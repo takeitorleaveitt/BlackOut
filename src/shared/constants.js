@@ -1,0 +1,119 @@
+// Shared tuning constants. Imported by both the browser client and the Node
+// authoritative server, so nothing in here may touch DOM or three.js.
+
+export const TICK_RATE = 30;                  // authoritative server ticks / second
+export const TICK_MS = 1000 / TICK_RATE;
+export const SNAPSHOT_RATE = 20;              // state broadcasts / second
+export const SNAPSHOT_MS = 1000 / SNAPSHOT_RATE;
+export const MAX_INPUTS_PER_PACKET = 12;
+export const INTERP_DELAY_MS = 100;           // remote entity render delay
+export const LAG_COMP_MAX_MS = 260;           // how far back the server will rewind hitboxes
+export const HISTORY_SECONDS = 1.0;
+
+// --- player dimensions (metres) ---
+export const PLAYER_RADIUS = 0.34;
+export const PLAYER_HEIGHT_STAND = 1.80;
+export const PLAYER_HEIGHT_CROUCH = 1.16;
+export const EYE_OFFSET = 0.14;               // eye height below the top of the capsule
+export const STEP_HEIGHT = 0.42;
+
+// --- movement ---
+export const GRAVITY = 21.0;
+export const SPEED_WALK = 3.15;
+export const SPEED_SPRINT = 5.55;
+export const SPEED_CROUCH = 1.52;
+export const SPEED_TACTICAL = 1.62;           // slow "tactical" walk
+export const SPEED_ADS_MULT = 0.52;
+export const ACCEL_GROUND = 42.0;
+export const ACCEL_AIR = 9.0;
+export const FRICTION_GROUND = 11.5;
+export const FRICTION_AIR = 0.15;
+export const JUMP_VELOCITY = 5.35;
+export const MAX_LEAN = 0.62;                 // radians of body roll when leaning
+export const LEAN_OFFSET = 0.46;              // lateral metres the head shifts when leaning
+export const LEAN_SPEED = 6.5;
+export const CROUCH_SPEED = 9.0;
+export const SPRINT_MIN_FORWARD = 0.55;       // stick must be pushed this far forward to sprint
+
+// --- combat ---
+export const MAX_HEALTH = 100;
+export const RESPAWN_DELAY_MS = 4200;
+export const HEAL_DELAY_MS = 6500;            // out-of-combat before regen starts
+export const HEAL_RATE = 11;                  // hp / second, only up to segment cap
+export const HEAL_CAP = 100;
+
+export const HITBOX = {
+  head:  { yMin: 0.855, yMax: 1.00, radius: 0.135, mult: 3.35 },
+  torso: { yMin: 0.545, yMax: 0.855, radius: 0.30, mult: 1.00 },
+  arms:  { yMin: 0.545, yMax: 0.855, radius: 0.44, mult: 0.78 },
+  legs:  { yMin: 0.00,  yMax: 0.545, radius: 0.28, mult: 0.72 }
+};
+
+// button bitmask packed into the input command
+export const BTN = {
+  FORWARD: 1 << 0,
+  BACK: 1 << 1,
+  LEFT: 1 << 2,
+  RIGHT: 1 << 3,
+  JUMP: 1 << 4,
+  CROUCH: 1 << 5,
+  SPRINT: 1 << 6,
+  ADS: 1 << 7,
+  FIRE: 1 << 8,
+  LEAN_L: 1 << 9,
+  LEAN_R: 1 << 10,
+  WALK: 1 << 11
+};
+
+export const TEAM = { NONE: 0, ALPHA: 1, BRAVO: 2 };
+
+export const SURFACE = {
+  CONCRETE: 'concrete',
+  METAL: 'metal',
+  WOOD: 'wood',
+  GLASS: 'glass',
+  DIRT: 'dirt',
+  GRASS: 'grass',
+  GRAVEL: 'gravel',
+  CARPET: 'carpet',
+  TILE: 'tile',
+  WATER: 'water',
+  PLASTER: 'plaster',
+  FABRIC: 'fabric',
+  FLESH: 'flesh'
+};
+
+// Per-surface ballistic behaviour. `density` scales penetration cost,
+// `maxPen` is the thickest slab (metres) a full-power round can defeat.
+export const SURFACE_PROPS = {
+  concrete: { density: 2.30, maxPen: 0.10, spark: 0.0, dust: 1.0, footVol: 1.00, hard: 1.0 },
+  metal:    { density: 3.10, maxPen: 0.06, spark: 1.0, dust: 0.2, footVol: 1.15, hard: 1.0 },
+  wood:     { density: 0.72, maxPen: 0.26, spark: 0.0, dust: 0.6, footVol: 0.90, hard: 0.7 },
+  glass:    { density: 0.28, maxPen: 0.40, spark: 0.0, dust: 0.3, footVol: 0.95, hard: 0.5 },
+  dirt:     { density: 1.55, maxPen: 0.16, spark: 0.0, dust: 1.0, footVol: 0.62, hard: 0.3 },
+  grass:    { density: 1.30, maxPen: 0.18, spark: 0.0, dust: 0.5, footVol: 0.50, hard: 0.2 },
+  gravel:   { density: 1.85, maxPen: 0.12, spark: 0.1, dust: 1.0, footVol: 0.88, hard: 0.5 },
+  carpet:   { density: 0.90, maxPen: 0.22, spark: 0.0, dust: 0.4, footVol: 0.40, hard: 0.2 },
+  tile:     { density: 2.05, maxPen: 0.11, spark: 0.0, dust: 0.9, footVol: 1.05, hard: 0.9 },
+  water:    { density: 1.00, maxPen: 0.50, spark: 0.0, dust: 0.0, footVol: 0.70, hard: 0.1 },
+  plaster:  { density: 0.55, maxPen: 0.34, spark: 0.0, dust: 1.0, footVol: 0.85, hard: 0.5 },
+  fabric:   { density: 0.40, maxPen: 0.30, spark: 0.0, dust: 0.3, footVol: 0.45, hard: 0.1 },
+  flesh:    { density: 1.05, maxPen: 0.30, spark: 0.0, dust: 0.0, footVol: 0.50, hard: 0.1 }
+};
+
+export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+export const lerp = (a, b, t) => a + (b - a) * t;
+export const smoothDamp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
+export const rand = (a, b) => a + Math.random() * (b - a);
+export const randInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
+
+// Deterministic 32-bit PRNG so client and server can agree on spread patterns.
+export function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}

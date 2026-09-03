@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<title>BLACKOUT PROTOCOL — Tactical FPS</title>
+<meta name="description" content="A browser-based tactical first-person shooter with bodycam presentation, authoritative multiplayer, seven firearms and six maps." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0c0e'/%3E%3Cpath d='M16 5 L27 11 v9 c0 5-5 6-11 7 -6-1-11-2-11-7 v-9z' fill='none' stroke='%23c8ff4d' stroke-width='2'/%3E%3Ccircle cx='16' cy='15' r='2.5' fill='%23c8ff4d'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="./src/styles/main.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game-canvas"></canvas>
+    <div id="fx-overlay" aria-hidden="true">
+      <div class="scanlines"></div>
+      <div class="vignette"></div>
+      <div class="chroma-edge"></div>
+    </div>
+    <div id="ui-root"></div>
+    <div id="hud-root" hidden></div>
+    <div id="boot">
+      <div class="boot-inner">
+        <div class="boot-logo">BLACKOUT<span>PROTOCOL</span></div>
+        <div class="boot-bar"><i></i></div>
+        <div class="boot-status">INITIALISING OPTICS…</div>
+      </div>
+    </div>
+  </div>
+  <noscript>
+    <div style="color:#c8ff4d;font:14px monospace;padding:40px">
+      BLACKOUT PROTOCOL requires JavaScript and WebGL2.
+    </div>
+  </noscript>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
