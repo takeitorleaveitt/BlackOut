@@ -35,7 +35,10 @@ export const STEP_HEIGHT = 0.42;
 // player arrives at full speed on the first frame of input and stops on the
 // frame they release it. ACCEL_GROUND is multiplied by the target speed in
 // accelerate(), so this value is "reach target speed within one tick".
-export const GRAVITY = 21.0;
+// Lower gravity + a stronger push gives a jump you can actually see and
+// use: ~1.2m of clearance over ~0.73s of air, instead of a 0.73m twitch
+// that was over in half a second.
+export const GRAVITY = 18.0;
 export const SPEED_WALK = 4.05;
 export const SPEED_SPRINT = 6.60;
 export const SPEED_CROUCH = 2.00;
@@ -45,7 +48,7 @@ export const ACCEL_GROUND = 95.0;
 export const ACCEL_AIR = 14.0;
 export const FRICTION_GROUND = 16.0;
 export const FRICTION_AIR = 0.15;
-export const JUMP_VELOCITY = 5.55;
+export const JUMP_VELOCITY = 6.60;
 
 // --- slide (sprint + hold crouch) ---
 export const SLIDE_SPEED = 9.20;              // launch speed out of the sprint

@@ -5,6 +5,7 @@
 import { el, button, header } from '../UI.js';
 import { audio } from '../../audio/AudioEngine.js';
 import { S, settings } from '../../core/Settings.js';
+import { account } from '../../core/Account.js';
 import { MAP_INFO } from '../../shared/maps/index.js';
 import { PRIMARIES, SECONDARIES } from '../../shared/weapons.js';
 
@@ -67,10 +68,18 @@ export function createMainMenu(game) {
       });
 
       this.tcNode = el('span', '00:00:00');
+      // The callsign block doubles as the profile button: level on the face
+      // of it, full record behind a click.
+      const profileBtn = el('div', {
+        style: { cursor: 'pointer' },
+        onclick: () => { audio.ui('accept'); _ui.show('profile'); },
+        onmouseenter: () => audio.ui('hover'),
+        title: 'View profile'
+      }, el('b', 'OPERATOR '), S.name, el('span.dim', `  ·  LVL ${account.level}`));
       const version = el('div.menu-badge',
         el('div', el('b', 'FEED '), this.tcNode),
         el('div', el('b', 'BUILD '), '1.0.0 · WEBGL2'),
-        el('div', el('b', 'OPERATOR '), S.name),
+        profileBtn,
         el('div', el('b', 'MAPS '), String(MAP_INFO.length), ' · ', el('b', 'WEAPONS '), String(PRIMARIES.length + SECONDARIES.length)));
 
       const right = el('div.menu-right', version);
@@ -109,8 +118,15 @@ export function createMainMenu(game) {
     },
 
     refresh() {
+      // Rebuild the callsign row wholesale. It used to poke at lastChild,
+      // which now belongs to the level chip rather than the name.
       const badge = document.querySelector('#screen-main .menu-badge');
-      if (badge) badge.children[2].lastChild.nodeValue = S.name;
+      const row = badge?.children[2];
+      if (!row) return;
+      row.textContent = '';
+      row.appendChild(el('b', 'OPERATOR '));
+      row.appendChild(document.createTextNode(S.name));
+      row.appendChild(el('span.dim', `  ·  LVL ${account.level}`));
     }
   };
 

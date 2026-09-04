@@ -34,11 +34,12 @@ export function createMoveState(x = 0, y = 0, z = 0) {
     // --- slide ---
     sliding: false,
     slideT: 0,           // seconds into the current slide
-    slideCooldown: 0,
+    slideReadyAt: 0,     // absolute time the next slide is allowed
     slideStarted: false, // true for the single tick a slide begins (drives fx)
     prevCrouchHeld: false,
     // --- jump ---
-    jumpCooldown: 0      // seconds until another jump is allowed
+    clock: 0,            // fallback clock for callers that don't stamp cmd.t
+    jumpReadyAt: 0       // absolute time the next jump is allowed
   };
 }
 
@@ -58,6 +59,10 @@ const scratch = { groundY: 0, hitGround: false, hitCeiling: false, hitWall: fals
  */
 export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
   const dt = clamp(cmd.dt, 0.001, 0.05);
+  // Monotonic clock carried BY the command. Falls back to advancing the
+  // state's own clock for callers that don't stamp one (bots), which is fine
+  // because those are never replayed.
+  const now = cmd.t !== undefined ? cmd.t : (s.clock = (s.clock || 0) + dt);
   const b = cmd.buttons;
   s.yaw = cmd.yaw;
   s.pitch = cmd.pitch;
@@ -78,7 +83,6 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
   // value, which is exactly the question being asked — "were you sprinting at
   // the moment you pressed crouch?". Runs in shared code so client prediction
   // and the authoritative sim slide identically.
-  s.slideCooldown = Math.max(0, s.slideCooldown - dt);
   const crouchHeld = canAct && !!(b & BTN.CROUCH);
   const crouchPressed = crouchHeld && !s.prevCrouchHeld;
   s.prevCrouchHeld = crouchHeld;
@@ -86,7 +90,7 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
 
   const hSpeed = Math.hypot(s.vx, s.vz);
   if (!s.sliding && crouchPressed && s.grounded && s.sprinting &&
-      hSpeed > SLIDE_MIN_SPEED && s.slideCooldown <= 0) {
+      hSpeed > SLIDE_MIN_SPEED && now >= s.slideReadyAt) {
     s.sliding = true;
     s.slideT = 0;
     s.slideStarted = true;
@@ -99,7 +103,7 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
     if (!crouchHeld || !s.grounded || s.slideT >= SLIDE_TIME ||
         Math.hypot(s.vx, s.vz) < SLIDE_END_SPEED) {
       s.sliding = false;
-      s.slideCooldown = SLIDE_COOLDOWN;
+      s.slideReadyAt = now + SLIDE_COOLDOWN;
     }
   }
 
@@ -191,14 +195,21 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
   // time and the landing friction exemption are all gone, so hops cannot be
   // chained — bunny hopping is not a movement option any more. Jumping still
   // cancels a slide, which is the one movement combo that remains.
-  s.jumpCooldown = Math.max(0, s.jumpCooldown - dt);
-  if (canAct && (b & BTN.JUMP) && s.grounded && s.jumpCooldown <= 0 &&
+  //
+  // The gate is an absolute DEADLINE compared against the command's own
+  // clock, not a countdown ticked down by dt. A countdown is not replay-safe:
+  // client reconciliation re-runs every unacknowledged command through this
+  // function, so each replay subtracted dt again and the cooldown drained
+  // several times faster than real time — which is why there was effectively
+  // no cooldown at all. `cmd.t` is a property of the command, so replaying it
+  // produces the same answer every time.
+  if (canAct && (b & BTN.JUMP) && s.grounded && now >= s.jumpReadyAt &&
       (s.crouchT < 0.4 || s.sliding)) {
-    if (s.sliding) { s.sliding = false; s.slideCooldown = SLIDE_COOLDOWN; }
+    if (s.sliding) { s.sliding = false; s.slideReadyAt = now + SLIDE_COOLDOWN; }
     s.vy = JUMP_VELOCITY;
     s.grounded = false;
     s.jumped = true;
-    s.jumpCooldown = JUMP_COOLDOWN;
+    s.jumpReadyAt = now + JUMP_COOLDOWN;
   } else s.jumped = false;
 
   // --- integrate + collide ------------------------------------------------

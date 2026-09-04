@@ -100,7 +100,7 @@ export class Engine {
       this.configureShadow();
       this.renderer.shadowMap.needsUpdate = true;
     }
-    if (['bloom', 'motionBlur', 'aa', 'preset', 'renderScale', '*'].includes(key)) {
+    if (['bloom', 'aa', 'preset', 'renderScale', '*'].includes(key)) {
       this.renderScale = S.renderScale;
       this.onResize();
       this.postfx.build();

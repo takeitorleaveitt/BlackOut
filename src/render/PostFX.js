@@ -13,7 +13,6 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { BodycamShader } from './passes/BodycamShader.js';
-import { MotionBlurShader } from './passes/MotionBlurShader.js';
 import { makeNoiseTexture } from './Textures.js';
 import { S } from '../core/Settings.js';
 import { clamp } from '../shared/constants.js';
@@ -73,13 +72,12 @@ export class PostFX {
       this.composer.addPass(this.bloom);
     } else this.bloom = null;
 
-    if (S.motionBlur) {
-      this.motion = new ShaderPass(MotionBlurShader);
-      this.motion.uniforms.uOffset.value = this.offset;
-      this.prevTarget = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
-      this.motion.uniforms.tPrev.value = this.prevTarget.texture;
-      this.composer.addPass(this.motion);
-    } else this.motion = null;
+    // Motion blur is gone. It worked by blending the previous frame back over
+    // the current one, which during the fast ADS transition left a second,
+    // offset copy of the weapon smeared across the screen — the "filter that
+    // makes two of the gun". It was also a full extra render pass.
+    this.motion = null;
+    this.prevTarget = null;
 
     this.bodycam = new ShaderPass(BodycamShader);
     this.bodycam.uniforms.tNoise.value = this.noise;
@@ -155,7 +153,7 @@ export class PostFX {
 
     if (this.motion) {
       const yawRate = ctx.yawRate || 0, pitchRate = ctx.pitchRate || 0;
-      const amt = clamp((Math.abs(yawRate) + Math.abs(pitchRate)) * 0.09, 0, 1) * (S.motionBlur ? 1 : 0);
+      const amt = 0;   // motion blur removed
       this.motion.uniforms.uAmount.value = amt * 0.7;
       this.offset.set(clamp(yawRate * 0.0055, -0.05, 0.05), clamp(-pitchRate * 0.0055, -0.05, 0.05));
     }

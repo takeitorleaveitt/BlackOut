@@ -3,6 +3,8 @@
 import { el, clear, button, header, footer, fmtTime } from '../UI.js';
 import { audio } from '../../audio/AudioEngine.js';
 import { S, settings } from '../../core/Settings.js';
+import { account, fmtDuration } from '../../core/Account.js';
+import { PLAYLISTS } from '../../shared/modes.js';
 
 // ---------------------------------------------------------------------------
 // FRIENDS — local roster plus invite codes
@@ -149,6 +151,131 @@ export function createEndMatch(game) {
           el('th', 'Operator'), el('th', 'Team'), el('th', 'K'), el('th', 'D'), el('th', 'K/D'),
           el('th', 'Damage'), el('th', 'Acc'), el('th', 'HS'), el('th', 'Score'))),
         el('tbody', ...rows)));
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// QUEUE — the player-only playlists hold here until the lobby is full
+// ---------------------------------------------------------------------------
+export function createQueue(game) {
+  let ui = null, countNode = null, statusNode = null, timerNode = null;
+  let timer = null, started = 0, playlist = null;
+
+  function refresh() {
+    const need = PLAYLISTS[playlist]?.minPlayers ?? 8;
+    const have = game.roomPlayerList?.filter((p) => !p.bot).length ?? 0;
+    if (countNode) countNode.textContent = `${have} / ${need}`;
+    if (statusNode) {
+      statusNode.textContent = have >= need
+        ? 'LOBBY FULL — STARTING'
+        : 'WAITING FOR PLAYERS';
+    }
+    if (timerNode) {
+      const secs = Math.floor((Date.now() - started) / 1000);
+      timerNode.textContent = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
+    }
+  }
+
+  return {
+    build(node, _ui) {
+      ui = _ui;
+      countNode = el('div', { style: { fontSize: '46px', fontWeight: '700', letterSpacing: '.04em' } }, '0 / 8');
+      statusNode = el('p.sub', 'WAITING FOR PLAYERS');
+      timerNode = el('div.dim', { style: { fontSize: '13px' } }, '00:00');
+      node.appendChild(header('MATCHMAKING'));
+      node.appendChild(el('div.body',
+        el('div.pane', {
+          style: { flex: '1', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '12px' }
+        },
+          el('h1.title', 'Searching'),
+          countNode, statusNode, timerNode,
+          el('p.sub', { style: { textTransform: 'none', maxWidth: '460px', textAlign: 'center' } },
+            'This playlist is real players only, so it waits for a full lobby rather than filling the match with bots.'))));
+      node.appendChild(footer([button('CANCEL', () => {
+        game.cancelQueue();
+        ui.back('play');
+      })]));
+    },
+    enter(props = {}) {
+      playlist = props.playlist || game.currentPlaylist || 'quickmatch';
+      started = Date.now();
+      refresh();
+      timer = setInterval(refresh, 500);
+      this.unsub = game.onRoomUpdate?.(() => refresh());
+    },
+    exit() {
+      clearInterval(timer);
+      timer = null;
+      this.unsub?.();
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PROFILE — level, account age, per-playlist K/D and the friends roster
+// ---------------------------------------------------------------------------
+export function createProfile(game) {
+  let ui = null;
+
+  function statBlock(label, value, sub) {
+    return el('div.card', { style: { textAlign: 'center' } },
+      el('div.k', label),
+      el('div.n', { style: { fontSize: '26px' } }, value),
+      sub ? el('div.d', sub) : el('div.d', ''));
+  }
+
+  function playlistRow(key, label) {
+    const s = account.statsFor(key) || { kills: 0, deaths: 0, matches: 0, wins: 0 };
+    const kd = account.kd(key);
+    return el('tr',
+      el('td', el('b', label)),
+      el('td', String(s.kills)),
+      el('td', String(s.deaths)),
+      el('td', el('b', kd.toFixed(2))),
+      el('td', String(s.matches)),
+      el('td', String(s.wins)));
+  }
+
+  return {
+    build(node, _ui) {
+      ui = _ui;
+      const created = new Date(account.createdAt);
+      const ageDays = Math.max(0, Math.floor((Date.now() - account.createdAt) / 86400000));
+      const pct = Math.round((account.xp / account.xpToNext) * 100);
+
+      const friends = loadFriends();
+      const friendList = friends.length
+        ? el('div', ...friends.map((f) => el('div.setting',
+            el('label', f.name),
+            el('div.val', f.code || ''))))
+        : el('p.sub', { style: { textTransform: 'none' } }, 'No friends added yet — add them on the FRIENDS screen.');
+
+      const ban = account.banRemainingMs();
+
+      node.appendChild(header('PROFILE'));
+      node.appendChild(el('div.body', el('div.pane', { style: { flex: '1' } },
+        el('h1.title', S.name || 'OPERATOR'),
+        el('p.sub', `ACCOUNT CREATED ${created.toLocaleDateString()} · ${ageDays} DAY${ageDays === 1 ? '' : 'S'} OLD`),
+
+        el('div.grid.c3', { style: { marginBottom: '18px' } },
+          statBlock('LEVEL', String(account.level), `${account.xp} / ${account.xpToNext} XP`),
+          statBlock('PROGRESS', `${pct}%`, 'TO NEXT LEVEL'),
+          statBlock('STATUS', ban > 0 ? 'PENALISED' : 'CLEAR',
+            ban > 0 ? `${fmtDuration(ban)} REMAINING` : 'NO ACTIVE PENALTY')),
+
+        el('h3.sec', 'Record'),
+        el('table.list',
+          el('thead', el('tr',
+            el('th', 'Playlist'), el('th', 'Kills'), el('th', 'Deaths'),
+            el('th', 'K/D'), el('th', 'Matches'), el('th', 'Wins'))),
+          el('tbody',
+            playlistRow('standard', 'STANDARD'),
+            playlistRow('quickmatch', 'QUICK MATCH'))),
+
+        el('h3.sec', 'Friends'),
+        friendList)));
+      node.appendChild(footer([button('BACK', () => ui.back('main'))]));
     }
   };
 }

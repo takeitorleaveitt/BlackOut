@@ -46,17 +46,17 @@ export const PLAYLISTS = {
   quickmatch: {
     key: 'quickmatch', name: 'QUICK MATCH',
     desc: 'Against real players only. Team Deathmatch or Elimination, first to 3.',
-    modes: ['tdm', 'elimination'], roundsToWin: 3, bots: false
+    modes: ['tdm', 'elimination'], roundsToWin: 3, bots: false, minPlayers: 8
   },
   standard: {
     key: 'standard', name: 'STANDARD',
     desc: 'Against real players only. Team Deathmatch, first to 4.',
-    modes: ['tdm'], roundsToWin: 4, bots: false
+    modes: ['tdm'], roundsToWin: 4, bots: false, minPlayers: 8
   },
   freeforall: {
     key: 'freeforall', name: 'FREE FOR ALL',
     desc: 'Everybody hostile. Fills with bots and real players alike.',
-    modes: ['ffa'], roundsToWin: 3, bots: true
+    modes: ['ffa'], roundsToWin: 3, bots: true, minPlayers: 1
   }
 };
 

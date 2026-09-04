@@ -152,7 +152,16 @@ export class HUD {
     this.dmgDirs.push({ node, life: 1.5, dir });
   }
 
-  addKillfeed({ attacker, victim, weapon, headshot, teamkill, mine }) {
+  addKillfeed({ attacker, victim, weapon, headshot, teamkill, mine, left, text }) {
+    // A player leaving shows up here too, as a plain single-line notice
+    // rather than an attacker/victim pair.
+    if (left) {
+      const n = el('div.kf', el('span.dim', text || 'A PLAYER HAS LEFT THE GAME'));
+      this.killfeed.appendChild(n);
+      this.killfeedItems.push({ node: n, life: 6 });
+      while (this.killfeedItems.length > 5) this.killfeedItems.shift().node.remove();
+      return;
+    }
     const node = el('div.kf',
       el('span', { class: mine === 'a' ? 'me' : '' }, attacker),
       el('span.dim', headshot ? ' ⌖ ' : ' › '),

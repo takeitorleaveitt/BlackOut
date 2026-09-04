@@ -158,7 +158,7 @@ export const WEAPONS = [
     penetration: 0.22, pellets: 9, pelletSpread: 2.6,
     audio: { punch: 58, body: 190, crack: 1800, tail: 0.66, level: 1.25, tone: 0.28 },
     model: { barrel: 0.50, receiver: 0.30, stock: 'wood', handguard: 'pump', mag: 'tube', tint: 0x24211d, accent: 0x4a3320 },
-    attachments: ['reddot', 'holo', 'flashlight', 'laser']
+    attachments: ['flashlight', 'laser']
   },
   {
     id: 5,
@@ -216,7 +216,7 @@ export const WEAPONS = [
     penetration: 0.5, pellets: 1, pelletSpread: 0,
     audio: { punch: 96, body: 360, crack: 2400, tail: 0.42, level: 1.1, tone: 0.5 },
     model: { barrel: 0.16, receiver: 0.20, stock: 'none', handguard: 'none', mag: 'pistol', tint: 0x4a4e52, accent: 0x2b2e31 },
-    attachments: ['reddot', 'flashlight', 'laser']
+    attachments: ['flashlight', 'laser']
   },
   {
     id: 6,

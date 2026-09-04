@@ -24,7 +24,7 @@ import { createMainMenu } from './ui/screens/MainMenu.js';
 import { createPlayMenu, createServerBrowser, createPrivateMatch, createLobby, createTraining } from './ui/screens/Play.js';
 import { createLoadout } from './ui/screens/Loadout.js';
 import { createSettings } from './ui/screens/SettingsScreen.js';
-import { createFriends, createPause, createEndMatch } from './ui/screens/Misc.js';
+import { createFriends, createPause, createEndMatch, createQueue, createProfile } from './ui/screens/Misc.js';
 import { getMap, MAP_INFO, MAP_KEYS } from './shared/maps/index.js';
 import { WEAPON_BY_ID, WEAPON_BY_KEY } from './shared/weapons.js';
 import { resolveWeapon } from './shared/attachments.js';
@@ -32,6 +32,7 @@ import { buildWeaponModel, buildWorldWeapon } from './weapons/WeaponModels.js';
 import { EV, SF } from './shared/protocol.js';
 import { INTERP_DELAY_MS, TEAM, clamp, lerp } from './shared/constants.js';
 import { REGIONS, PLAYLISTS } from './shared/modes.js';
+import { account, fmtDuration } from './core/Account.js';
 
 const MENU_MAPS = ['warehouse', 'refinery', 'suburb', 'killhouse'];
 
@@ -67,6 +68,7 @@ class Game {
     this._accumNet = 0;
     // Cheat codes, entered from the main menu. Offline-only (see applyCheatCode).
     this.cheats = { walls: false, auto: false, aimbot: false };
+    this.currentPlaylist = null;   // which playlist this match came from
 
     this.ui = new UI(document.getElementById('ui-root'));
     this.hud = new HUD(document.getElementById('hud-root'), this);
@@ -93,6 +95,8 @@ class Game {
     u.register('friends', createFriends(this));
     u.register('pause', createPause(this));
     u.register('end', createEndMatch(this));
+    u.register('queue', createQueue(this));
+    u.register('profile', createProfile(this));
   }
 
   bindInput() {
@@ -350,13 +354,43 @@ class Game {
   async playPlaylist(key) {
     const pl = PLAYLISTS[key];
     if (!pl) return;
+
+    // A leave penalty locks every playlist; private matches stay open.
+    const ban = account.banRemainingMs();
+    if (ban > 0) {
+      this.ui.toast(
+        `Leave penalty active — ${fmtDuration(ban)} remaining. Private matches only.`,
+        'warn'
+      );
+      return;
+    }
+
+    // An abandoned Standard match is offered back before starting a new queue.
+    const pending = account.pendingReconnect;
+    if (key === 'standard' && pending && (pending.roomId || pending.code)) {
+      this.ui.toast('Rejoining your Standard match…');
+      account.clearPendingReconnect();
+      this.currentPlaylist = 'standard';
+      try {
+        if (pending.code) await this.joinCode(pending.code);
+        else await this.joinRoom(pending.roomId);
+        return;
+      } catch (e) { /* fall through to a fresh queue */ }
+    }
+
     const mode = pl.modes[(Math.random() * pl.modes.length) | 0];
+    this.currentPlaylist = pl.key;
     try {
       const net = await this.ensureOnline();
-      this.ui.toast(pl.bots
-        ? `Searching — ${pl.name}…`
-        : `Searching for real players — ${pl.name}…`);
-      net.quickMatch(mode, { playlist: pl.key, roundsToWin: pl.roundsToWin, bots: pl.bots });
+      // The player-only playlists wait for a full 8-player lobby before they
+      // load in, rather than dropping into a half-empty match.
+      this.ui.show('queue', { playlist: pl.key });
+      net.quickMatch(mode, {
+        playlist: pl.key,
+        roundsToWin: pl.roundsToWin,
+        bots: pl.bots,
+        minPlayers: pl.minPlayers
+      });
     } catch (e) { /* toast already shown */ }
   }
 
@@ -382,6 +416,28 @@ class Game {
       ok: true,
       message: `${code} ${this.cheats[key] ? 'ON' : 'OFF'} · OFFLINE ONLY`
     };
+  }
+
+  /** Back out of matchmaking without any penalty — nothing has started yet. */
+  cancelQueue() {
+    this.currentPlaylist = null;
+    this.onlineNet?.leave?.();
+  }
+
+  /**
+   * Award XP and fold the result into the lifetime record. Only the two
+   * player-only playlists count toward K/D — bot matches and private games
+   * would make the number meaningless.
+   */
+  recordMatchResult({ won = false } = {}) {
+    const pl = this.currentPlaylist;
+    const kills = this.player.kills || 0;
+    const deaths = this.player.deaths || 0;
+    account.addXp(kills * 25 + (won ? 300 : 100));
+    if (pl === 'standard' || pl === 'quickmatch') {
+      account.recordMatch(pl, { kills, deaths, won });
+    }
+    account.clearPendingReconnect();
   }
 
   /** True only when this match is local bots, never online against people. */
@@ -508,6 +564,15 @@ class Game {
       if (p) { p.dispose(); this.remotes.delete(msg.id); }
       this.roomPlayerList = this.roomPlayerList.filter((x) => x.id !== msg.id);
       this.notifyRoom();
+      // Show it in the kill feed the same way a death is shown.
+      if (this.mode === 'match' && msg.name) {
+        bus.emit('hud:kill', { left: true, text: `${msg.name} HAS LEFT THE GAME` });
+      }
+    });
+    // Player-only playlists hold in a queue until the lobby is full.
+    net.on('lobbyStatus', (msg) => {
+      this.lobbyStatus = msg;
+      this.notifyRoom();
     });
     net.on('error', (msg) => this.ui.toast(msg.message || 'Server error', 'err'));
     net.on('chat', (msg) => this.ui.toast(`${msg.from}: ${msg.text}`));
@@ -599,7 +664,37 @@ class Game {
     audio.setMuffle(0);
   }
 
+  /**
+   * Leave the current match.
+   *
+   * Quick Match is free to leave. Standard is not: abandoning one records a
+   * leave and starts an escalating ban (1/5/10/45/60/120 minutes), during
+   * which only private matches are available, and the count resets a day
+   * after the first leave. A Standard match is also remembered so it can be
+   * rejoined rather than re-queued.
+   */
   leaveMatch() {
+    const playlist = this.currentPlaylist;
+    if (this.mode === 'match' && playlist) {
+      if (playlist === 'standard') {
+        account.setPendingReconnect({
+          roomId: this.roomInfo?.id || null,
+          code: this.roomInfo?.code || null,
+          at: Date.now()
+        });
+        const mins = account.recordLeave('standard');
+        if (mins > 0) {
+          this.ui.toast(
+            `Left a Standard match — ${mins} minute penalty. Private matches only until it expires.`,
+            'warn'
+          );
+        }
+      } else {
+        // Quick Match: no penalty, and nothing to come back to.
+        account.clearPendingReconnect();
+      }
+    }
+    this.currentPlaylist = null;
     this.net?.leave?.();
     if (this.net && this.net !== this.onlineNet) this.net.disconnect?.();
     this.toMenu();

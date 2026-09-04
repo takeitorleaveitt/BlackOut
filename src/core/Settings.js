@@ -9,25 +9,25 @@ const KEY = 'bp.settings.v1';
 export const PRESETS = {
   low: {
     renderScale: 0.72, shadows: 'off', shadowRes: 512, textureQuality: 'low', aa: 'off',
-    bloom: false, motionBlur: false, lensDistortion: false,
+    bloom: false, lensDistortion: false,
     lensFlare: false, ssao: false, particles: 0.25, decals: 40, decalLife: 8,
     lights: 'low', fog: true, anisotropy: 1, viewDistance: 0.7, compression: false, dustMotes: false
   },
   medium: {
     renderScale: 0.85, shadows: 'low', shadowRes: 1024, textureQuality: 'medium', aa: 'fxaa',
-    bloom: true, motionBlur: false, lensDistortion: false,
+    bloom: true, lensDistortion: false,
     lensFlare: false, ssao: false, particles: 0.4, decals: 90, decalLife: 14,
     lights: 'medium', fog: true, anisotropy: 4, viewDistance: 0.85, compression: false, dustMotes: true
   },
   high: {
     renderScale: 1.0, shadows: 'high', shadowRes: 2048, textureQuality: 'high', aa: 'fxaa',
-    bloom: true, motionBlur: false, lensDistortion: false,
+    bloom: true, lensDistortion: false,
     lensFlare: false, ssao: false, particles: 0.6, decals: 160, decalLife: 22,
     lights: 'high', fog: true, anisotropy: 8, viewDistance: 1.0, compression: false, dustMotes: true
   },
   ultra: {
     renderScale: 1.0, shadows: 'ultra', shadowRes: 4096, textureQuality: 'high', aa: 'fxaa',
-    bloom: true, motionBlur: false, lensDistortion: false,
+    bloom: true, lensDistortion: false,
     lensFlare: false, ssao: true, particles: 0.8, decals: 260, decalLife: 30,
     lights: 'ultra', fog: true, anisotropy: 16, viewDistance: 1.25, compression: false, dustMotes: true
   }
@@ -111,12 +111,26 @@ class SettingsStore {
     this.load();
   }
 
+  // Settings that no longer exist. Saved data is merged OVER the defaults, so
+  // without this a returning player keeps a removed feature switched on
+  // forever — which is exactly what happened with motion blur: it stayed
+  // enabled from an old save and kept ghosting a second copy of the weapon
+  // across the screen during ADS, long after it was disabled in every preset.
+  static REMOVED_KEYS = [
+    'motionBlur', 'filmGrain', 'chromatic', 'weaponSway', 'autoSprint'
+  ];
+
   load() {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) this.data = deepMerge(DEFAULTS, JSON.parse(raw));
     } catch (e) { /* storage may be unavailable; defaults are fine */ }
+    let migrated = false;
+    for (const k of SettingsStore.REMOVED_KEYS) {
+      if (k in this.data) { delete this.data[k]; migrated = true; }
+    }
     if (!this.data.name) this.data.name = randomCallsign();
+    if (migrated) this.save();
   }
 
   save() {

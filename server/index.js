@@ -78,6 +78,7 @@ function createPublicRoom(mode, map, opts = {}) {
     persistent: true,
     fillBots: opts.fillBots ?? MODES[mode].maxPlayers ?? 6,
     botSkill: opts.botSkill || 'normal',
+    minPlayers: opts.minPlayers,
     options: opts.options
   });
   rooms.set(room.id, room);
@@ -128,7 +129,10 @@ function findQuickMatch(modeKey, opts = {}) {
     const mode = modeKey || 'tdm';
     const maps = mapsForMode(mode);
     best = createPublicRoom(mode, maps[(Math.random() * maps.length) | 0], {
-      fillBots: wantBots ? undefined : 0
+      fillBots: wantBots ? undefined : 0,
+      // A player-only playlist holds in warmup until this many humans have
+      // arrived, rather than starting a lopsided match.
+      minPlayers: opts.minPlayers
     });
   }
   return best;
@@ -256,7 +260,8 @@ function handle(client, msg) {
       break;
     case 'quickMatch': {
       const room = findQuickMatch(msg.mode, {
-        bots: msg.bots, roundsToWin: msg.roundsToWin, playlist: msg.playlist
+        bots: msg.bots, roundsToWin: msg.roundsToWin, playlist: msg.playlist,
+        minPlayers: msg.minPlayers
       });
       joinRoom(client, room);
       break;

@@ -91,7 +91,6 @@ export function createSettings(game) {
       sliderRow('Head bob', 'headBob', 0, 2, 0.05, (v) => `${Math.round(v * 100)}%`),
       el('h3.sec', 'Post-processing'),
       toggleRow('Bloom', 'bloom'),
-      toggleRow('Motion blur', 'motionBlur'),
       toggleRow('Lens distortion', 'lensDistortion', 'The fisheye barrel of a wide-angle body camera.'),
       toggleRow('Lens glare', 'lensFlare'),
       toggleRow('Compression artefacts', 'compression', 'Macroblocking and scanlines from a cheap recorder.'),

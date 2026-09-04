@@ -177,12 +177,17 @@ export class LocalPlayer {
       this.acc -= TICK;
       steps++;
       const buttons = this.buildButtons(input);
+      // `t` is a monotonic clock stamped ON the command. Cooldowns compare
+      // against it rather than counting down, so replaying an unacknowledged
+      // command during reconciliation cannot advance them a second time.
+      this.simTime = (this.simTime || 0) + TICK;
       const cmd = {
         seq: this.seq++,
         buttons,
         yaw: this.rig.targetYaw,
         pitch: this.rig.targetPitch,
-        dt: TICK
+        dt: TICK,
+        t: this.simTime
       };
       // Mobility MUST be the exact value the server will use for this same
       // command, or prediction drifts and the reconciler yanks you back —

@@ -529,7 +529,12 @@ export class MatchSim {
       const c = q.shift();
       const w = p.weapons[p.slot];
       const mobility = w ? w.def.mobility : 1;
-      const cmd = frozen ? { ...c, buttons: c.buttons & ~(BTN.FORWARD | BTN.BACK | BTN.LEFT | BTN.RIGHT | BTN.JUMP | BTN.FIRE) } : c;
+      // Human commands carry their own clock (see LocalPlayer). Older or
+      // malformed ones fall back to the sim clock so the cooldowns still work.
+      const base = c.t !== undefined ? c : { ...c, t: this.time };
+      const cmd = frozen
+        ? { ...base, buttons: base.buttons & ~(BTN.FORWARD | BTN.BACK | BTN.LEFT | BTN.RIGHT | BTN.JUMP | BTN.FIRE) }
+        : base;
       stepMovement(p.state, cmd, this.world, mobility, p.alive && !frozen);
       p.lastCmdSeq = c.seq;
       p.buttons = c.buttons;
@@ -555,7 +560,8 @@ export class MatchSim {
     const cmd = {
       seq: 0,
       buttons: frozen ? 0 : out.buttons,
-      yaw: out.yaw, pitch: out.pitch, dt
+      yaw: out.yaw, pitch: out.pitch, dt,
+      t: this.time
     };
     stepMovement(p.state, cmd, this.world, w ? w.def.mobility : 1, p.alive && !frozen);
 

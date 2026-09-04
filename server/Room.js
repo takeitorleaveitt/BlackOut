@@ -38,7 +38,11 @@ export class Room {
     this.stateAccum = 0;
     this.closed = false;
     this.createdAt = Date.now();
-    this.startRequested = !this.private;
+    // Player-only playlists hold in warmup until this many humans have
+    // arrived. 0/undefined means start immediately, which is what every other
+    // room does.
+    this.minPlayers = opts.minPlayers || 0;
+    this.startRequested = !this.private && !this.minPlayers;
     this.newMatch(opts.map, opts.mode, opts.options);
   }
 
@@ -113,6 +117,7 @@ export class Room {
     this.broadcastJson({
       t: 'playerJoined', id: client.id, name: client.name, team: entity.team
     });
+    this.checkLobbyReady();
     return true;
   }
 
@@ -120,7 +125,10 @@ export class Room {
     this.clients.delete(client.id);
     this.sim.removePlayer(client.id);
     client.room = null;
-    this.broadcastJson({ t: 'playerLeft', id: client.id });
+    // Name included so the client can put "<NAME> has left the game" in the
+    // kill feed. This path covers a deliberate leave and a dropped socket
+    // alike, which is what you want — both look the same to everyone else.
+    this.broadcastJson({ t: 'playerLeft', id: client.id, name: client.name });
     if (this.private && this.hostId === client.id) {
       // hand the room over, or close it
       const next = this.clients.values().next().value;
@@ -129,6 +137,24 @@ export class Room {
     }
     if (!this.persistent && this.clients.size === 0) this.closed = true;
     else this.topUpBots();
+  }
+
+  /**
+   * A room gated on minPlayers stays in warmup, telling everyone how full the
+   * lobby is, until enough humans have joined — then it starts for all of them
+   * at once.
+   */
+  checkLobbyReady() {
+    if (!this.minPlayers) return;
+    const have = this.humanCount;
+    this.broadcastJson({
+      t: 'lobbyStatus', have, need: this.minPlayers, ready: have >= this.minPlayers
+    });
+    if (have >= this.minPlayers && this.sim.phase === 'warmup') {
+      this.startRequested = true;
+      this.sim.start();
+      this.broadcastJson({ t: 'matchStart', ...this.info(), state: this.sim.matchState() });
+    }
   }
 
   topUpBots() {
