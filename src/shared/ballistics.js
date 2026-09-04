@@ -67,13 +67,21 @@ function rayBoxLocal(ox, oy, oz, dx, dy, dz, hx, hy, hz, cy) {
   return tmin >= 0 ? tmin : 0;
 }
 
-/** Zone boxes for a player of the given height, in player-local space. */
+/**
+ * Zone boxes for a player of the given height, in player-local space.
+ *
+ * Half-extents match the rendered PlayerModel: helmet 0.23 x 0.25, chest 0.42
+ * wide by ~0.43 deep once the plate and backpack are included, arms out to
+ * +-0.315, boots reaching forward past the shins. The depths (hz) used to be
+ * roughly a third under the visible geometry, so rounds fired at the front or
+ * back edge of a body passed straight through it.
+ */
 export function hitZones(height) {
   return [
-    { zone: 'head', hx: 0.115, hy: (HITBOX.head.yMax - HITBOX.head.yMin) * height * 0.5, hz: 0.125, cy: (HITBOX.head.yMin + HITBOX.head.yMax) * 0.5 * height, mult: HITBOX.head.mult },
-    { zone: 'torso', hx: 0.215, hy: (HITBOX.torso.yMax - HITBOX.torso.yMin) * height * 0.5, hz: 0.155, cy: (HITBOX.torso.yMin + HITBOX.torso.yMax) * 0.5 * height, mult: HITBOX.torso.mult },
-    { zone: 'arms', hx: 0.40, hy: (HITBOX.arms.yMax - HITBOX.arms.yMin) * height * 0.44, hz: 0.17, cy: (HITBOX.arms.yMin + HITBOX.arms.yMax) * 0.5 * height, mult: HITBOX.arms.mult },
-    { zone: 'legs', hx: 0.215, hy: (HITBOX.legs.yMax - HITBOX.legs.yMin) * height * 0.5, hz: 0.165, cy: (HITBOX.legs.yMin + HITBOX.legs.yMax) * 0.5 * height, mult: HITBOX.legs.mult }
+    { zone: 'head', hx: 0.125, hy: (HITBOX.head.yMax - HITBOX.head.yMin) * height * 0.5, hz: 0.135, cy: (HITBOX.head.yMin + HITBOX.head.yMax) * 0.5 * height, mult: HITBOX.head.mult },
+    { zone: 'torso', hx: 0.225, hy: (HITBOX.torso.yMax - HITBOX.torso.yMin) * height * 0.5, hz: 0.205, cy: (HITBOX.torso.yMin + HITBOX.torso.yMax) * 0.5 * height, mult: HITBOX.torso.mult },
+    { zone: 'arms', hx: 0.40, hy: (HITBOX.arms.yMax - HITBOX.arms.yMin) * height * 0.46, hz: 0.20, cy: (HITBOX.arms.yMin + HITBOX.arms.yMax) * 0.5 * height, mult: HITBOX.arms.mult },
+    { zone: 'legs', hx: 0.225, hy: (HITBOX.legs.yMax - HITBOX.legs.yMin) * height * 0.5, hz: 0.185, cy: (HITBOX.legs.yMin + HITBOX.legs.yMax) * 0.5 * height, mult: HITBOX.legs.mult }
   ];
 }
 

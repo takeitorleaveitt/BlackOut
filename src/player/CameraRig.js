@@ -98,20 +98,19 @@ export class CameraRig {
    *                            sprinting, walking, landImpact }
    */
   update(dt, st, ctx = {}) {
-    // --- angle smoothing: this is the "weight" of the camera ---------------
-    const stiffness = 34 - (1 - (S.bodycam ?? 1)) * 12;
+    // --- aim angles: 1:1 with the mouse, no smoothing ----------------------
+    // These used to be chased with an exponential spring (stiffness ~34, i.e.
+    // only ~43% of the remaining mouse delta applied per frame at 60fps). That
+    // is what made aiming feel laggy and mushy: the crosshair was always a
+    // frame or two behind the hand. Call of Duty — and every shooter that
+    // feels tight — moves the view exactly as far as the mouse moved, on the
+    // same frame. The camera's "weight" now lives purely in the decoupled
+    // roll / bob / shake / spring terms below, none of which touch where the
+    // gun is actually pointed, so the aim stays honest and instant while the
+    // motion still reads as smooth.
     const prevYaw = this.yaw, prevPitch = this.pitch;
-    // smoothDamp is a plain scalar exponential — it has no idea yaw wraps at
-    // +-PI, so a fast flick that crosses that seam (targetYaw jumps from say
-    // 3.13 to -3.13) used to read as a ~2*PI error and yank the camera almost
-    // all the way around the LONG way in a single frame before snapping back
-    // straight. Smooth toward the shortest wrapped delta instead so a fast
-    // turn always spins the short way, however far it goes.
-    let dYawTarget = this.targetYaw - this.yaw;
-    if (dYawTarget > Math.PI) dYawTarget -= Math.PI * 2;
-    if (dYawTarget < -Math.PI) dYawTarget += Math.PI * 2;
-    this.yaw = smoothDamp(this.yaw, this.yaw + dYawTarget, stiffness, dt);
-    this.pitch = smoothDamp(this.pitch, this.targetPitch, stiffness * 1.1, dt);
+    this.yaw = this.targetYaw;
+    this.pitch = this.targetPitch;
     // unwrap for rate computation
     let dYaw = this.yaw - prevYaw;
     if (dYaw > Math.PI) dYaw -= Math.PI * 2;
@@ -141,8 +140,13 @@ export class CameraRig {
     // counter, so leaning left slid the camera left but rolled the view as
     // if leaning right, and the two fighting each other read as "backwards".
     const shakeScale = S.cameraShake ?? 1;
-    const rollTarget = clamp(-this.yawRate * 0.010, -0.09, 0.09) * (S.bodycam ?? 1)
-      - st.leanT * 0.42;
+    // Turn-roll is scaled well down from what it was: now that yaw tracks the
+    // mouse 1:1, yawRate spikes hard on a flick, and the old coefficient would
+    // have tilted the whole world every time you turned quickly. A slide adds
+    // its own bank, which is where the roll budget is better spent.
+    const rollTarget = clamp(-this.yawRate * 0.004, -0.05, 0.05) * (S.bodycam ?? 1)
+      - st.leanT * 0.42
+      + (st.sliding ? 0.07 : 0);
     this.rollVel += (rollTarget - this.roll) * 90 * dt;
     this.rollVel *= Math.exp(-13 * dt);
     this.roll += this.rollVel * dt;
@@ -151,8 +155,11 @@ export class CameraRig {
     const speedN = clamp(st.speed / 5.55, 0, 1.25);
     const rate = st.sprinting ? 10.4 : st.crouchT > 0.5 ? 5.2 : st.walking ? 6.2 : 7.8;
     if (st.grounded && st.speed > 0.35) this.bobT += dt * rate * (0.5 + speedN * 0.75);
-    const amp = (S.headBob ?? 1) * speedN * (ctx.ads ? 0.35 : 1) * (st.grounded ? 1 : 0.1);
-    const sprintBoost = st.sprinting ? 2.1 : 1;
+    // No gait bob at all while sliding — you are not taking steps — and a
+    // tamer sprint boost, which used to more than double an already fast bob.
+    const amp = (S.headBob ?? 1) * speedN * (ctx.ads ? 0.35 : 1) *
+      (st.grounded ? 1 : 0.1) * (st.sliding ? 0 : 1);
+    const sprintBoost = st.sprinting ? 1.35 : 1;
     this.bobPos.set(
       Math.sin(this.bobT) * 0.020 * amp * sprintBoost,
       (Math.abs(Math.cos(this.bobT)) - 0.55) * 0.026 * amp * sprintBoost,
@@ -202,11 +209,15 @@ export class CameraRig {
     this.pos.y -= Math.abs(st.leanT) * 0.06;
 
     if (this._first) { this.smoothPos.copy(this.pos); this._first = false; }
-    // the camera body itself is sprung on the chest rig
-    const springRate = ctx.ads ? 46 : 30;
-    this.smoothPos.x = smoothDamp(this.smoothPos.x, this.pos.x, springRate, dt);
-    this.smoothPos.y = smoothDamp(this.smoothPos.y, this.pos.y, springRate * 0.82, dt);
-    this.smoothPos.z = smoothDamp(this.smoothPos.z, this.pos.z, springRate, dt);
+    // Horizontally the camera now sits exactly where the player is: the old
+    // chest-rig spring (rate 30) trailed the body by a few centimetres during
+    // every strafe and stop, which is the positional half of the "laggy"
+    // feel. Only the vertical axis is still damped, and stiffly, because that
+    // is what keeps stairs, step-ups and the crouch transition from jolting —
+    // it smooths geometry, not input.
+    this.smoothPos.x = this.pos.x;
+    this.smoothPos.z = this.pos.z;
+    this.smoothPos.y = smoothDamp(this.smoothPos.y, this.pos.y, 60, dt);
 
     const cam = this.camera;
     cam.position.set(

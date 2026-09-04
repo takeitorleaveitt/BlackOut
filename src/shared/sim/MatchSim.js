@@ -221,8 +221,14 @@ export class MatchSim {
     const w = p.weapons[clamp(shot.slot ?? p.slot, 0, p.weapons.length - 1)];
     if (!w) return;
     const now = this.time;
-    const minInterval = fireInterval(w.def) * 0.85;
-    if (now - p.lastFire < minInterval) return;      // rate limit
+    // Rate limit. The window is deliberately looser than the weapon's true
+    // cadence: shots are fired on the client's clock and arrive bunched by
+    // jitter, so a gate set close to the exact interval silently discards
+    // legitimate rounds — which the player experiences as shots that simply
+    // do not register. 0.7 still blocks any real rapid-fire cheat while
+    // leaving room for ordinary timing noise.
+    const minInterval = fireInterval(w.def) * 0.70;
+    if (now - p.lastFire < minInterval) return;
     // Melee never runs dry — magSize on the knife exists only to size the HUD
     // ammo readout, not to gate use. Without this guard the first stab of a
     // life would burn the knife's one "round" and every later swing that

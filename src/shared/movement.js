@@ -7,7 +7,10 @@ import {
   BTN, GRAVITY, SPEED_WALK, SPEED_SPRINT, SPEED_CROUCH, SPEED_TACTICAL, SPEED_ADS_MULT,
   ACCEL_GROUND, ACCEL_AIR, FRICTION_GROUND, JUMP_VELOCITY, PLAYER_RADIUS,
   PLAYER_HEIGHT_STAND, PLAYER_HEIGHT_CROUCH, STEP_HEIGHT, MAX_LEAN, LEAN_SPEED,
-  CROUCH_SPEED, SPRINT_MIN_FORWARD, clamp, lerp
+  CROUCH_SPEED, SPRINT_MIN_FORWARD,
+  SLIDE_SPEED, SLIDE_MIN_SPEED, SLIDE_TIME, SLIDE_END_SPEED, SLIDE_FRICTION,
+  SLIDE_COOLDOWN, SLIDE_STEER,
+  clamp, lerp
 } from './constants.js';
 import { depenetrate } from './physics.js';
 
@@ -27,7 +30,13 @@ export function createMoveState(x = 0, y = 0, z = 0) {
     landImpact: 0,
     stepDistance: 0,     // accumulated ground distance, drives footsteps
     airTime: 0,
-    lastJump: 0
+    lastJump: 0,
+    // --- slide ---
+    sliding: false,
+    slideT: 0,           // seconds into the current slide
+    slideCooldown: 0,
+    slideStarted: false, // true for the single tick a slide begins (drives fx)
+    prevCrouchHeld: false
   };
 }
 
@@ -60,11 +69,44 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
   if (len > 1) { fwd /= len; side /= len; }
   if (!canAct) { fwd = 0; side = 0; }
 
+  // --- slide --------------------------------------------------------------
+  // Hold crouch while sprinting to slide, Call-of-Duty style: a one-off speed
+  // launch that glides on low friction, forces the crouched stance, decays,
+  // and then drops you into a normal crouch. `s.sprinting` here is last tick's
+  // value, which is exactly the question being asked — "were you sprinting at
+  // the moment you pressed crouch?". Runs in shared code so client prediction
+  // and the authoritative sim slide identically.
+  s.slideCooldown = Math.max(0, s.slideCooldown - dt);
+  const crouchHeld = canAct && !!(b & BTN.CROUCH);
+  const crouchPressed = crouchHeld && !s.prevCrouchHeld;
+  s.prevCrouchHeld = crouchHeld;
+  s.slideStarted = false;
+
+  const hSpeed = Math.hypot(s.vx, s.vz);
+  if (!s.sliding && crouchPressed && s.grounded && s.sprinting &&
+      hSpeed > SLIDE_MIN_SPEED && s.slideCooldown <= 0) {
+    s.sliding = true;
+    s.slideT = 0;
+    s.slideStarted = true;
+    const inv = 1 / hSpeed;
+    s.vx = s.vx * inv * SLIDE_SPEED;
+    s.vz = s.vz * inv * SLIDE_SPEED;
+  }
+  if (s.sliding) {
+    s.slideT += dt;
+    if (!crouchHeld || !s.grounded || s.slideT >= SLIDE_TIME ||
+        Math.hypot(s.vx, s.vz) < SLIDE_END_SPEED) {
+      s.sliding = false;
+      s.slideCooldown = SLIDE_COOLDOWN;
+    }
+  }
+
   // --- stance -------------------------------------------------------------
-  const wantCrouch = canAct && !!(b & BTN.CROUCH);
+  const wantCrouch = crouchHeld || s.sliding;
   const targetCrouch = wantCrouch ? 1 : 0;
   if (targetCrouch > s.crouchT) {
-    s.crouchT = Math.min(1, s.crouchT + CROUCH_SPEED * dt * 0.75);
+    // a slide drops you into the low stance much faster than a normal crouch
+    s.crouchT = Math.min(1, s.crouchT + CROUCH_SPEED * dt * (s.sliding ? 2.2 : 0.75));
   } else if (targetCrouch < s.crouchT) {
     // only stand up if there is headroom
     const testT = Math.max(0, s.crouchT - CROUCH_SPEED * dt);
@@ -74,7 +116,8 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
 
   const ads = canAct && !!(b & BTN.ADS);
   const walkKey = canAct && !!(b & BTN.WALK);
-  const wantSprint = canAct && !!(b & BTN.SPRINT) && fwd > SPRINT_MIN_FORWARD && !ads && s.crouchT < 0.35;
+  const wantSprint = canAct && !!(b & BTN.SPRINT) && fwd > SPRINT_MIN_FORWARD && !ads &&
+    s.crouchT < 0.35 && !s.sliding;
   s.ads = ads && !wantSprint;
   s.sprinting = wantSprint;
   s.walking = walkKey && !wantSprint;
@@ -115,7 +158,17 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
   const wz = wishLen > 0 ? wishZ / wishLen : 0;
   const wishSpeed = wishLen > 0 ? speed : 0;
 
-  if (s.grounded) {
+  if (s.grounded && s.sliding) {
+    // A slide coasts: far lower drag than walking, and only a little steering
+    // authority, so it commits you to the direction you launched in.
+    const spd = Math.hypot(s.vx, s.vz);
+    if (spd > 0.01) {
+      const drop = spd * SLIDE_FRICTION * dt;
+      const k = Math.max(0, spd - drop) / spd;
+      s.vx *= k; s.vz *= k;
+    }
+    accelerate(s, wx, wz, wishSpeed * SLIDE_STEER, ACCEL_GROUND * 0.16, dt);
+  } else if (s.grounded) {
     // friction
     const spd = Math.hypot(s.vx, s.vz);
     if (spd > 0.01) {
@@ -130,7 +183,10 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
   }
 
   // --- jump ---------------------------------------------------------------
-  if (canAct && (b & BTN.JUMP) && s.grounded && s.crouchT < 0.4) {
+  // Jumping cancels a slide, so a slide can be used to close distance and then
+  // hop straight out of it rather than committing you to the full duration.
+  if (canAct && (b & BTN.JUMP) && s.grounded && (s.crouchT < 0.4 || s.sliding)) {
+    if (s.sliding) { s.sliding = false; s.slideCooldown = SLIDE_COOLDOWN; }
     s.vy = JUMP_VELOCITY;
     s.grounded = false;
     s.jumped = true;

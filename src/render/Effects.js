@@ -617,16 +617,9 @@ export class Effects {
       );
     }
 
-    if (surface === 'concrete' || surface === 'plaster' || surface === 'gravel' || surface === 'tile') {
-      for (let i = 0; i < Math.round(4 * q); i++) {
-        this.particles.spawn(
-          point[0] + rand(-0.06, 0.06), point[1] + rand(-0.06, 0.06), point[2] + rand(-0.06, 0.06),
-          normal[0] * rand(0.2, 0.9) + rand(-0.3, 0.3), rand(0.2, 0.9),
-          normal[2] * rand(0.2, 0.9) + rand(-0.3, 0.3),
-          [col[0] * 1.1, col[1] * 1.1, col[2] * 1.1], rand(9, 18), rand(0.7, 1.5), 0.35, 2.4
-        );
-      }
-    }
+    // (No dust/smoke puff on masonry impacts — the big soft slow-rising
+    // particles that used to spawn here were the "smoke" coming off every
+    // bullet strike. Only hard debris chips and sparks remain.)
     if (surface === 'metal') {
       for (let i = 0; i < Math.round(9 * q); i++) {
         this.particles.spark(

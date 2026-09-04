@@ -8,7 +8,7 @@
 import { MatchSim } from '../shared/sim/MatchSim.js';
 import { botName } from '../shared/sim/bot.js';
 import { bus } from '../core/EventBus.js';
-import { TICK_MS, SNAPSHOT_MS } from '../shared/constants.js';
+import { TICK_MS, SNAPSHOT_MS, INTERP_DELAY_MS } from '../shared/constants.js';
 
 export class LocalNet {
   constructor(cfg = {}) {
@@ -65,7 +65,13 @@ export class LocalNet {
   }
 
   sendInput(cmd) { this.sim.queueInput(this.id, [cmd]); }
-  sendShot(shot) { this.sim.handleShot(this.id, shot, 0); }
+  // Even offline the shot needs lag compensation. Remote entities (bots) are
+  // drawn INTERP_DELAY_MS in the past so their motion interpolates smoothly,
+  // but the sim's live state is that much further ahead — so resolving a shot
+  // against live positions tested a bot roughly half a metre from where the
+  // player actually saw and aimed at it. Rewinding by the same delay the
+  // renderer applies makes the sim agree with the screen.
+  sendShot(shot) { this.sim.handleShot(this.id, shot, INTERP_DELAY_MS); }
   sendEvent(kind, data = {}) {
     if (kind === 'reload') this.sim.handleReload(this.id);
     else if (kind === 'switch') this.sim.handleSwitch(this.id, data.slot | 0);

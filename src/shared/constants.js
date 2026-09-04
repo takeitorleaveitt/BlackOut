@@ -30,17 +30,35 @@ export const EYE_OFFSET = 0.14;               // eye height below the top of the
 export const STEP_HEIGHT = 0.42;
 
 // --- movement ---
+// Tuned for a Call-of-Duty pace and feel rather than a slow milsim one:
+// faster base speeds, near-instant acceleration and a hard stop, so the
+// player arrives at full speed on the first frame of input and stops on the
+// frame they release it. ACCEL_GROUND is multiplied by the target speed in
+// accelerate(), so this value is "reach target speed within one tick".
 export const GRAVITY = 21.0;
-export const SPEED_WALK = 3.15;
-export const SPEED_SPRINT = 5.55;
-export const SPEED_CROUCH = 1.52;
-export const SPEED_TACTICAL = 1.62;           // slow "tactical" walk
+export const SPEED_WALK = 4.05;
+export const SPEED_SPRINT = 6.60;
+export const SPEED_CROUCH = 2.00;
+export const SPEED_TACTICAL = 2.20;           // slow "tactical" walk
 export const SPEED_ADS_MULT = 0.52;
-export const ACCEL_GROUND = 42.0;
-export const ACCEL_AIR = 9.0;
-export const FRICTION_GROUND = 11.5;
+export const ACCEL_GROUND = 95.0;
+export const ACCEL_AIR = 14.0;
+export const FRICTION_GROUND = 16.0;
 export const FRICTION_AIR = 0.15;
-export const JUMP_VELOCITY = 5.35;
+export const JUMP_VELOCITY = 5.55;
+
+// --- slide (sprint + hold crouch) ---
+export const SLIDE_SPEED = 8.60;              // launch speed out of the sprint
+export const SLIDE_MIN_SPEED = 3.60;          // must already be moving this fast
+export const SLIDE_TIME = 0.85;               // longest a slide can last
+export const SLIDE_END_SPEED = 2.60;          // slide ends once it decays to this
+// Glide drag, far below ground friction. Sized so the slide decays from
+// SLIDE_SPEED down to SLIDE_END_SPEED just as SLIDE_TIME runs out, which
+// makes the slide end because it naturally ran out of momentum rather than
+// being cut short by the timer — about four metres of ground covered.
+export const SLIDE_FRICTION = 1.50;
+export const SLIDE_COOLDOWN = 0.60;           // gap before another slide can start
+export const SLIDE_STEER = 0.30;              // how much you can still steer mid-slide
 export const MAX_LEAN = 0.62;                 // radians of body roll when leaning
 export const LEAN_OFFSET = 0.46;              // lateral metres the head shifts when leaning
 export const LEAN_SPEED = 10.5;
@@ -54,11 +72,17 @@ export const HEAL_DELAY_MS = 6500;            // out-of-combat before regen star
 export const HEAL_RATE = 11;                  // hp / second, only up to segment cap
 export const HEAL_CAP = 100;
 
+// Hitboxes are sized to the *visible* blocky player model rather than to an
+// idealised human, because a round that visually connects with the model and
+// deals no damage is what reads as "broken hit detection". The rendered torso
+// is 0.42 wide and, once the chest plate and backpack are counted, ~0.43 deep;
+// the helmet is 0.23 x 0.25. The depths in particular used to be well under
+// the geometry a player can actually see and shoot at.
 export const HITBOX = {
-  head:  { yMin: 0.855, yMax: 1.00, radius: 0.135, mult: 3.35 },
-  torso: { yMin: 0.545, yMax: 0.855, radius: 0.30, mult: 1.00 },
-  arms:  { yMin: 0.545, yMax: 0.855, radius: 0.44, mult: 0.78 },
-  legs:  { yMin: 0.00,  yMax: 0.545, radius: 0.28, mult: 0.72 }
+  head:  { yMin: 0.850, yMax: 1.00, radius: 0.135, mult: 3.35 },
+  torso: { yMin: 0.540, yMax: 0.860, radius: 0.30, mult: 1.00 },
+  arms:  { yMin: 0.540, yMax: 0.860, radius: 0.44, mult: 0.78 },
+  legs:  { yMin: 0.00,  yMax: 0.540, radius: 0.28, mult: 0.72 }
 };
 
 // button bitmask packed into the input command

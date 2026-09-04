@@ -277,6 +277,13 @@ export class LocalPlayer {
       g.audio.footstep(st.groundSurface, [st.x, st.y, st.z], clamp(st.landImpact * 1.4, 0.3, 1.4), true);
       g.net?.sendEvent('land');
     }
+    // A slide is one long scrape, not a run of footfalls: play a single heavy
+    // scuff as it launches and then stay quiet until it ends.
+    if (st.slideStarted) {
+      g.audio.footstep(st.groundSurface, [st.x, st.y, st.z], 1.25, true);
+      this.rig.addShake(0.35 * (S.cameraShake ?? 1));
+    }
+    if (st.sliding) { this.stepAccum = st.stepDistance; return; }
     if (!st.grounded || st.speed < 0.4) return;
     const interval = stepInterval(st);
     if (st.stepDistance - this.stepAccum >= interval) {
