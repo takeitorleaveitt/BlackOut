@@ -24,8 +24,6 @@ import { createPlayMenu, createServerBrowser, createPrivateMatch, createLobby, c
 import { createLoadout } from './ui/screens/Loadout.js';
 import { createSettings } from './ui/screens/SettingsScreen.js';
 import { createFriends, createPause, createEndMatch } from './ui/screens/Misc.js';
-import { OperatorPicker } from './game/OperatorPicker.js';
-import { OPERATOR_BY_KEY } from './shared/operators.js';
 import { getMap, MAP_INFO } from './shared/maps/index.js';
 import { WEAPON_BY_ID, WEAPON_BY_KEY } from './shared/weapons.js';
 import { resolveWeapon } from './shared/attachments.js';
@@ -70,7 +68,6 @@ class Game {
     this.ui = new UI(document.getElementById('ui-root'));
     this.hud = new HUD(document.getElementById('hud-root'), this);
     this.hud.show(false);
-    this.operatorPicker = new OperatorPicker(document.getElementById('operator-root'), this);
 
     this.registerScreens();
     this.bindInput();
@@ -118,10 +115,7 @@ class Game {
         this.input.requestLock();
       }
       if (down && btn === 2 && S.toggleAds) this.player.adsToggle = !this.player.adsToggle;
-      if (this.mode === 'match' && down && !this.player.alive) {
-        if (this.matchState?.mode === 'siege' || this.matchState?.mode === 'quickplay') this.cycleSpectate();
-        else this.net?.requestRespawn();
-      }
+      if (this.mode === 'match' && down && !this.player.alive) this.net?.requestRespawn();
     });
 
     bus.on('input:lock', (locked) => {
@@ -523,7 +517,6 @@ class Game {
     this.paused = false;
     this.net = null;
     this.hud.show(false);
-    this.operatorPicker.root.hidden = true;
     this.input.exitLock();
     this.input.enabled = false;
     audio.stopAmbience();
@@ -596,12 +589,6 @@ class Game {
     if (!state) return;
     this.matchState = state;
     this.roomPlayerList = (state.board || []).map((r) => ({ id: r.id, name: r.name, team: r.team, bot: r.bot }));
-    if (state.board) {
-      for (const row of state.board) {
-        const r = this.remotes.get(row.id);
-        if (r) r.setOperator(row.operator);
-      }
-    }
     if (state.phase === 'matchEnd' && this.mode === 'match' && !this._endShown) {
       this._endShown = true;
       this.input.exitLock();
@@ -611,7 +598,6 @@ class Game {
     }
     if (state.phase !== 'matchEnd') this._endShown = false;
     if (this.scoreboardOpen) this.hud.toggleScoreboard(true, state);
-    this.operatorPicker.update(state);
   }
 
   onEvents(list) {
@@ -774,26 +760,6 @@ class Game {
     if (this.mode === 'match') this.player.setLoadout(this.loadout());
   }
 
-  /**
-   * Siege operator pick. Same optimistic-update shape as onLoadoutChanged()
-   * above — the server call alone updates the authoritative sim, but the
-   * client's own weapon list is a locally-predicted structure that nothing
-   * else re-syncs it from, so without this the picker would visibly apply
-   * (operatorKey changes) while you kept holding the old operator's gun
-   * until the next full respawn snapshot caught it up.
-   */
-  pickOperator(opKey) {
-    this.net?.sendEvent('operator', { key: opKey });
-    const op = OPERATOR_BY_KEY[opKey];
-    if (op && this.mode === 'match') {
-      this.player.setLoadout({ primary: op.primary, secondary: op.secondary, primaryAttachments: [], secondaryAttachments: [] });
-    }
-  }
-
-  pickSpawnChoice(extra) {
-    this.net?.sendEvent('operator', { key: null, ...extra });
-  }
-
   onNameChanged() {
     if (this.hud?.unit) this.hud.unit.textContent = 'UNIT ' + S.name;
   }
@@ -840,9 +806,6 @@ class Game {
     // --- match ------------------------------------------------------------
     this.net?.update(dt);
     if (!this.paused) this.player.update(dt, this.input);
-    const spectating = !this.player.alive && (this.matchState?.mode === 'siege' || this.matchState?.mode === 'quickplay');
-    if (spectating) this.updateSpectate();
-    else this.spectateTargetId = null;
 
     const serverTime = this.net?.offline ? performance.now() : Date.now() + (this.onlineNet?.serverTimeOffset || 0);
     const renderTime = serverTime - INTERP_DELAY_MS;
@@ -884,42 +847,10 @@ class Game {
       this.hud.modeLabel.textContent = `${this.matchState.modeName} · ${this.matchState.mapName}`;
       if (this.matchState.bomb?.planted) {
         this.hud.setObjective(`CHARGE ARMED · ${this.matchState.bomb.timer}s`);
-      } else if (this.matchState.mode === 'siege' || this.matchState.mode === 'quickplay') {
-        const attacking = this.player.team === this.matchState.attackTeam;
-        const role = attacking ? 'ATTACKING' : 'DEFENDING';
-        const hold = this.matchState.siegeHold || 0;
-        this.hud.setObjective(hold > 0.3
-          ? `${role} · SITE CONTESTED ${hold.toFixed(0)}/${this.matchState.siteHoldSec}s`
-          : role + (this.matchState.otActive ? ' · OVERTIME' : ''));
       }
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Siege spectator camera — no in-round respawn, so a dead player rides
-  // along with a living teammate's view instead of staring at a death screen.
-  cycleSpectate() {
-    const living = [...this.remotes.values()].filter((r) => r.team === this.player.team && !r.render.dead);
-    if (!living.length) return;
-    const i = living.findIndex((r) => r.id === this.spectateTargetId);
-    this.spectateTargetId = living[(i + 1) % living.length].id;
-  }
-
-  updateSpectate() {
-    const living = [...this.remotes.values()].filter((r) => r.team === this.player.team && !r.render.dead);
-    if (!living.length) {
-      this.spectateTargetId = null;
-      this.hud.setPrompt('NO TEAMMATES ALIVE — CLICK TO RESPAWN NEXT ROUND');
-      return;
-    }
-    if (!living.some((r) => r.id === this.spectateTargetId)) this.spectateTargetId = living[0].id;
-    const target = this.remotes.get(this.spectateTargetId);
-    if (!target) return;
-    this._specEye = target.eyePosition(this._specEye || new THREE.Vector3());
-    this.engine.camera.position.copy(this._specEye);
-    this.engine.camera.rotation.set(target.render.pitch, target.render.yaw, 0, 'YXZ');
-    this.hud.setPrompt(`SPECTATING ${target.name} — CLICK TO CYCLE`);
-  }
 }
 
 function fmtClock(sec) {

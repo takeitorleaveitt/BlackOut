@@ -337,13 +337,12 @@ export class LocalPlayer {
     );
     this.rig.addAimKick(shot.aimKick.y * 0.55, shot.aimKick.x * 0.5);
 
-    // muzzle flash + smoke at the actual muzzle (guns only — a knife has
-    // neither a muzzle nor a casing to eject)
+    // muzzle flash at the actual muzzle (guns only — a knife has neither a
+    // muzzle nor a casing to eject)
     const mz = g.viewmodel.getMuzzle(this._muzzle, cam);
     const suppressed = !!def.flags?.suppressed;
     if (mz && !def.melee) {
       g.effects.flashes.flash(mz.pos, def.pellets > 1 ? 1.5 : 1.0, suppressed);
-      g.effects.muzzleSmoke(mz.pos, mz.dir, suppressed ? 0.4 : 1);
       if (!suppressed) g.engine.postCtx.flash = 0.055;
     }
 

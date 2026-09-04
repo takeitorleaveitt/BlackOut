@@ -668,9 +668,6 @@ export class Effects {
     }
   }
 
-  /** Muzzle smoke — removed per request; kept as a no-op so callers don't need changes. */
-  muzzleSmoke() {}
-
   bloodMist(point, dir) {
     const q = S.particles || 1;
     for (let i = 0; i < Math.round(9 * q); i++) {

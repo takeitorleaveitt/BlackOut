@@ -4,6 +4,12 @@
 // them individually: the magazine drops out on a reload, the charging handle
 // cycles, the bolt reciprocates, the optic sits on its own rail. Proportions,
 // materials and silhouettes differ per weapon so they read apart instantly.
+//
+// Built to match the "Block Guns" low-poly reference sheets: every gun is a
+// small stack of flat axis-aligned rectangular prisms (no cylindrical
+// barrels/rails, no fine greebles like selector switches or sling loops) —
+// a clean, chunky, minimal silhouette per weapon class rather than a
+// detailed replica.
 
 import * as THREE from 'three';
 
@@ -34,52 +40,41 @@ function part(geo, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
   return m;
 }
 
-/** Picatinny rail teeth — cheap detail that reads well up close. */
-function railStack(group, len, y, z0, mat = M.black) {
-  for (let i = 0; i < Math.floor(len / 0.022); i++) {
-    group.add(part(b(0.028, 0.006, 0.012), mat, 0, y, z0 - i * 0.022));
-  }
+/** Flat top-rail bar — a single chunky block, not individual rail teeth. */
+function topRail(g, len, y, z0, mat = M.black) {
+  g.add(part(b(0.040, 0.010, len), mat, 0, y, z0 - len / 2));
 }
 
-// Peep-and-post iron sights. Both ends sit on the weapon's centreline (x=0)
-// at the same height the ADS pose centres on (see `ironHeight` below), so
-// once aimed the rear aperture and front post land stacked under the
-// crosshair with a real hole to look through — guns without an optic used
-// to have no sight geometry at all, so ADS just zoomed the receiver up to
-// fill the screen with nothing to actually aim with.
+// Boxy peep-and-post iron sights. Both ends sit on the weapon's centreline
+// (x=0) at the same height the ADS pose centres on (see `ironHeight` below),
+// so once aimed the rear aperture and front post land stacked under the
+// crosshair with a real gap to look through.
 function ironSights(g, y, rearZ, frontZ, mat = M.steelWorn) {
-  g.add(part(c(0.015, 0.015, 0.004, 8), mat, 0, y, rearZ, Math.PI / 2));   // rear aperture housing (disc)
-  g.add(part(c(0.008, 0.008, 0.005, 8), M.black, 0, y, rearZ, Math.PI / 2)); // the actual peep hole
-  g.add(part(b(0.006, 0.020, 0.012), mat, -0.017, y, rearZ));             // housing ears
-  g.add(part(b(0.006, 0.020, 0.012), mat, 0.017, y, rearZ));
-  g.add(part(b(0.022, 0.006, 0.016), mat, 0, y - 0.011, frontZ));         // front sight base
-  g.add(part(b(0.006, 0.026, 0.006), M.black, 0, y + 0.005, frontZ));     // front post
+  g.add(part(b(0.030, 0.022, 0.010), mat, 0, y, rearZ));               // rear aperture block
+  g.add(part(b(0.010, 0.010, 0.012), M.black, 0, y, rearZ));           // peep hole (dark inset)
+  g.add(part(b(0.022, 0.006, 0.016), mat, 0, y - 0.011, frontZ));      // front sight base
+  g.add(part(b(0.006, 0.026, 0.006), M.black, 0, y + 0.005, frontZ)); // front post
 }
 
 /** Notch-and-post for pistols — same centreline convention as ironSights(). */
 function pistolSights(g, y, rearZ, frontZ, mat = M.steelWorn) {
-  g.add(part(b(0.026, 0.008, 0.010), mat, 0, y, rearZ));
-  g.add(part(b(0.007, 0.010, 0.011), M.black, -0.008, y + 0.002, rearZ)); // notch walls
-  g.add(part(b(0.007, 0.010, 0.011), M.black, 0.008, y + 0.002, rearZ));
-  g.add(part(b(0.005, 0.018, 0.006), M.black, 0, y + 0.006, frontZ));     // front post
+  g.add(part(b(0.026, 0.010, 0.010), mat, 0, y, rearZ));
+  g.add(part(b(0.010, 0.006, 0.011), M.black, 0, y + 0.002, rearZ));  // notch inset
+  g.add(part(b(0.005, 0.018, 0.006), M.black, 0, y + 0.006, frontZ)); // front post
 }
 
 const BUILD = {
   m4a1(g) {
     g.add(part(b(0.062, 0.085, 0.30), M.polymer, 0, 0, -0.02));                 // lower receiver
     g.add(part(b(0.05, 0.055, 0.26), M.polymer, 0, 0.052, -0.10));              // upper receiver
-    railStack(g, 0.24, 0.084, -0.02);
-    g.add(part(c(0.014, 0.014, 0.40), M.steel, 0, 0.035, -0.36, Math.PI / 2));  // barrel
+    topRail(g, 0.24, 0.086, -0.02);
+    g.add(part(b(0.022, 0.022, 0.40), M.steel, 0, 0.035, -0.36));               // barrel block
     g.add(part(b(0.056, 0.056, 0.24), M.polymer, 0, 0.035, -0.28));             // quad-rail handguard
-    g.add(part(b(0.062, 0.062, 0.02), M.steel, 0, 0.035, -0.56));
-    g.add(part(c(0.018, 0.020, 0.06, 8), M.black, 0, 0.035, -0.585, Math.PI / 2)); // flash hider
+    g.add(part(b(0.030, 0.030, 0.06), M.black, 0, 0.035, -0.585));              // flash hider block
     g.add(part(b(0.05, 0.12, 0.05), M.polymer, 0, -0.10, 0.03, 0.22));          // pistol grip
     g.add(part(b(0.036, 0.036, 0.16), M.polymer, 0, -0.005, 0.16));             // buffer tube
-    g.add(part(b(0.06, 0.09, 0.11), M.polymer, 0, -0.01, 0.21));                // collapsible stock
-    g.add(part(b(0.055, 0.10, 0.03), M.polymer, 0, -0.015, 0.28));              // butt pad
+    g.add(part(b(0.07, 0.11, 0.13), M.polymer, 0, -0.015, 0.26));               // stock block
     g.add(part(b(0.03, 0.055, 0.02), M.steel, 0, -0.055, -0.03));               // trigger guard
-    g.add(part(b(0.010, 0.020, 0.014), M.black, -0.032, -0.015, 0.005));        // selector switch
-    g.add(part(b(0.024, 0.024, 0.010), M.steel, 0, -0.02, 0.30));               // sling loop
     ironSights(g, 0.086, 0.02, -0.40);
     g.name = 'm4a1';
   },
@@ -87,55 +82,47 @@ const BUILD = {
     g.add(part(b(0.066, 0.10, 0.28), M.steel, 0, 0, -0.01));
     g.add(part(b(0.058, 0.05, 0.20), M.wood, 0, 0.05, -0.24));                  // upper handguard
     g.add(part(b(0.062, 0.062, 0.22), M.wood, 0, -0.008, -0.24));               // lower handguard
-    g.add(part(c(0.015, 0.015, 0.42), M.steel, 0, 0.03, -0.40, Math.PI / 2));
-    g.add(part(c(0.023, 0.026, 0.075, 8), M.steel, 0, 0.03, -0.60, Math.PI / 2)); // muzzle brake
+    g.add(part(b(0.024, 0.024, 0.42), M.steel, 0, 0.03, -0.40));                // barrel block
+    g.add(part(b(0.034, 0.034, 0.075), M.steel, 0, 0.03, -0.62));               // muzzle brake block
     g.add(part(b(0.03, 0.06, 0.05), M.steel, 0, 0.07, -0.30));                  // gas block
     g.add(part(b(0.048, 0.13, 0.05), M.wood, 0, -0.11, 0.02, 0.20));            // grip
     g.add(part(b(0.05, 0.075, 0.24), M.wood, 0, -0.02, 0.20, -0.06));           // fixed stock
-    g.add(part(b(0.055, 0.10, 0.025), M.black, 0, -0.032, 0.315, -0.06));
-    g.add(part(b(0.028, 0.05, 0.02), M.steel, 0, -0.06, -0.02));
-    g.add(part(b(0.012, 0.052, 0.10), M.steel, -0.037, 0.02, 0.02, 0, 0, 0.15)); // AK safety lever
-    g.add(part(b(0.026, 0.026, 0.012), M.steel, 0, -0.03, 0.34));               // sling loop
+    g.add(part(b(0.028, 0.05, 0.02), M.steel, 0, -0.06, -0.02));                // trigger guard
     ironSights(g, 0.086, 0.06, -0.36);
     g.name = 'ak74';
   },
   mp5(g) {
     g.add(part(b(0.056, 0.082, 0.26), M.polymer, 0, 0, -0.01));
-    g.add(part(c(0.03, 0.03, 0.20, 12), M.polymer, 0, 0.012, -0.22, Math.PI / 2)); // tri-lug handguard
-    g.add(part(c(0.012, 0.012, 0.22), M.steel, 0, 0.012, -0.28, Math.PI / 2));
-    g.add(part(c(0.017, 0.017, 0.03, 8), M.steel, 0, 0.012, -0.395, Math.PI / 2));
-    g.add(part(b(0.044, 0.11, 0.05), M.polymer, 0, -0.09, 0.02, 0.18));
+    g.add(part(b(0.048, 0.048, 0.20), M.polymer, 0, 0.012, -0.22));             // handguard block
+    g.add(part(b(0.020, 0.020, 0.22), M.steel, 0, 0.012, -0.28));               // barrel block
+    g.add(part(b(0.028, 0.028, 0.03), M.steel, 0, 0.012, -0.395));              // muzzle cap
+    g.add(part(b(0.044, 0.11, 0.05), M.polymer, 0, -0.09, 0.02, 0.18));         // grip
     g.add(part(b(0.03, 0.03, 0.20), M.steel, 0, 0.0, 0.16));                    // retractable stock rod
-    g.add(part(b(0.05, 0.07, 0.03), M.polymer, 0, 0.0, 0.27));
-    g.add(part(c(0.014, 0.014, 0.07, 8), M.steel, 0.028, 0.03, -0.16, 0, 0, 0.4)); // cocking tube
-    g.add(part(b(0.028, 0.05, 0.02), M.steel, 0, -0.05, -0.02));
-    g.add(part(b(0.010, 0.018, 0.012), M.black, -0.030, -0.01, 0.0));           // selector switch
-    g.add(part(b(0.022, 0.022, 0.010), M.steel, 0, 0.03, 0.02));                // sling loop
+    g.add(part(b(0.05, 0.07, 0.03), M.polymer, 0, 0.0, 0.27));                  // stock plate
+    g.add(part(b(0.028, 0.05, 0.02), M.steel, 0, -0.05, -0.02));                // trigger guard
     ironSights(g, 0.086, 0.02, -0.32);
     g.name = 'mp5';
   },
   mp7(g) {
     g.add(part(b(0.05, 0.075, 0.20), M.polymer, 0, 0, 0.0));
     g.add(part(b(0.044, 0.04, 0.14), M.polymer, 0, 0.045, -0.10));
-    railStack(g, 0.14, 0.068, -0.04);
-    g.add(part(c(0.010, 0.010, 0.18), M.steel, 0, 0.028, -0.19, Math.PI / 2));
-    g.add(part(b(0.04, 0.04, 0.09), M.polymer, 0, 0.028, -0.17));
-    g.add(part(b(0.042, 0.10, 0.045), M.polymer, 0, -0.075, 0.01, 0.12));
+    topRail(g, 0.14, 0.068, -0.04);
+    g.add(part(b(0.018, 0.018, 0.18), M.steel, 0, 0.028, -0.19));               // barrel block
+    g.add(part(b(0.04, 0.04, 0.09), M.polymer, 0, 0.028, -0.17));               // shroud
+    g.add(part(b(0.042, 0.10, 0.045), M.polymer, 0, -0.075, 0.01, 0.12));       // grip
     g.add(part(b(0.03, 0.075, 0.04), M.polymer, 0, -0.05, -0.15, -0.35));       // folding foregrip
-    g.add(part(b(0.026, 0.026, 0.13), M.steel, 0, 0.005, 0.13));
-    g.add(part(b(0.046, 0.06, 0.025), M.polymer, 0, 0.005, 0.20));
-    g.add(part(b(0.008, 0.016, 0.010), M.black, -0.026, -0.005, 0.02));         // selector switch
+    g.add(part(b(0.026, 0.026, 0.13), M.steel, 0, 0.005, 0.13));                // stock rod
+    g.add(part(b(0.046, 0.06, 0.025), M.polymer, 0, 0.005, 0.20));              // stock plate
     ironSights(g, 0.086, 0.04, -0.18);
     g.name = 'mp7';
   },
   m870(g) {
     g.add(part(b(0.058, 0.09, 0.24), M.steelWorn, 0, 0, -0.02));
-    g.add(part(c(0.017, 0.017, 0.50), M.steelWorn, 0, 0.036, -0.40, Math.PI / 2)); // barrel
-    g.add(part(c(0.014, 0.014, 0.42), M.steel, 0, -0.005, -0.36, Math.PI / 2));    // magazine tube
-    g.add(part(b(0.048, 0.11, 0.05), M.wood, 0, -0.085, 0.02, 0.22));
-    g.add(part(b(0.052, 0.085, 0.26), M.wood, 0, -0.03, 0.20, -0.10));
-    g.add(part(b(0.056, 0.10, 0.028), M.black, 0, -0.056, 0.325, -0.10));
-    g.add(part(b(0.02, 0.02, 0.02), M.steel, 0, 0.062, -0.60));                    // bead sight
+    g.add(part(b(0.030, 0.030, 0.50), M.steelWorn, 0, 0.036, -0.40));           // barrel block
+    g.add(part(b(0.022, 0.022, 0.42), M.steel, 0, -0.005, -0.36));              // magazine tube block
+    g.add(part(b(0.048, 0.11, 0.05), M.wood, 0, -0.085, 0.02, 0.22));           // grip
+    g.add(part(b(0.052, 0.085, 0.26), M.wood, 0, -0.03, 0.20, -0.10));          // stock
+    g.add(part(b(0.02, 0.02, 0.02), M.steel, 0, 0.062, -0.60));                 // bead sight
     g.name = 'm870';
   },
   glock17(g) {
@@ -146,30 +133,24 @@ const BUILD = {
     g.name = 'glock17';
   },
   deagle(g) {
-    g.add(part(b(0.040, 0.052, 0.20), M.steelWorn, 0, -0.008, -0.05));         // long slide/frame
-    g.add(part(b(0.034, 0.026, 0.16), M.steel, 0, 0.026, -0.11));              // vented barrel shroud
-    g.add(part(b(0.036, 0.006, 0.14), M.steelWorn, 0, 0.041, -0.11));          // vent rib
+    g.add(part(b(0.040, 0.052, 0.20), M.steelWorn, 0, -0.008, -0.05));         // slide/frame
+    g.add(part(b(0.034, 0.026, 0.16), M.steel, 0, 0.026, -0.11));              // barrel shroud block
     g.add(part(b(0.036, 0.135, 0.05), M.polymer, 0, -0.10, 0.035, 0.17));      // grip, slight rake
     g.add(part(b(0.022, 0.038, 0.02), M.black, 0, -0.04, -0.02));              // trigger guard
     g.add(part(b(0.010, 0.012, 0.02), M.black, 0, 0.052, -0.20));              // front sight post
     g.add(part(b(0.026, 0.008, 0.010), M.steelWorn, 0, 0.052, 0.03));          // rear sight
-    g.add(part(b(0.007, 0.010, 0.011), M.black, -0.008, 0.054, 0.03));
-    g.add(part(b(0.007, 0.010, 0.011), M.black, 0.008, 0.054, 0.03));
     g.name = 'deagle';
   },
   scarh(g) {
     g.add(part(b(0.07, 0.095, 0.32), M.polymerTan, 0, 0, -0.02));
     g.add(part(b(0.062, 0.05, 0.26), M.polymerTan, 0, 0.056, -0.14));
-    railStack(g, 0.30, 0.088, -0.02, M.polymerTan);
-    g.add(part(c(0.016, 0.016, 0.44), M.steel, 0, 0.032, -0.40, Math.PI / 2));
-    g.add(part(b(0.062, 0.06, 0.26), M.polymerTan, 0, 0.03, -0.30));
-    g.add(part(c(0.022, 0.024, 0.08, 8), M.black, 0, 0.032, -0.62, Math.PI / 2));
-    g.add(part(b(0.052, 0.125, 0.05), M.polymer, 0, -0.105, 0.04, 0.20));
+    topRail(g, 0.30, 0.088, -0.02, M.polymerTan);
+    g.add(part(b(0.026, 0.026, 0.44), M.steel, 0, 0.032, -0.40));              // barrel block
+    g.add(part(b(0.062, 0.06, 0.26), M.polymerTan, 0, 0.03, -0.30));           // handguard
+    g.add(part(b(0.036, 0.036, 0.08), M.black, 0, 0.032, -0.62));              // muzzle device
+    g.add(part(b(0.052, 0.125, 0.05), M.polymer, 0, -0.105, 0.04, 0.20));      // grip
     g.add(part(b(0.058, 0.10, 0.20), M.polymerTan, 0, -0.012, 0.20));          // folding stock
-    g.add(part(b(0.06, 0.11, 0.03), M.polymer, 0, -0.02, 0.30));
-    g.add(part(b(0.032, 0.055, 0.02), M.steel, 0, -0.06, -0.03));
-    g.add(part(b(0.012, 0.022, 0.016), M.black, -0.038, -0.02, 0.01));          // selector switch
-    g.add(part(b(0.026, 0.026, 0.012), M.steel, 0, -0.02, 0.36));               // sling loop
+    g.add(part(b(0.032, 0.055, 0.02), M.steel, 0, -0.06, -0.03));              // trigger guard
     ironSights(g, 0.086, 0.04, -0.44, M.polymerTan);
     g.name = 'scarh';
   },
@@ -211,7 +192,7 @@ const BOLTS = {
   glock17: () => {
     const g = new THREE.Group();
     g.add(part(b(0.03, 0.055, 0.18), M.steel, 0, 0.02, -0.03));
-    g.add(part(c(0.008, 0.008, 0.10, 8), M.steelWorn, 0, 0.022, -0.11, Math.PI / 2));
+    g.add(part(b(0.014, 0.014, 0.10), M.steelWorn, 0, 0.022, -0.11));
     g.add(part(b(0.008, 0.012, 0.008), M.black, 0, 0.05, -0.105));
     g.add(part(b(0.024, 0.012, 0.01), M.black, 0, 0.05, 0.05));
     return g;
@@ -219,7 +200,7 @@ const BOLTS = {
   deagle: () => {
     const g = new THREE.Group();
     g.add(part(b(0.038, 0.06, 0.20), M.steel, 0, 0.024, -0.06));
-    g.add(part(c(0.009, 0.009, 0.11, 8), M.steelWorn, 0, 0.026, -0.14, Math.PI / 2));
+    g.add(part(b(0.016, 0.016, 0.11), M.steelWorn, 0, 0.026, -0.14));
     g.add(part(b(0.009, 0.014, 0.009), M.black, 0, 0.055, -0.13));
     g.add(part(b(0.026, 0.014, 0.012), M.black, 0, 0.055, 0.05));
     return g;
@@ -245,11 +226,11 @@ export function buildAttachment(key) {
       g.userData.opticHeight = 0.058;
       break;
     case 'suppressor':
-      g.add(part(c(0.021, 0.023, 0.17, 12), M.black, 0, 0, -0.06, Math.PI / 2));
-      g.add(part(c(0.024, 0.024, 0.012, 12), M.steel, 0, 0, 0.018, Math.PI / 2));
+      g.add(part(b(0.042, 0.042, 0.17), M.black, 0, 0, -0.06));
+      g.add(part(b(0.048, 0.048, 0.012), M.steel, 0, 0, 0.018));
       break;
     case 'compensator':
-      g.add(part(c(0.020, 0.022, 0.055, 8), M.steelWorn, 0, 0, -0.01, Math.PI / 2));
+      g.add(part(b(0.040, 0.040, 0.055), M.steelWorn, 0, 0, -0.01));
       g.add(part(b(0.044, 0.006, 0.03), M.steelWorn, 0, 0.014, -0.01));
       g.add(part(b(0.044, 0.006, 0.03), M.steelWorn, 0, -0.014, -0.01));
       break;
@@ -258,8 +239,8 @@ export function buildAttachment(key) {
       g.add(part(b(0.034, 0.012, 0.034), M.black, 0, -0.004, 0));
       break;
     case 'flashlight':
-      g.add(part(c(0.016, 0.016, 0.07, 10), M.black, 0, 0, -0.01, Math.PI / 2));
-      g.add(part(c(0.014, 0.014, 0.004, 10), new THREE.MeshBasicMaterial({ color: 0xfff6dd }), 0, 0, -0.046, Math.PI / 2));
+      g.add(part(b(0.032, 0.032, 0.07), M.black, 0, 0, -0.01));
+      g.add(part(b(0.028, 0.028, 0.004), new THREE.MeshBasicMaterial({ color: 0xfff6dd }), 0, 0, -0.046));
       break;
     case 'laser':
       g.add(part(b(0.018, 0.018, 0.05), M.black, 0, 0, 0));

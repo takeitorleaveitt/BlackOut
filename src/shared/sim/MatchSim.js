@@ -12,7 +12,6 @@ import { simulateBullet, applySpread } from '../ballistics.js';
 import { WEAPON_BY_KEY, WEAPON_BY_ID, fireInterval, PRIMARIES, SECONDARIES } from '../weapons.js';
 import { resolveWeapon } from '../attachments.js';
 import { MODES } from '../modes.js';
-import { OPERATOR_BY_KEY, OPERATORS_FOR_TEAM } from '../operators.js';
 import { BotBrain, botName } from './bot.js';
 import { EV, SF } from '../protocol.js';
 import {
@@ -26,13 +25,11 @@ let nextEntityId = 1;
 
 export class MatchSim {
   constructor(opts = {}) {
-    this.modeKey = opts.mode || 'tdm';
-    this.mode = MODES[this.modeKey] || MODES.tdm;
-    const isSiege = this.modeKey === 'siege' || this.modeKey === 'quickplay';
-    // Siege/Quickplay are purpose-built for one map — see mapsForMode().
-    this.mapKey = isSiege ? 'district9' : (opts.map || 'warehouse');
+    this.mapKey = opts.map || 'warehouse';
     this.map = getMap(this.mapKey);
     this.world = new World(this.map.brushes, { key: this.mapKey });
+    this.modeKey = opts.mode || 'tdm';
+    this.mode = MODES[this.modeKey] || MODES.tdm;
 
     const o = opts.options || {};
     this.options = {
@@ -61,17 +58,6 @@ export class MatchSim {
     this.rng = mulberry32(opts.seed || (Date.now() & 0xffffffff));
     this.spawnCursor = { 1: 0, 2: 0, ffa: 0 };
     this.started = false;
-
-    // --- Siege / Quickplay only ---------------------------------------------
-    // Tan (BRAVO) attacks first, Blue (ALPHA) defends first; beginRound()
-    // flips this at the halfway point and once more entering overtime.
-    // speedMult/damageMult are the overtime "different speed and armor"
-    // modifiers — 1 outside OT, so every other mode ignores them entirely.
-    this.attackTeam = TEAM.BRAVO;
-    this.otActive = false;
-    this.speedMult = 1;
-    this.damageMult = 1;
-    this.siegeHoldT = 0;
   }
 
   // -------------------------------------------------------------------------
@@ -123,9 +109,7 @@ export class MatchSim {
       firing: false, reloading: false, reloadEnd: 0,
       planting: false, plantProgress: 0,
       lastShotAt: 0,
-      joinedAt: this.time,
-      // Siege / Quickplay only
-      operatorKey: null, attackSide: null, floorChoice: null
+      joinedAt: this.time
     };
     this.setLoadout(p, info.loadout);
     this.players.set(id, p);
@@ -177,7 +161,6 @@ export class MatchSim {
 
   // -------------------------------------------------------------------------
   spawnPointFor(p) {
-    if (this.modeKey === 'siege' || this.modeKey === 'quickplay') return this.spawnPointForSiege(p);
     const sp = this.map.spawns;
     let list;
     if (this.mode.teams && p.team === TEAM.ALPHA && sp.alpha.length) list = sp.alpha;
@@ -200,75 +183,6 @@ export class MatchSim {
       if (score > bestScore) { bestScore = score; best = s; }
     }
     return best;
-  }
-
-  /**
-   * District 9's spawn lists are tagged by ROLE, not by literal team — the
-   * exterior points (three approach sides) are stored under 'bravo', the
-   * interior points (two floor landings) under 'alpha' — because a side
-   * swap means whichever team is attacking this round needs the exterior
-   * points, not whichever team happens to be BRAVO. attackSide/floorChoice
-   * (from handleOperatorPick, or auto-assigned in beginRound()) narrow that
-   * down to the specific approach or floor the player picked.
-   */
-  spawnPointForSiege(p) {
-    const sp = this.map.spawns;
-    const attacking = p.team === this.attackTeam;
-    const pool = (attacking ? sp.bravo : sp.alpha);
-    let list = pool.length ? pool : sp.ffa;
-    if (attacking && p.attackSide) {
-      const filtered = list.filter((s) => s.side === p.attackSide);
-      if (filtered.length) list = filtered;
-    } else if (!attacking && p.floorChoice) {
-      const filtered = list.filter((s) => s.floor === p.floorChoice);
-      if (filtered.length) list = filtered;
-    }
-    return list[Math.floor(this.rng() * list.length)] || sp.ffa[0];
-  }
-
-  /** Fill in an operator/side/floor for anyone who hasn't picked (bots, or a human who let the clock run out). */
-  autoAssignSiegeDefaults() {
-    for (const team of [TEAM.ALPHA, TEAM.BRAVO]) {
-      const roster = OPERATORS_FOR_TEAM(team);
-      const teamPlayers = [...this.players.values()].filter((p) => p.team === team);
-      const used = new Set();
-      for (const p of teamPlayers) {
-        if (p.operatorKey && OPERATOR_BY_KEY[p.operatorKey] && !used.has(p.operatorKey)) used.add(p.operatorKey);
-        else p.operatorKey = null;
-      }
-      for (const p of teamPlayers) {
-        if (p.operatorKey) continue;
-        const pick = roster.find((o) => !used.has(o.key));
-        if (!pick) continue;
-        used.add(pick.key);
-        p.operatorKey = pick.key;
-        this.setLoadout(p, { primary: pick.primary, secondary: pick.secondary, primaryAttachments: [], secondaryAttachments: [] });
-      }
-      const attacking = team === this.attackTeam;
-      for (const p of teamPlayers) {
-        if (attacking && !p.attackSide) p.attackSide = ['north', 'west', 'east'][Math.floor(this.rng() * 3)];
-        if (!attacking && !p.floorChoice) p.floorChoice = this.rng() < 0.5 ? 1 : 2;
-      }
-    }
-  }
-
-  /** Client -> server operator pick (and/or spawn side / floor choice), only honoured during the pre-round freeze. */
-  handleOperatorPick(id, opKey, extra = {}) {
-    const p = this.players.get(id);
-    if (!p || !this.mode.operators) return;
-    if (this.phase !== PHASE.FREEZE && this.phase !== PHASE.WARMUP) return;
-    if (opKey) {
-      const op = OPERATOR_BY_KEY[opKey];
-      if (!op || op.team !== p.team) return;
-      for (const o of this.players.values()) {
-        if (o.id !== p.id && o.team === p.team && o.operatorKey === opKey) return;
-      }
-      p.operatorKey = opKey;
-      this.setLoadout(p, { primary: op.primary, secondary: op.secondary, primaryAttachments: [], secondaryAttachments: [] });
-    }
-    if (extra.floor === 1 || extra.floor === 2) p.floorChoice = extra.floor;
-    if (extra.side === 'north' || extra.side === 'west' || extra.side === 'east') p.attackSide = extra.side;
-    if (p.alive) this.respawn(p);
   }
 
   respawn(p, immediate = false) {
@@ -390,7 +304,7 @@ export class MatchSim {
   applyDamage(attacker, victimId, hit) {
     const v = this.players.get(victimId);
     if (!v || !v.alive) return;
-    const dmg = Math.round(hit.damage * this.damageMult * 10) / 10;
+    const dmg = Math.round(hit.damage * 10) / 10;
     v.health -= dmg;
     v.lastDamage = this.time;
     attacker.damageDealt += dmg;
@@ -546,7 +460,6 @@ export class MatchSim {
     }
 
     if (this.modeKey === 'snd') this.tickBomb(dt);
-    if (this.modeKey === 'siege' || this.modeKey === 'quickplay') this.tickSiegeObjective(dt);
     this.recordHistory();
     return this.takeEvents();
   }
@@ -557,7 +470,7 @@ export class MatchSim {
     while (q.length && processed < 8) {
       const c = q.shift();
       const w = p.weapons[p.slot];
-      const mobility = (w ? w.def.mobility : 1) * this.speedMult;
+      const mobility = w ? w.def.mobility : 1;
       const cmd = frozen ? { ...c, buttons: c.buttons & ~(BTN.FORWARD | BTN.BACK | BTN.LEFT | BTN.RIGHT | BTN.JUMP | BTN.FIRE) } : c;
       stepMovement(p.state, cmd, this.world, mobility, p.alive && !frozen);
       p.lastCmdSeq = c.seq;
@@ -569,7 +482,7 @@ export class MatchSim {
       stepMovement(p.state, {
         buttons: (p.buttons || 0) & ~(BTN.JUMP),
         yaw: p.state.yaw, pitch: p.state.pitch, dt
-      }, this.world, this.speedMult, p.alive && !frozen);
+      }, this.world, 1, p.alive && !frozen);
     }
   }
 
@@ -586,7 +499,7 @@ export class MatchSim {
       buttons: frozen ? 0 : out.buttons,
       yaw: out.yaw, pitch: out.pitch, dt
     };
-    stepMovement(p.state, cmd, this.world, (w ? w.def.mobility : 1) * this.speedMult, p.alive && !frozen);
+    stepMovement(p.state, cmd, this.world, w ? w.def.mobility : 1, p.alive && !frozen);
 
     if (frozen) return;
     if (out.reload && !p.reloading && w && w.reserve > 0 && w.ammo < w.def.magSize) {
@@ -655,15 +568,9 @@ export class MatchSim {
     this.bomb = this.modeKey === 'snd'
       ? { planted: false, carrier: null, pos: null, site: null, timer: 0, defusing: null, defuseProgress: 0 }
       : null;
-    if (this.modeKey === 'siege' || this.modeKey === 'quickplay') {
-      this.siegeHoldT = 0;
-      this.autoAssignSiegeDefaults();
-    }
     for (const p of this.players.values()) this.respawn(p);
     // in S&D, alpha attacks
-    this.emit(EV.ROUND_START, {
-      round: this.round, freeze: this.options.freezeSec, attackTeam: this.attackTeam, otActive: this.otActive
-    });
+    this.emit(EV.ROUND_START, { round: this.round, freeze: this.options.freezeSec });
   }
 
   updatePhase(dt) {
@@ -680,11 +587,7 @@ export class MatchSim {
       case PHASE.LIVE:
         if (this.mode.rounds) {
           if (this.time >= this.phaseEnd && !(this.bomb && this.bomb.planted)) {
-            const isSiege = this.modeKey === 'siege' || this.modeKey === 'quickplay';
-            const timeout = this.modeKey === 'snd' ? TEAM.BRAVO
-              : isSiege ? (this.attackTeam === TEAM.ALPHA ? TEAM.BRAVO : TEAM.ALPHA) // undefended objective -> defense wins
-                : this.timeoutWinner();
-            this.endRound(timeout, 'time');
+            this.endRound(this.modeKey === 'snd' ? TEAM.BRAVO : this.timeoutWinner(), 'time');
           }
         } else if (this.time >= this.matchEndsAt) {
           this.endMatch('time');
@@ -692,8 +595,7 @@ export class MatchSim {
         break;
       case PHASE.ROUND_END:
         if (this.time >= this.phaseEnd) {
-          if (this.modeKey === 'siege' || this.modeKey === 'quickplay') this.advanceSiegeMatch();
-          else if (this.roundWins[1] >= this.options.roundsToWin || this.roundWins[2] >= this.options.roundsToWin) {
+          if (this.roundWins[1] >= this.options.roundsToWin || this.roundWins[2] >= this.options.roundsToWin) {
             this.endMatch('rounds');
           } else this.beginRound();
         }
@@ -727,55 +629,6 @@ export class MatchSim {
       if (this.modeKey === 'snd' && this.bomb && this.bomb.planted) return;
       this.endRound(TEAM.ALPHA, 'wipe');
     }
-  }
-
-  /**
-   * Siege's site-hold win condition: the attacking team wins the round by
-   * keeping at least one living attacker inside a site for `siteHoldSec`
-   * continuous seconds. Killing that attacker resets the clock to zero —
-   * it "just kills them" rather than ending the round, exactly like the
-   * elimination check above still requires wiping the whole team — but it
-   * does NOT itself win the round for the defense; only a full wipe or the
-   * round clock running out does that.
-   */
-  tickSiegeObjective(dt) {
-    if (this.phase !== PHASE.LIVE) return;
-    let held = false;
-    for (const p of this.players.values()) {
-      if (!p.alive || p.team !== this.attackTeam) continue;
-      if (this.siteAt(p.state.x, p.state.y, p.state.z)) { held = true; break; }
-    }
-    if (held) {
-      this.siegeHoldT += dt;
-      if (this.siegeHoldT >= (this.mode.siteHoldSec || 25)) this.endRound(this.attackTeam, 'site-held');
-    } else {
-      this.siegeHoldT = 0;
-    }
-  }
-
-  /**
-   * Runs once a Siege/Quickplay round's post-round freeze finishes. Checks
-   * for a match win at the current target (5 in overtime, 4/2 otherwise),
-   * triggers overtime the first time both teams are tied one round short of
-   * that target (one more side swap, then the speed/damage multipliers for
-   * the rest of the match), performs the regular halfway side swap, and
-   * otherwise just starts the next round.
-   */
-  advanceSiegeMatch() {
-    const target = this.otActive ? this.mode.otRoundsToWin : this.mode.roundsToWin;
-    if (this.roundWins[1] >= target || this.roundWins[2] >= target) {
-      this.endMatch('rounds');
-      return;
-    }
-    if (!this.otActive && this.roundWins[1] === this.mode.roundsToWin - 1 && this.roundWins[2] === this.mode.roundsToWin - 1) {
-      this.otActive = true;
-      this.attackTeam = this.attackTeam === TEAM.ALPHA ? TEAM.BRAVO : TEAM.ALPHA;
-      this.speedMult = this.mode.otSpeedMult ?? 1;
-      this.damageMult = this.mode.otDamageMult ?? 1;
-    } else if (!this.otActive && this.round === this.mode.switchSidesAt) {
-      this.attackTeam = this.attackTeam === TEAM.ALPHA ? TEAM.BRAVO : TEAM.ALPHA;
-    }
-    this.beginRound();
   }
 
   endRound(winner, reason) {
@@ -949,10 +802,7 @@ export class MatchSim {
         score: p.score, ping: p.ping, alive: p.alive,
         damage: Math.round(p.damageDealt),
         acc: p.shotsFired ? Math.round((p.hits / p.shotsFired) * 100) : 0,
-        hs: p.headshots, streak: p.streak,
-        operator: p.operatorKey || null,
-        attackSide: p.attackSide || null,
-        floorChoice: p.floorChoice || null
+        hs: p.headshots, streak: p.streak
       });
     }
     rows.sort((a, b) => b.score - a.score || b.kills - a.kills);
@@ -977,10 +827,6 @@ export class MatchSim {
       scoreLimit: this.options.scoreLimit,
       roundsToWin: this.options.roundsToWin,
       friendlyFire: this.options.friendlyFire,
-      attackTeam: this.attackTeam,
-      otActive: this.otActive,
-      siegeHold: Math.round(this.siegeHoldT * 10) / 10,
-      siteHoldSec: this.mode.siteHoldSec ?? 0,
       bomb: this.bomb ? {
         planted: this.bomb.planted, site: this.bomb.site,
         timer: Math.max(0, Math.round(this.bomb.timer)),

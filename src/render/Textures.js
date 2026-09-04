@@ -311,7 +311,7 @@ export function makeNoiseTexture(size = 256) {
   return t;
 }
 
-/** Radial soft-edged sprite (muzzle flash core, light glow, smoke). */
+/** Radial soft-edged sprite (muzzle flash core, light glow). */
 export function makeRadialTexture(size = 128, inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255,0)', power = 1) {
   const c = makeCanvas(size);
   const ctx = c.getContext('2d');
@@ -333,29 +333,6 @@ function mixColor(a, b, t) {
   const out = [0, 1, 2].map((i) => Math.round(pa[i] + (pb[i] - pa[i]) * t));
   const alpha = (pa[3] ?? 1) + ((pb[3] ?? 1) - (pa[3] ?? 1)) * t;
   return `rgba(${out[0]},${out[1]},${out[2]},${alpha})`;
-}
-
-/** Irregular smoke puff sprite. */
-export function makeSmokeTexture(size = 128) {
-  const c = makeCanvas(size);
-  const ctx = c.getContext('2d');
-  const img = ctx.createImageData(size, size);
-  const cx = size / 2, cy = size / 2;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const d = Math.hypot(x - cx, y - cy) / (size / 2);
-      const n = fbm(x / size * 5, y / size * 5, 4, 7);
-      let a = Math.max(0, 1 - d) * (0.55 + n * 0.75);
-      a = Math.max(0, Math.min(1, a * (1 - d * d)));
-      const i = (y * size + x) * 4;
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
-      img.data[i + 3] = a * 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
 }
 
 /** Bullet hole decal: dark crater + cracked rim, tinted per surface. */

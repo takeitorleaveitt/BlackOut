@@ -35,8 +35,7 @@ export const MSG = {
   SWITCH: 'switch',
   PLANT: 'plant',
   DEFUSE: 'defuse',
-  RESPAWN: 'respawn',
-  OPERATOR: 'operator'       // client -> server: Siege operator pick / attack side / defend floor
+  RESPAWN: 'respawn'
 };
 
 // Event ids inside the batched EVENTS message.

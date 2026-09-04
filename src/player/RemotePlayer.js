@@ -5,7 +5,6 @@
 
 import * as THREE from 'three';
 import { PlayerModel } from './PlayerModel.js';
-import { OPERATOR_BY_KEY } from '../shared/operators.js';
 import { SF } from '../shared/protocol.js';
 import { INTERP_DELAY_MS, PLAYER_HEIGHT_STAND, PLAYER_HEIGHT_CROUCH, SPEED_WALK, SPEED_SPRINT, lerp, clamp } from '../shared/constants.js';
 import { WEAPON_BY_ID } from '../shared/weapons.js';
@@ -23,7 +22,6 @@ export class RemotePlayer {
     this.scene = scene;
     this.name = info.name || 'OPERATOR';
     this.team = info.team ?? 0;
-    this.operatorKey = null;
     this.model = new PlayerModel(this.team);
     scene.add(this.model.root);
     this.states = [];
@@ -71,25 +69,13 @@ export class RemotePlayer {
     if (info.name) this.name = info.name;
     if (info.team !== undefined && info.team !== this.team) {
       this.team = info.team;
-      this.rebuildModel();
+      const old = this.model;
+      this.model = new PlayerModel(this.team);
+      this.model.setWeapon(WEAPON_BY_ID[this.weaponId] || WEAPON_BY_ID[0]);
+      this.scene.add(this.model.root);
+      this.scene.remove(old.root);
+      old.dispose();
     }
-  }
-
-  /** Siege operator pick — swaps the model's accent tint (a small per-operator distinguisher). */
-  setOperator(opKey) {
-    if (opKey === this.operatorKey) return;
-    this.operatorKey = opKey || null;
-    this.rebuildModel();
-  }
-
-  rebuildModel() {
-    const op = this.operatorKey ? OPERATOR_BY_KEY[this.operatorKey] : null;
-    const old = this.model;
-    this.model = new PlayerModel(this.team, op ? op.accent : null);
-    this.model.setWeapon(WEAPON_BY_ID[this.weaponId] || WEAPON_BY_ID[0]);
-    this.scene.add(this.model.root);
-    this.scene.remove(old.root);
-    old.dispose();
   }
 
   /** Push an authoritative state (already unpacked from the snapshot). */

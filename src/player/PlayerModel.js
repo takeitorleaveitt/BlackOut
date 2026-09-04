@@ -17,15 +17,13 @@ const mat = (c, rough = 0.82, metal = 0.05) =>
   new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal });
 
 export class PlayerModel {
-  /** `accent` (optional hex) overrides the trim colour — Siege operators
-   *  each get a small distinct tint on top of their team's base kit. */
-  constructor(team = 0, accent = null) {
+  constructor(team = 0) {
     const col = TEAM_COLORS[team] || TEAM_COLORS[0];
     this.root = new THREE.Group();
     this.materials = [];
 
     const kit = mat(col.kit);
-    const trim = mat(accent ?? col.trim, 0.7);
+    const trim = mat(col.trim, 0.7);
     const pouch = mat(col.pouch, 0.9);
     const skin = mat(0x8a6b52, 0.9);
     const black = mat(0x1a1c1e, 0.7);

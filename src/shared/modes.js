@@ -38,32 +38,6 @@ export const MODES = {
     roundsToWin: 6, roundTimeSec: 40, freezeSec: 4, maxPlayers: 4, minPlayers: 2,
     friendlyFireDefault: true, compactMaps: true
   },
-  // Attacker/defender siege on a single purpose-built map. Blue defends and
-  // Tan attacks for the first `switchSidesAt` rounds, then sides swap; a tie
-  // at (roundsToWin - 1) each sends the match to overtime — one more side
-  // swap, `otRoundsToWin` as the new target, and the speed/damage
-  // multipliers below in effect for the rest of the match.
-  siege: {
-    key: 'siege', name: 'Siege', short: 'SIEGE',
-    desc: 'Blue defends, Tan attacks a two-floor building. Wipe the other team or hold a site for 25 seconds to win the round.',
-    teams: true, respawn: false, rounds: true, objective: true, operators: true,
-    roundsToWin: 4, otRoundsToWin: 5, switchSidesAt: 3,
-    roundTimeSec: 180, freezeSec: 20, siteHoldSec: 25,
-    otSpeedMult: 1.15, otDamageMult: 0.8,
-    maxPlayers: 8, minPlayers: 2,
-    friendlyFireDefault: false
-  },
-  // Same building, same rules, a much shorter match — the "casual" playlist.
-  quickplay: {
-    key: 'quickplay', name: 'Quickplay', short: 'QP',
-    desc: 'The fast version of Siege — same building, same rules, first to 2 wins.',
-    teams: true, respawn: false, rounds: true, objective: true, operators: true,
-    roundsToWin: 2, otRoundsToWin: 3, switchSidesAt: 1,
-    roundTimeSec: 150, freezeSec: 15, siteHoldSec: 25,
-    otSpeedMult: 1.15, otDamageMult: 0.8,
-    maxPlayers: 8, minPlayers: 2,
-    friendlyFireDefault: false
-  }
 };
 
 export const MODE_LIST = Object.values(MODES);
