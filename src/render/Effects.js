@@ -668,22 +668,9 @@ export class Effects {
     }
   }
 
-  /** Muzzle smoke / heat wisp hanging in the air after a burst. */
+  /** Muzzle smoke / heat wisp hanging in the air after a burst. Disabled. */
   muzzleSmoke(pos, dir, amount = 1) {
-    // Kept deliberately light: at full-auto fire rates this fires 10-16
-    // times a second, and the old counts/sizes/lifetimes stacked into a
-    // permanent haze in front of the camera during sustained fire.
-    const q = S.particles || 1;
-    const count = Math.round(1.4 * q * amount);
-    for (let i = 0; i < count; i++) {
-      this.particles.spawn(
-        pos.x + dir.x * 0.06, pos.y + dir.y * 0.06, pos.z + dir.z * 0.06,
-        dir.x * rand(0.7, 1.9) + rand(-0.2, 0.2),
-        dir.y * rand(0.7, 1.9) + rand(0.1, 0.5),
-        dir.z * rand(0.7, 1.9) + rand(-0.2, 0.2),
-        [0.55, 0.54, 0.52], rand(3, 6), rand(0.28, 0.5), -0.5, 3.6
-      );
-    }
+    // no-op: muzzle smoke removed
   }
 
   bloodMist(point, dir) {
