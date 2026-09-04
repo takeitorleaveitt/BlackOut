@@ -139,7 +139,7 @@ export class Engine {
     } else {
       this.scene.fog = null;
     }
-    this.renderer.toneMappingExposure = (env.exposure ?? 1) * (S.exposure ?? 1) * 1.15;
+    this.renderer.toneMappingExposure = (env.exposure ?? 1) * (S.exposure ?? 1) * 1.02;
     this.camera.far = Math.max(220, (env.fog?.far ?? 200) * 1.6);
     this.camera.updateProjectionMatrix();
   }

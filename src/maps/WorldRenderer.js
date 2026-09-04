@@ -18,7 +18,7 @@ const LIGHT_BUDGET = { low: 4, medium: 8, high: 14, ultra: 22 };
 // converts them into the renderer's physical units.  Decay is deliberately
 // below the physical 2.0 so a ceiling fixture still reaches the floor of a
 // 9-metre warehouse without blowing out everything directly beneath it.
-const LIGHT_SCALE = 9.0;
+const LIGHT_SCALE = 7.6;
 const POINT_DECAY = 1.5;
 const SPOT_DECAY = 1.35;
 

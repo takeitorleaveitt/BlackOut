@@ -106,6 +106,15 @@ const BUILD = {
     g.add(part(b(0.02, 0.035, 0.018), M.black, 0, -0.035, -0.015));            // trigger guard
     g.name = 'glock17';
   },
+  deagle(g) {
+    g.add(part(b(0.040, 0.052, 0.20), M.steelWorn, 0, -0.008, -0.05));         // long slide/frame
+    g.add(part(b(0.034, 0.026, 0.16), M.steel, 0, 0.026, -0.11));              // vented barrel shroud
+    g.add(part(b(0.036, 0.006, 0.14), M.steelWorn, 0, 0.041, -0.11));          // vent rib
+    g.add(part(b(0.036, 0.135, 0.05), M.polymer, 0, -0.10, 0.035, 0.17));      // grip, slight rake
+    g.add(part(b(0.022, 0.038, 0.02), M.black, 0, -0.04, -0.02));              // trigger guard
+    g.add(part(b(0.010, 0.012, 0.02), M.black, 0, 0.045, -0.20));              // front sight post
+    g.name = 'deagle';
+  },
   scarh(g) {
     g.add(part(b(0.07, 0.095, 0.32), M.polymerTan, 0, 0, -0.02));
     g.add(part(b(0.062, 0.05, 0.26), M.polymerTan, 0, 0.056, -0.14));
@@ -133,6 +142,7 @@ const MAGS = {
   mp7: () => { const m = new THREE.Mesh(b(0.024, 0.13, 0.035), M.polymer); m.position.set(0, -0.09, -0.02); return m; },
   m870: () => { const m = new THREE.Mesh(b(0.001, 0.001, 0.001), M.black); m.visible = false; return m; },
   glock17: () => { const m = new THREE.Mesh(b(0.022, 0.10, 0.035), M.black); m.position.set(0, -0.10, 0.03); return m; },
+  deagle: () => { const m = new THREE.Mesh(b(0.028, 0.12, 0.045), M.black); m.position.set(0, -0.115, 0.03); return m; },
   scarh: () => { const m = new THREE.Mesh(b(0.034, 0.15, 0.06), M.polymerTan); m.position.set(0, -0.11, -0.03); return m; }
 };
 
@@ -150,6 +160,14 @@ const BOLTS = {
     g.add(part(c(0.008, 0.008, 0.10, 8), M.steelWorn, 0, 0.022, -0.11, Math.PI / 2));
     g.add(part(b(0.008, 0.012, 0.008), M.black, 0, 0.05, -0.105));
     g.add(part(b(0.024, 0.012, 0.01), M.black, 0, 0.05, 0.05));
+    return g;
+  },
+  deagle: () => {
+    const g = new THREE.Group();
+    g.add(part(b(0.038, 0.06, 0.20), M.steel, 0, 0.024, -0.06));
+    g.add(part(c(0.009, 0.009, 0.11, 8), M.steelWorn, 0, 0.026, -0.14, Math.PI / 2));
+    g.add(part(b(0.009, 0.014, 0.009), M.black, 0, 0.055, -0.13));
+    g.add(part(b(0.026, 0.014, 0.012), M.black, 0, 0.055, 0.05));
     return g;
   },
   scarh: () => part(b(0.022, 0.022, 0.055), M.steelWorn, 0.038, 0.055, 0.03)
@@ -226,24 +244,28 @@ export function buildWeaponModel(weapon, attachments = []) {
     root.add(pump);
   }
 
+  // Both pistols share the same compact proportions (no stock/handguard rail
+  // to hang the usual anchors off), so they take the same overrides below.
+  const isPistol = weapon.key === 'glock17' || weapon.key === 'deagle';
+
   const muzzle = new THREE.Object3D();
   muzzle.name = 'muzzle';
-  const barrelLen = weapon.model.barrel + (weapon.key === 'glock17' ? 0.06 : 0.20);
-  muzzle.position.set(0, weapon.key === 'glock17' ? 0.022 : 0.033, -barrelLen - 0.02);
+  const barrelLen = weapon.model.barrel + (isPistol ? 0.06 : 0.20);
+  muzzle.position.set(0, isPistol ? 0.022 : 0.033, -barrelLen - 0.02);
   root.add(muzzle);
 
   const eject = new THREE.Object3D();
   eject.name = 'eject';
-  eject.position.set(0.045, weapon.key === 'glock17' ? 0.03 : 0.045, -0.02);
+  eject.position.set(0.045, isPistol ? 0.03 : 0.045, -0.02);
   root.add(eject);
 
   // rail / mount nodes
-  const railY = weapon.key === 'glock17' ? 0.05 : weapon.key === 'ak74' ? 0.10 : weapon.key === 'm870' ? 0.06 : 0.088;
+  const railY = isPistol ? 0.05 : weapon.key === 'ak74' ? 0.10 : weapon.key === 'm870' ? 0.06 : 0.088;
   const optics = new THREE.Object3D();
   optics.position.set(0, railY, -0.02);
   root.add(optics);
   const underMount = new THREE.Object3D();
-  underMount.position.set(0, weapon.key === 'glock17' ? -0.01 : 0.0, -weapon.model.barrel * 0.55 - 0.06);
+  underMount.position.set(0, isPistol ? -0.01 : 0.0, -weapon.model.barrel * 0.55 - 0.06);
   root.add(underMount);
   const sideMount = new THREE.Object3D();
   sideMount.position.set(0.036, 0.0, -weapon.model.barrel * 0.5 - 0.04);
@@ -282,7 +304,7 @@ export function buildWeaponModel(weapon, attachments = []) {
   }
 
   // iron sight height when there is no optic fitted
-  const ironHeight = weapon.key === 'glock17' ? 0.052 : weapon.key === 'm870' ? 0.064 : 0.086;
+  const ironHeight = isPistol ? 0.052 : weapon.key === 'm870' ? 0.064 : 0.086;
 
   root.traverse((o) => { o.frustumCulled = false; if (o.isMesh) o.renderOrder = 10; });
 

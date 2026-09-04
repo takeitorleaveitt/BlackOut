@@ -167,7 +167,9 @@ export class PlayerModel {
     this.hips.position.y = lerp(0.92, 0.58, crouch);
     this.hips.rotation.y = st.yaw;
     this.hips.rotation.z = -(st.leanT || 0) * 0.30;
-    this.torso.rotation.x = lerp(0, 0.28, crouch) + clamp(-(st.pitch || 0) * 0.28, -0.2, 0.2);
+    this.aimT = lerp(this.aimT ?? 0, st.aiming && !st.sprinting ? 1 : 0, 1 - Math.exp(-10 * dt));
+    const aim = this.aimT;
+    this.torso.rotation.x = lerp(0, 0.28, crouch) + clamp(-(st.pitch || 0) * 0.28, -0.2, 0.2) + aim * 0.05;
     this.torso.rotation.z = -(st.leanT || 0) * 0.22;
     this.neck.rotation.x = clamp((st.pitch || 0) * 0.72, -0.9, 0.9);
 
@@ -190,15 +192,35 @@ export class PlayerModel {
     this.sprintT = lerp(this.sprintT ?? 0, sprintT, 1 - Math.exp(-8 * dt));
     const sp = this.sprintT;
     const recoil = st.firing ? Math.sin(performance.now() * 0.06) * 0.05 : 0;
-    const reload = st.reloading ? Math.sin(performance.now() * 0.008) * 0.28 : 0;
 
-    this.armR.rotation.set(-1.30 + sp * 0.5 + recoil + reload * 0.4, -0.30 + sp * 0.4, 0.16);
-    this.armL.rotation.set(-1.45 + sp * 0.75 + recoil, 0.55 - sp * 0.2, -0.32 + reload);
-    this.armL.userData.fore.rotation.x = -0.55 - sp * 0.35 + reload * 0.7;
-    this.armR.userData.fore.rotation.x = -0.35;
+    // Reload used to be an endless per-frame sine wiggle that never actually
+    // went anywhere — it looked like a nervous tremor, not a reload. Track
+    // elapsed time in the state instead and shape it into one clean
+    // rise-then-fall arc (support hand drops for the mag, then comes back
+    // up to seat it) so teammates read as actually doing something.
+    if (st.reloading) this.reloadT = (this.reloadT ?? 0) + dt;
+    else this.reloadT = 0;
+    const reload = st.reloading ? Math.sin(clamp(this.reloadT / 1.7, 0, 1) * Math.PI) : 0;
 
-    this.weaponMount.rotation.set(-0.12 + sp * 0.55 + recoil * 1.4, -0.26 + sp * 0.55, sp * 0.35);
-    this.weaponMount.position.set(0.20 - sp * 0.03, 0.30 - sp * 0.10, -0.22 + sp * 0.05);
+    this.armR.rotation.set(
+      lerp(-1.30 + sp * 0.5 + recoil, -0.95, aim) + reload * 0.15,
+      lerp(-0.30 + sp * 0.4, -0.08, aim),
+      lerp(0.16, 0.06, aim)
+    );
+    this.armL.rotation.set(-1.45 + sp * 0.75 + recoil + reload * 0.95, 0.55 - sp * 0.2 - aim * 0.4, -0.32 + reload * 0.2);
+    this.armL.userData.fore.rotation.x = -0.55 - sp * 0.35 + reload * 0.85;
+    this.armR.userData.fore.rotation.x = lerp(-0.35, -0.55, aim);
+
+    this.weaponMount.rotation.set(
+      lerp(-0.12 + sp * 0.55 + recoil * 1.4, -0.02, aim) + reload * 0.1,
+      lerp(-0.26 + sp * 0.55, -0.05, aim),
+      sp * 0.35
+    );
+    this.weaponMount.position.set(
+      lerp(0.20 - sp * 0.03, 0.10, aim),
+      lerp(0.30 - sp * 0.10, 0.40, aim) - reload * 0.03,
+      lerp(-0.22 + sp * 0.05, -0.14, aim)
+    );
   }
 
   dispose() {

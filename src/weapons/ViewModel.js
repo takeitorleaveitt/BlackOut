@@ -23,6 +23,7 @@ const HIP = {
   mp7: { p: [0.136, -0.130, -0.52], r: [0.03, -0.08, 0.0] },
   m870: { p: [0.156, -0.156, -0.66], r: [0.04, -0.08, 0.0] },
   glock17: { p: [0.120, -0.126, -0.48], r: [0.03, -0.09, 0.0] },
+  deagle: { p: [0.128, -0.132, -0.50], r: [0.03, -0.09, 0.0] },
   scarh: { p: [0.162, -0.162, -0.68], r: [0.04, -0.075, 0.0] }
 };
 
@@ -73,6 +74,15 @@ export class ViewModel {
     this.sprintT = 0;
     this.animOffset = new THREE.Vector3();
     this.animRot = new THREE.Vector3();
+    // The left (support) hand gets its own reach animation on top of the
+    // holder transform — it lets go of the handguard to run the reload and
+    // tightens up on it when aiming, instead of just riding along rigidly.
+    this.leftArmBaseP = new THREE.Vector3();
+    this.leftArmBaseR = new THREE.Vector3();
+    this.leftArmOffset = new THREE.Vector3();
+    this.leftArmOffsetRot = new THREE.Vector3();
+    this.leftArmTargetOffset = new THREE.Vector3();
+    this.leftArmTargetRot = new THREE.Vector3();
     this.wallT = 0;
     this.tmpV = new THREE.Vector3();
     this.tmpQ = new THREE.Quaternion();
@@ -122,19 +132,23 @@ export class ViewModel {
     this.rightArm.position.set(grip.p[0], grip.p[1], grip.p[2]);
     this.rightArm.rotation.set(grip.r[0], grip.r[1], grip.r[2]);
 
-    if (def.key === 'glock17') {
+    if (def.key === 'glock17' || def.key === 'deagle') {
       // pistols get a two-handed cup instead of a handguard grip
-      this.leftArm.position.set(PISTOL_SUPPORT.p[0], PISTOL_SUPPORT.p[1], PISTOL_SUPPORT.p[2]);
-      this.leftArm.rotation.set(PISTOL_SUPPORT.r[0], PISTOL_SUPPORT.r[1], PISTOL_SUPPORT.r[2]);
+      this.leftArmBaseP.set(PISTOL_SUPPORT.p[0], PISTOL_SUPPORT.p[1], PISTOL_SUPPORT.p[2]);
+      this.leftArmBaseR.set(PISTOL_SUPPORT.r[0], PISTOL_SUPPORT.r[1], PISTOL_SUPPORT.r[2]);
       this.leftArm.visible = true;
     } else if (this.model.underMount) {
       const um = this.model.underMount.position;
-      this.leftArm.position.set(um.x + SUPPORT_OFFSET.p[0], um.y + SUPPORT_OFFSET.p[1], um.z + SUPPORT_OFFSET.p[2]);
-      this.leftArm.rotation.set(SUPPORT_OFFSET.r[0], SUPPORT_OFFSET.r[1], SUPPORT_OFFSET.r[2]);
+      this.leftArmBaseP.set(um.x + SUPPORT_OFFSET.p[0], um.y + SUPPORT_OFFSET.p[1], um.z + SUPPORT_OFFSET.p[2]);
+      this.leftArmBaseR.set(SUPPORT_OFFSET.r[0], SUPPORT_OFFSET.r[1], SUPPORT_OFFSET.r[2]);
       this.leftArm.visible = true;
     } else {
       this.leftArm.visible = false;
     }
+    this.leftArm.position.copy(this.leftArmBaseP);
+    this.leftArm.rotation.set(this.leftArmBaseR.x, this.leftArmBaseR.y, this.leftArmBaseR.z);
+    this.leftArmOffset.set(0, 0, 0);
+    this.leftArmOffsetRot.set(0, 0, 0);
   }
 
   /**
@@ -284,6 +298,8 @@ export class ViewModel {
     const k = clamp(t / dur, 0, 1);
     let ox = 0, oy = 0, oz = 0, rx = 0, ry = 0, rz = 0;
     let magY = 0, magR = 0, magVisible = true, boltZ = 0, pumpZ = 0;
+    // left (support) hand reach, local to its resting anchor on the handguard
+    let lox = 0, loy = 0, loz = 0, lrx = 0, lry = 0, lrz = 0;
 
     const ease = (x) => x * x * (3 - 2 * x);
     const pulse = (x) => Math.sin(x * Math.PI);
@@ -314,6 +330,9 @@ export class ViewModel {
           magY = -0.32 * a * a;
           magR = a * 0.9;
           if (a > 0.55) magVisible = false;
+          // left hand lets go of the handguard and drops to the mag pouch
+          lox = -0.03 * a; loy = -0.34 * a; loz = 0.24 * a;
+          lrx = 0.95 * a; lry = -0.18 * a;
         } else if (k < insertEnd) {
           const a = (k - dropEnd) / (insertEnd - dropEnd);
           oy = -0.075 - 0.035 * pulse(a); rz = -0.30 + 0.06 * a; rx = 0.18 - 0.05 * a;
@@ -321,16 +340,26 @@ export class ViewModel {
           magVisible = a > 0.42;
           magY = -0.22 * (1 - clamp((a - 0.42) / 0.5, 0, 1));
           magR = 0.5 * (1 - clamp((a - 0.42) / 0.5, 0, 1));
+          // fresh mag rises from the pouch and seats in the well
+          const rise = clamp(a / 0.65, 0, 1);
+          lox = -0.03 * (1 - rise) - 0.01 * rise; loy = -0.34 + 0.31 * rise; loz = 0.24 - 0.22 * rise;
+          lrx = 0.95 * (1 - rise) + 0.08 * rise; lry = -0.18 * (1 - rise);
         } else {
           const a = (k - insertEnd) / (1 - insertEnd);
           oy = -0.11 * (1 - ease(a)); rz = -0.24 * (1 - ease(a)); rx = 0.13 * (1 - ease(a));
           magY = 0; magR = 0;
+          // hand settles back onto the handguard
+          const back = ease(a);
+          lox = -0.01 * (1 - back); loy = -0.03 * (1 - back); loz = 0.02 * (1 - back);
+          lrx = 0.08 * (1 - back);
           if (w.emptyReload) {
             // charging handle yank at the end
             const b = clamp((a - 0.35) / 0.45, 0, 1);
             boltZ = pulse(b) * 0.075;
             rx += pulse(b) * 0.10;
             ox += pulse(b) * 0.03;
+            lrx += pulse(b) * 0.12;
+            loy -= pulse(b) * 0.02;
           }
         }
         break;
@@ -342,6 +371,8 @@ export class ViewModel {
         ox = -0.04 * pulse(a);
         rz = -0.22 * pulse(a);
         rx = 0.12 * pulse(a);
+        lox = -0.02 * pulse(a); loy = -0.24 * pulse(a); loz = 0.16 * pulse(a);
+        lrx = 0.62 * pulse(a);
         break;
       }
       case WS.CYCLING: {
@@ -374,8 +405,32 @@ export class ViewModel {
     // firing bolt cycle
     if (w.sinceShot < 0.09 && !w.def.pumpTime) {
       const a = 1 - w.sinceShot / 0.09;
-      boltZ = Math.max(boltZ, a * (w.def.key === 'glock17' ? 0.05 : 0.035));
+      boltZ = Math.max(boltZ, a * (w.def.key === 'deagle' ? 0.065 : w.def.key === 'glock17' ? 0.05 : 0.035));
     }
+
+    // aiming grip: the support hand tightens up and shifts forward when ADS,
+    // independent of whatever the reload phase above is doing to it
+    const adsGrip = w.adsT;
+    lox += adsGrip * 0.012;
+    loy += adsGrip * 0.016;
+    loz += adsGrip * -0.028;
+    lry += adsGrip * 0.09;
+
+    this.leftArmTargetOffset.set(lox, loy, loz);
+    this.leftArmTargetRot.set(lrx, lry, lrz);
+    const leftK = 1 - Math.exp(-24 * dt);
+    this.leftArmOffset.lerp(this.leftArmTargetOffset, leftK);
+    this.leftArmOffsetRot.lerp(this.leftArmTargetRot, leftK);
+    this.leftArm.position.set(
+      this.leftArmBaseP.x + this.leftArmOffset.x,
+      this.leftArmBaseP.y + this.leftArmOffset.y,
+      this.leftArmBaseP.z + this.leftArmOffset.z
+    );
+    this.leftArm.rotation.set(
+      this.leftArmBaseR.x + this.leftArmOffsetRot.x,
+      this.leftArmBaseR.y + this.leftArmOffsetRot.y,
+      this.leftArmBaseR.z + this.leftArmOffsetRot.z
+    );
 
     this.animOffset.set(
       lerp(this.animOffset.x, ox, 1 - Math.exp(-30 * dt)),

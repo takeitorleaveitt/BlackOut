@@ -430,7 +430,17 @@ class Game {
     this.friendlyFire = !!info.friendlyFire;
 
     this.player.setLoadout(this.loadout());
-    const spawn = map.spawns.ffa[0];
+    // Placeholder spawn until the authoritative SPAWN event lands: pick the
+    // right pool for the assigned team so the camera starts facing roughly
+    // the way the real spawn will, instead of the map's FFA pool regardless
+    // of mode. Using the wrong pool here (e.g. FFA's pos/yaw in a team mode)
+    // left the camera looking one way while the corrected authoritative
+    // position sat behind it, so "forward" briefly ran you backward until
+    // the real spawn event corrected the camera a moment later.
+    const pool = this.player.team === TEAM.ALPHA && map.spawns.alpha.length ? map.spawns.alpha
+      : this.player.team === TEAM.BRAVO && map.spawns.bravo.length ? map.spawns.bravo
+      : map.spawns.ffa;
+    const spawn = pool[(Math.random() * pool.length) | 0];
     this.player.spawn(spawn.p, spawn.yaw);
     this.player.canAct = true;
 

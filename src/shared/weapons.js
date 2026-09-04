@@ -190,6 +190,35 @@ export const WEAPONS = [
     attachments: ['reddot', 'suppressor', 'flashlight', 'laser']
   },
   {
+    id: 7,
+    key: 'deagle',
+    name: 'Desert Eagle',
+    fullName: 'Desert Eagle Mark XIX',
+    caliber: '.50 Action Express',
+    class: 'Semi-Auto Pistol',
+    slot: SLOT.SECONDARY,
+    desc: 'Oversized hand cannon. One or two hits end most fights, but the slide is heavy and the mag is short.',
+    damage: 58, damageMin: 40, falloffStart: 20, falloffEnd: 50,
+    rpm: 220, auto: false, burst: 0,
+    muzzleVelocity: 470, dropScale: 1.15,
+    magSize: 7, reserve: 35,
+    reloadTactical: 1.95, reloadEmpty: 2.55, drawTime: 0.46, holsterTime: 0.32,
+    adsTime: 0.230, adsFov: 0.78,
+    spreadHip: 2.6, spreadAds: 0.34, spreadMove: 2.0, spreadJump: 4.0,
+    spreadPerShot: 0.55, spreadMax: 4.6, spreadRecover: 6.4,
+    recoil: {
+      vert: 0.0340, horiz: 0.0130, recovery: 6.4, viewKick: 1.9, camShake: 1.1,
+      firstShotMult: 1.0, kickBack: 0.095,
+      pattern: pattern('0,1 0.3,1 -0.35,1 0.4,1 -0.3,1 0.35,1 -0.25,1')
+    },
+    weight: 1.4, mobility: 1.03, adsMobility: 0.74,
+    sway: { amp: 0.74, freq: 1.28, inertia: 0.66 },
+    penetration: 0.5, pellets: 1, pelletSpread: 0,
+    audio: { punch: 96, body: 360, crack: 2400, tail: 0.42, level: 1.1, tone: 0.5 },
+    model: { barrel: 0.16, receiver: 0.20, stock: 'none', handguard: 'none', mag: 'pistol', tint: 0x4a4e52, accent: 0x2b2e31 },
+    attachments: ['reddot', 'flashlight', 'laser']
+  },
+  {
     id: 6,
     key: 'scarh',
     name: 'SCAR-H',

@@ -117,6 +117,7 @@ export class RemotePlayer {
     r.grounded = !!(f & SF.GROUNDED);
     r.firing = !!(f & SF.FIRING);
     r.reloading = !!(f & SF.RELOADING);
+    r.aiming = !!(f & SF.ADS);
     r.sprinting = flagSprint;
     const wantCrouch = (f & SF.CROUCH) ? 1 : 0;
     r.crouchT = lerp(r.crouchT, wantCrouch, 1 - Math.exp(-11 * dt));
