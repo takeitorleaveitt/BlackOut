@@ -415,7 +415,14 @@ export class LocalPlayer {
     const dy = self.y - this.state.y;
     const dz = self.z - this.state.z;
     const err = Math.hypot(dx, dy, dz);
-    if (err < 0.035) return;      // close enough, keep the smooth local view
+    // The client predicts at a fixed 60Hz while the server steps at 30Hz, so
+    // even perfectly-matched physics will disagree by a few centimetres on
+    // ordinary continuous movement just from the two integration step sizes
+    // — that is expected numerical noise, not desync. Correcting on every
+    // snapshot at a few-cm threshold snapped the camera constantly during
+    // normal play. Only reconcile once the gap is large enough to actually
+    // matter (a real misprediction, not integration rounding).
+    if (err < 0.12) return;
 
     // snap to the server state, then replay everything it has not seen yet
     this.state.x = self.x; this.state.y = self.y; this.state.z = self.z;

@@ -18,11 +18,11 @@ export function buildSuburb() {
     env: {
       sky: 'dusk',
       sunDir: [0.75, 0.16, -0.4],
-      sunColor: 0xff9d5c, sunIntensity: 1.35,
-      ambientColor: 0x3a4560, ambientIntensity: 0.5,
-      hemiGround: 0x241f1b,
+      sunColor: 0xff9d5c, sunIntensity: 2.6,
+      ambientColor: 0x5a6888, ambientIntensity: 1.35,
+      hemiGround: 0x564840,
       fog: { color: 0x6a5a63, near: 18, far: 96 },
-      exposure: 1.05,
+      exposure: 1.34,
       reverb: 'outdoor',
       wind: 0.3, rain: 0.0, dustMotes: 0.4
     }

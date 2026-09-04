@@ -35,7 +35,6 @@ export class CameraRig {
     this.shakeSeed = Math.random() * 1000;
 
     this.recoil = { pitch: 0, yaw: 0 };
-    this.recoilVel = { pitch: 0, yaw: 0 };
 
     this.breath = 0;
     this.breathRate = 1.0;
@@ -85,10 +84,10 @@ export class CameraRig {
     this.targetYaw -= yaw;
   }
 
-  /** Visual-only recoil impulse (recovers to zero). */
+  /** Visual-only recoil impulse (recovers to zero via the spring in update()). */
   addRecoil(pitch, yaw, shake = 0) {
-    this.recoilVel.pitch += pitch;
-    this.recoilVel.yaw += yaw;
+    this.recoil.pitch += pitch;
+    this.recoil.yaw += yaw;
     this.shake = Math.min(2.2, this.shake + shake);
   }
 
@@ -112,11 +111,14 @@ export class CameraRig {
     this.pitchRate = lerp(this.pitchRate, (this.pitch - prevPitch) / Math.max(dt, 0.0001), 0.45);
 
     // --- recoil spring -----------------------------------------------------
+    // addRecoil() bumps recoil.pitch/yaw by the kick amount directly (an
+    // instant snap-up, which is the point), and this is the only place that
+    // brings it back down — a single dt-correct smoothDamp. (This used to be
+    // a two-stage velocity+position spring where the velocity was added to
+    // position every frame without scaling by dt, so the total kick size
+    // silently scaled with framerate — worse the higher your FPS. One spring
+    // is both simpler and actually frame-rate independent.)
     const rec = ctx.recoilRecovery ?? 8;
-    this.recoil.pitch += this.recoilVel.pitch;
-    this.recoil.yaw += this.recoilVel.yaw;
-    this.recoilVel.pitch *= Math.exp(-26 * dt);
-    this.recoilVel.yaw *= Math.exp(-26 * dt);
     this.recoil.pitch = smoothDamp(this.recoil.pitch, 0, rec, dt);
     this.recoil.yaw = smoothDamp(this.recoil.yaw, 0, rec, dt);
 

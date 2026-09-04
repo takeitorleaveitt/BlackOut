@@ -160,7 +160,7 @@ const GEN = {
     const rust = fbm(u * 3.5, v * 3.5, 5, 71);
     const panel = (Math.abs(((u * 2) % 1) - 0.5) < 0.012 || Math.abs(((v * 2) % 1) - 0.5) < 0.012) ? 0.55 : 1;
     const bolt = worley(u * 8, v * 8, 13, 0.2).f1 < 0.06 ? 1 : 0;
-    let base = (0.30 + brush * 0.13) * panel;
+    let base = (0.42 + brush * 0.15) * panel;
     let r = base, g = base, b = base * 1.06;
     if (rust > 0.62) {
       const t = Math.min(1, (rust - 0.62) * 4.2);

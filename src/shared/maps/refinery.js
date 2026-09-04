@@ -18,11 +18,11 @@ export function buildRefinery() {
     env: {
       sky: 'day',
       sunDir: [0.45, 0.82, 0.35],
-      sunColor: 0xfff3dd, sunIntensity: 2.6,
-      ambientColor: 0x7d8ea8, ambientIntensity: 0.7,
-      hemiGround: 0x4a463f,
+      sunColor: 0xfff3dd, sunIntensity: 4.4,
+      ambientColor: 0x9dadc8, ambientIntensity: 1.7,
+      hemiGround: 0x7a7364,
       fog: { color: 0xa9b4bf, near: 40, far: 190 },
-      exposure: 1.12,
+      exposure: 1.34,
       reverb: 'outdoor',
       wind: 0.6, rain: 0, dustMotes: 0.7, heatHaze: 0.5
     }

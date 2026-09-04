@@ -18,11 +18,11 @@ export function buildWarehouse() {
     env: {
       sky: 'overcast',
       sunDir: [-0.35, 0.72, 0.6],
-      sunColor: 0xbcc4cc, sunIntensity: 1.5,
-      ambientColor: 0x5a6470, ambientIntensity: 0.55,
-      hemiGround: 0x2e2b28,
+      sunColor: 0xbcc4cc, sunIntensity: 3.2,
+      ambientColor: 0x7a8694, ambientIntensity: 1.5,
+      hemiGround: 0x605a50,
       fog: { color: 0x8e959c, near: 24, far: 132 },
-      exposure: 1.0,
+      exposure: 1.3,
       reverb: 'outdoor',
       wind: 0.5, rain: 0.0,
       dustMotes: 1.0

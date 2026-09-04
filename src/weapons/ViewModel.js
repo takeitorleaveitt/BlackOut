@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { buildWeaponModel, disposeWeaponModel } from './WeaponModels.js';
+import { buildArm, GRIP_ANCHOR, SUPPORT_OFFSET, PISTOL_SUPPORT } from './Arms.js';
 import { WS } from './Weapon.js';
 import { S } from '../core/Settings.js';
 import { clamp, lerp, smoothDamp } from '../shared/constants.js';
@@ -54,6 +55,13 @@ export class ViewModel {
 
     this.model = null;
     this.weapon = null;
+
+    // Persistent arms — built once, repositioned per weapon in equip(). As
+    // children of `holder` they ride along with every bit of animation the
+    // weapon already gets (sway, recoil, reload, ADS, sprint) at no extra cost.
+    this.rightArm = buildArm(false);
+    this.leftArm = buildArm(true);
+    this.holder.add(this.rightArm, this.leftArm);
 
     // motion state
     this.sway = new THREE.Vector2();
@@ -104,7 +112,29 @@ export class ViewModel {
     this.holder.add(this.model.root);
     this.pose = HIP[weapon.def.key] || HIP.m4a1;
     this.reloadPhase = 0;
+    this.placeArms(weapon.def);
     return this.model;
+  }
+
+  /** Seat the hands on the newly-equipped weapon's grip and handguard. */
+  placeArms(def) {
+    const grip = GRIP_ANCHOR[def.key] || GRIP_ANCHOR.m4a1;
+    this.rightArm.position.set(grip.p[0], grip.p[1], grip.p[2]);
+    this.rightArm.rotation.set(grip.r[0], grip.r[1], grip.r[2]);
+
+    if (def.key === 'glock17') {
+      // pistols get a two-handed cup instead of a handguard grip
+      this.leftArm.position.set(PISTOL_SUPPORT.p[0], PISTOL_SUPPORT.p[1], PISTOL_SUPPORT.p[2]);
+      this.leftArm.rotation.set(PISTOL_SUPPORT.r[0], PISTOL_SUPPORT.r[1], PISTOL_SUPPORT.r[2]);
+      this.leftArm.visible = true;
+    } else if (this.model.underMount) {
+      const um = this.model.underMount.position;
+      this.leftArm.position.set(um.x + SUPPORT_OFFSET.p[0], um.y + SUPPORT_OFFSET.p[1], um.z + SUPPORT_OFFSET.p[2]);
+      this.leftArm.rotation.set(SUPPORT_OFFSET.r[0], SUPPORT_OFFSET.r[1], SUPPORT_OFFSET.r[2]);
+      this.leftArm.visible = true;
+    } else {
+      this.leftArm.visible = false;
+    }
   }
 
   /**

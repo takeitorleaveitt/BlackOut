@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { PlayerModel } from './PlayerModel.js';
 import { SF } from '../shared/protocol.js';
-import { INTERP_DELAY_MS, PLAYER_HEIGHT_STAND, PLAYER_HEIGHT_CROUCH, lerp, clamp } from '../shared/constants.js';
+import { INTERP_DELAY_MS, PLAYER_HEIGHT_STAND, PLAYER_HEIGHT_CROUCH, SPEED_WALK, SPEED_SPRINT, lerp, clamp } from '../shared/constants.js';
 import { WEAPON_BY_ID } from '../shared/weapons.js';
 
 const BUFFER = 24;
@@ -102,12 +102,22 @@ export class RemotePlayer {
     r.x = x; r.y = y; r.z = z;
     r.yaw = yaw; r.pitch = pitch;
     r.leanT = lean;
+    // Numerically differentiating interpolated/extrapolated positions is
+    // fragile — it can read near-zero for a frame or two from clamped
+    // extrapolation, a duplicate snapshot, or a single-sample buffer right
+    // after this player entered view, which used to freeze the gait mid-
+    // stride even though the player was genuinely moving. The server already
+    // knows the truth for this exact tick, so use its MOVING/SPRINT flags as
+    // a floor underneath the derived speed instead of trusting the math alone.
+    const flagMoving = !!(f & SF.MOVING);
+    const flagSprint = !!(f & SF.SPRINT);
+    if (flagMoving) speed = Math.max(speed, flagSprint ? SPEED_SPRINT * 0.85 : SPEED_WALK * 0.75);
     r.speed = speed;
     r.dead = !!(f & SF.DEAD);
     r.grounded = !!(f & SF.GROUNDED);
     r.firing = !!(f & SF.FIRING);
     r.reloading = !!(f & SF.RELOADING);
-    r.sprinting = !!(f & SF.SPRINT);
+    r.sprinting = flagSprint;
     const wantCrouch = (f & SF.CROUCH) ? 1 : 0;
     r.crouchT = lerp(r.crouchT, wantCrouch, 1 - Math.exp(-11 * dt));
 

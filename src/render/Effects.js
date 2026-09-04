@@ -222,7 +222,10 @@ class ParticleSystem {
   }
 
   spawn(x, y, z, vx, vy, vz, color, size, life, gravity = 6, drag = 1.4) {
-    const i = this.n < this.max ? this.n++ : (Math.random() * this.max) | 0;
+    // Once the pool is full, steal the slot nearest death instead of a random
+    // one — that way an unlucky overwrite never cuts off a particle that just
+    // started its life.
+    const i = this.n < this.max ? this.n++ : this.oldest(this.life, this.n);
     this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
     this.vel[i * 3] = vx; this.vel[i * 3 + 1] = vy; this.vel[i * 3 + 2] = vz;
     this.col[i * 3] = color[0]; this.col[i * 3 + 1] = color[1]; this.col[i * 3 + 2] = color[2];
@@ -235,7 +238,7 @@ class ParticleSystem {
   }
 
   spark(x, y, z, vx, vy, vz, size, life) {
-    const i = this.sN < this.sMax ? this.sN++ : (Math.random() * this.sMax) | 0;
+    const i = this.sN < this.sMax ? this.sN++ : this.oldest(this.sLife, this.sN);
     this.sPos[i * 3] = x; this.sPos[i * 3 + 1] = y; this.sPos[i * 3 + 2] = z;
     this.sVel[i * 3] = vx; this.sVel[i * 3 + 1] = vy; this.sVel[i * 3 + 2] = vz;
     this.sCol[i * 3] = 1.0; this.sCol[i * 3 + 1] = 0.72; this.sCol[i * 3 + 2] = 0.32;
@@ -245,10 +248,37 @@ class ParticleSystem {
     this.sMaxLife[i] = life;
   }
 
+  oldest(lifeArr, n) {
+    let idx = 0, best = Infinity;
+    for (let i = 0; i < n; i++) { if (lifeArr[i] < best) { best = lifeArr[i]; idx = i; } }
+    return idx;
+  }
+
+  /** Swap a dead slot with the last active one so the live range shrinks. */
+  swapOut(i, last, pos, vel, col, size, alpha, life, maxLife, grav, drag) {
+    pos[i * 3] = pos[last * 3]; pos[i * 3 + 1] = pos[last * 3 + 1]; pos[i * 3 + 2] = pos[last * 3 + 2];
+    vel[i * 3] = vel[last * 3]; vel[i * 3 + 1] = vel[last * 3 + 1]; vel[i * 3 + 2] = vel[last * 3 + 2];
+    col[i * 3] = col[last * 3]; col[i * 3 + 1] = col[last * 3 + 1]; col[i * 3 + 2] = col[last * 3 + 2];
+    size[i] = size[last]; alpha[i] = alpha[last]; life[i] = life[last]; maxLife[i] = maxLife[last];
+    if (grav) grav[i] = grav[last];
+    if (drag) drag[i] = drag[last];
+  }
+
   update(dt) {
-    for (let i = 0; i < this.n; i++) {
-      if (this.life[i] <= 0) { this.alpha[i] = 0; continue; }
+    // Live particles occupy [0, n) — a dead one is swapped with the last
+    // live slot and n shrinks, so the GPU buffer upload below only ever
+    // covers particles that are actually on screen, not the pool's max size.
+    let i = 0;
+    while (i < this.n) {
       this.life[i] -= dt;
+      if (this.life[i] <= 0) {
+        const last = this.n - 1;
+        if (i !== last) {
+          this.swapOut(i, last, this.pos, this.vel, this.col, this.size, this.alpha, this.life, this.maxLife, this.grav, this.drag);
+        }
+        this.n--;
+        continue;
+      }
       const t = clamp(this.life[i] / this.maxLife[i], 0, 1);
       this.alpha[i] = t * t * 0.85;
       const d = Math.exp(-this.drag[i] * dt);
@@ -259,31 +289,45 @@ class ParticleSystem {
       this.pos[i * 3 + 1] += this.vel[i * 3 + 1] * dt;
       this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
       this.size[i] += dt * 1.5;
+      i++;
     }
     this.geo.setDrawRange(0, this.n);
-    this.geo.attributes.position.needsUpdate = true;
-    this.geo.attributes.aAlpha.needsUpdate = true;
-    this.geo.attributes.aSize.needsUpdate = true;
-    this.geo.attributes.aColor.needsUpdate = true;
+    if (this.n > 0) {
+      this.geo.attributes.position.needsUpdate = true;
+      this.geo.attributes.aAlpha.needsUpdate = true;
+      this.geo.attributes.aSize.needsUpdate = true;
+      this.geo.attributes.aColor.needsUpdate = true;
+    }
 
-    for (let i = 0; i < this.sN; i++) {
-      if (this.sLife[i] <= 0) { this.sAlpha[i] = 0; continue; }
-      this.sLife[i] -= dt;
-      const t = clamp(this.sLife[i] / this.sMaxLife[i], 0, 1);
-      this.sAlpha[i] = t;
-      this.sVel[i * 3 + 1] -= 13 * dt;
-      this.sVel[i * 3] *= Math.exp(-2.2 * dt);
-      this.sVel[i * 3 + 2] *= Math.exp(-2.2 * dt);
-      this.sPos[i * 3] += this.sVel[i * 3] * dt;
-      this.sPos[i * 3 + 1] += this.sVel[i * 3 + 1] * dt;
-      this.sPos[i * 3 + 2] += this.sVel[i * 3 + 2] * dt;
-      this.sCol[i * 3 + 1] = 0.72 * t;
-      this.sCol[i * 3 + 2] = 0.32 * t * t;
+    let si = 0;
+    while (si < this.sN) {
+      this.sLife[si] -= dt;
+      if (this.sLife[si] <= 0) {
+        const last = this.sN - 1;
+        if (si !== last) {
+          this.swapOut(si, last, this.sPos, this.sVel, this.sCol, this.sSize, this.sAlpha, this.sLife, this.sMaxLife, null, null);
+        }
+        this.sN--;
+        continue;
+      }
+      const t = clamp(this.sLife[si] / this.sMaxLife[si], 0, 1);
+      this.sAlpha[si] = t;
+      this.sVel[si * 3 + 1] -= 13 * dt;
+      this.sVel[si * 3] *= Math.exp(-2.2 * dt);
+      this.sVel[si * 3 + 2] *= Math.exp(-2.2 * dt);
+      this.sPos[si * 3] += this.sVel[si * 3] * dt;
+      this.sPos[si * 3 + 1] += this.sVel[si * 3 + 1] * dt;
+      this.sPos[si * 3 + 2] += this.sVel[si * 3 + 2] * dt;
+      this.sCol[si * 3 + 1] = 0.72 * t;
+      this.sCol[si * 3 + 2] = 0.32 * t * t;
+      si++;
     }
     this.sGeo.setDrawRange(0, this.sN);
-    this.sGeo.attributes.position.needsUpdate = true;
-    this.sGeo.attributes.aAlpha.needsUpdate = true;
-    this.sGeo.attributes.aColor.needsUpdate = true;
+    if (this.sN > 0) {
+      this.sGeo.attributes.position.needsUpdate = true;
+      this.sGeo.attributes.aAlpha.needsUpdate = true;
+      this.sGeo.attributes.aColor.needsUpdate = true;
+    }
   }
 
   clear() {
@@ -626,14 +670,18 @@ export class Effects {
 
   /** Muzzle smoke / heat wisp hanging in the air after a burst. */
   muzzleSmoke(pos, dir, amount = 1) {
+    // Kept deliberately light: at full-auto fire rates this fires 10-16
+    // times a second, and the old counts/sizes/lifetimes stacked into a
+    // permanent haze in front of the camera during sustained fire.
     const q = S.particles || 1;
-    for (let i = 0; i < Math.round(3 * q * amount); i++) {
+    const count = Math.round(1.4 * q * amount);
+    for (let i = 0; i < count; i++) {
       this.particles.spawn(
         pos.x + dir.x * 0.06, pos.y + dir.y * 0.06, pos.z + dir.z * 0.06,
-        dir.x * rand(0.6, 1.8) + rand(-0.25, 0.25),
-        dir.y * rand(0.6, 1.8) + rand(0.1, 0.6),
-        dir.z * rand(0.6, 1.8) + rand(-0.25, 0.25),
-        [0.55, 0.54, 0.52], rand(6, 13), rand(0.5, 1.1), -0.5, 2.8
+        dir.x * rand(0.7, 1.9) + rand(-0.2, 0.2),
+        dir.y * rand(0.7, 1.9) + rand(0.1, 0.5),
+        dir.z * rand(0.7, 1.9) + rand(-0.2, 0.2),
+        [0.55, 0.54, 0.52], rand(3, 6), rand(0.28, 0.5), -0.5, 3.6
       );
     }
   }

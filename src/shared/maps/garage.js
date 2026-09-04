@@ -18,11 +18,11 @@ export function buildGarage() {
     env: {
       sky: 'interior',
       sunDir: [0.2, 0.9, 0.3],
-      sunColor: 0x9fb0c4, sunIntensity: 0.25,
-      ambientColor: 0x1b2027, ambientIntensity: 0.42,
-      hemiGround: 0x0d0f12,
+      sunColor: 0x9fb0c4, sunIntensity: 0.6,
+      ambientColor: 0x2c3440, ambientIntensity: 1.4,
+      hemiGround: 0x1b2027,
       fog: { color: 0x14181e, near: 6, far: 58 },
-      exposure: 1.28,
+      exposure: 1.6,
       reverb: 'garage',
       wind: 0, rain: 0, dustMotes: 0.9
     }
@@ -57,8 +57,8 @@ export function buildGarage() {
   b.room(-30, -22, 7, 8, L2 + H, { doors: [{ side: 'e', at: 0.6 }], mat: C, floorMat: C, ceil: false, reverb: 'stair' });
   b.stairs(-32.6, 0.02, -25, 2.6, 'z', 14, L2 - 0.02, 5.6, C);
   b.wallDoor(-33.5, -18, -26.5, -18, H, 0.5, 1.2, { y: L2, mat: C, thick: 0.25 });
-  b.light('point', -30, L2 + 2.4, -22, { color: 0xd6e4ff, intensity: 4, distance: 10, flicker: 0.55 });
-  b.light('point', -30, 2.4, -22, { color: 0xd6e4ff, intensity: 3, distance: 9, flicker: 0.2 });
+  b.light('point', -30, L2 + 2.4, -22, { color: 0xd6e4ff, intensity: 6, distance: 11, flicker: 0.3 });
+  b.light('point', -30, 2.4, -22, { color: 0xd6e4ff, intensity: 5, distance: 10, flicker: 0.15 });
 
   // --- pillars -------------------------------------------------------------
   for (let ix = -3; ix <= 3; ix++) {

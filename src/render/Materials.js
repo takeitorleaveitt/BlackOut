@@ -36,12 +36,12 @@ export function surfaceMaterial(surface) {
     roughnessMap: maps.roughnessMap,
     normalMap: maps.normalMap,
     normalScale: new THREE.Vector2(0.85, 0.85),
-    metalness: surface === SURFACE.METAL ? 0.72 : water ? 0.2 : 0.02,
+    metalness: surface === SURFACE.METAL ? 0.55 : water ? 0.2 : 0.02,
     roughness: 1.0,
     transparent: glass || water,
     opacity: glass ? 0.22 : water ? 0.72 : 1,
     side: glass ? THREE.DoubleSide : THREE.FrontSide,
-    envMapIntensity: surface === SURFACE.METAL ? 1.1 : 0.55
+    envMapIntensity: surface === SURFACE.METAL ? 1.6 : 0.7
   });
   m.userData.surface = surface;
   m.userData.texScale = maps.scale;

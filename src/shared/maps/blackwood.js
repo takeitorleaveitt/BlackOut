@@ -19,10 +19,10 @@ export function buildBlackwood() {
       sky: 'night',
       sunDir: [-0.3, 0.5, -0.7],
       sunColor: 0x4d6a9a, sunIntensity: 0.28,
-      ambientColor: 0x141c2c, ambientIntensity: 0.30,
+      ambientColor: 0x141c2c, ambientIntensity: 0.52,
       hemiGround: 0x0a0d0f,
       fog: { color: 0x0b1018, near: 8, far: 74 },
-      exposure: 1.35,
+      exposure: 1.52,
       reverb: 'forest',
       wind: 0.8, rain: 0.25, dustMotes: 0.3, moon: true
     }

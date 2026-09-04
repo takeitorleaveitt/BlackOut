@@ -18,11 +18,11 @@ export function buildHighrise() {
     env: {
       sky: 'dusk',
       sunDir: [-0.82, 0.28, 0.2],
-      sunColor: 0xffb070, sunIntensity: 2.1,
-      ambientColor: 0x4a5060, ambientIntensity: 0.55,
-      hemiGround: 0x38312c,
+      sunColor: 0xffb070, sunIntensity: 3.6,
+      ambientColor: 0x6a7282, ambientIntensity: 1.4,
+      hemiGround: 0x685c50,
       fog: { color: 0x8a7b74, near: 16, far: 110 },
-      exposure: 1.08,
+      exposure: 1.34,
       reverb: 'hall',
       wind: 0.7, rain: 0, dustMotes: 1.4
     }

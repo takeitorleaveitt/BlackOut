@@ -151,7 +151,15 @@ export class PlayerModel {
       this.legR.rotation.x = lerp(0, -0.35, t);
       return;
     }
-    this.deathT = 0;
+    // Blend out of the ragdoll pose instead of snapping straight to standing
+    // the instant a respawn flips `dead` false — the snap was reading as a
+    // broken/skipped animation.
+    if (this.deathT > 0) {
+      this.deathT = Math.max(0, this.deathT - dt * 5);
+      const t = this.deathT;
+      r.rotation.set(t * 1.45, st.yaw, t * 0.35);
+      if (t > 0.02) return;
+    }
     r.rotation.set(0, 0, 0);
 
     // hips face the movement direction, torso faces the aim

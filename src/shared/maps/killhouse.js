@@ -16,11 +16,11 @@ export function buildKillhouse() {
     env: {
       sky: 'interior',
       sunDir: [0.3, 0.9, 0.2],
-      sunColor: 0xd8e4f0, sunIntensity: 0.8,
-      ambientColor: 0x39414d, ambientIntensity: 0.7,
+      sunColor: 0xd8e4f0, sunIntensity: 1.3,
+      ambientColor: 0x555e6c, ambientIntensity: 1.5,
       hemiGround: 0x1b1a18,
       fog: { color: 0x2a2f36, near: 12, far: 60 },
-      exposure: 1.1,
+      exposure: 1.32,
       reverb: 'hall',
       wind: 0, rain: 0, dustMotes: 0.8
     }
@@ -45,9 +45,9 @@ export function buildKillhouse() {
     b.prop('crate_large', 8.5, 0, 8 * s, { yaw: -0.3 });
     b.prop('barrel', 0, 0, 10 * s, {});
     b.prop('sandbags', 2.5, 0, 6.5 * s, { yaw: 0.1 });
-    b.light('point', 0, 3.9, 8 * s, { color: 0xfff0d8, intensity: 6, distance: 16, shadow: false });
-    b.light('point', -8, 3.9, 6 * s, { color: 0xe6f0ff, intensity: 4, distance: 12, flicker: s > 0 ? 0.3 : 0 });
-    b.light('point', 8, 3.9, 6 * s, { color: 0xe6f0ff, intensity: 4, distance: 12 });
+    b.light('point', 0, 3.9, 8 * s, { color: 0xfff0d8, intensity: 1.2, distance: 16, shadow: false });
+    b.light('point', -8, 3.9, 6 * s, { color: 0xe6f0ff, intensity: 0.9, distance: 12, flicker: s > 0 ? 0.3 : 0 });
+    b.light('point', 8, 3.9, 6 * s, { color: 0xe6f0ff, intensity: 0.9, distance: 12 });
   }
 
   // central island
@@ -61,7 +61,7 @@ export function buildKillhouse() {
   b.prop('pallet', 10, 0, 0, { yaw: -0.4 });
   b.prop('tire_stack', -11, 0, -6, {});
   b.prop('tire_stack', 11, 0, 6, {});
-  b.light('point', 0, 4.0, 0, { color: 0xfff4e0, intensity: 7, distance: 18, shadow: true });
+  b.light('point', 0, 4.0, 0, { color: 0xfff4e0, intensity: 1.4, distance: 18, shadow: true });
 
   b.spawn('alpha', 0, 0, -11.5, 0);
   b.spawn('alpha', -3, 0, -11.5, 0);

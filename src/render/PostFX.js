@@ -161,8 +161,11 @@ export class PostFX {
 
   render() {
     this.composer.render();
-    if (this.motion && this.prevTarget) {
-      // stash this frame for the next one's smear
+    // The smear copy is a full extra render pass — skip it whenever the blur
+    // amount is too small to see (standing still, aiming, menus), which is
+    // most frames. Doing this unconditionally was costing a full second
+    // full-screen pass on every single frame motion blur was enabled.
+    if (this.motion && this.prevTarget && this.motion.uniforms.uAmount.value > 0.004) {
       const rt = this.composer.readBuffer;
       const old = this.renderer.getRenderTarget();
       this.renderer.setRenderTarget(this.prevTarget);
