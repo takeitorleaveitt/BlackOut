@@ -6,7 +6,7 @@
 // multipliers so each weapon climbs a recognisable path (the AK's hard right
 // hook, the M4's tight vertical then left drift, the MP7's fast scatter...).
 
-export const SLOT = { PRIMARY: 'primary', SECONDARY: 'secondary' };
+export const SLOT = { PRIMARY: 'primary', SECONDARY: 'secondary', MELEE: 'melee' };
 
 function pattern(str) {
   // compact authoring: "h,v h,v h,v" -> [[h,v],...]
@@ -246,6 +246,42 @@ export const WEAPONS = [
     audio: { punch: 62, body: 210, crack: 2600, tail: 0.60, level: 1.18, tone: 0.32 },
     model: { barrel: 0.44, receiver: 0.34, stock: 'folding', handguard: 'rail', mag: 'battle', tint: 0x3b3a2e, accent: 0x4a4838 },
     attachments: ['reddot', 'holo', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
+  },
+  {
+    id: 8,
+    key: 'knife',
+    name: 'Combat Knife',
+    fullName: 'Fixed-Blade Combat Knife',
+    caliber: 'Melee',
+    class: 'Melee',
+    slot: SLOT.MELEE,
+    desc: 'Always on you regardless of loadout. A clean stab at knife range drops anyone in one hit.',
+    melee: true,
+    // damageMin=0 and a falloff that closes over a few centimetres past
+    // falloffStart turns the shared range-falloff math into a hard melee-range
+    // cutoff: full lethal damage up close, nothing at all past knife reach.
+    // damage is well above MAX_HEALTH (100) even through the weakest
+    // (leg, x0.72) hit-zone multiplier so a stab kills from full health from
+    // any angle, not just center-mass.
+    damage: 200, damageMin: 0, falloffStart: 1.4, falloffEnd: 1.6,
+    rpm: 110, auto: false, burst: 0,
+    muzzleVelocity: 260, dropScale: 0,
+    magSize: 1, reserve: 1,
+    reloadTactical: 0.01, reloadEmpty: 0.01, drawTime: 0.22, holsterTime: 0.16,
+    adsTime: 0.12, adsFov: 1.0,
+    spreadHip: 0, spreadAds: 0, spreadMove: 0, spreadJump: 0,
+    spreadPerShot: 0, spreadMax: 0, spreadRecover: 20,
+    recoil: {
+      vert: 0, horiz: 0, recovery: 20, viewKick: 0, camShake: 0,
+      firstShotMult: 1, kickBack: 0,
+      pattern: pattern('0,0')
+    },
+    weight: 0.6, mobility: 1.16, adsMobility: 1.0,
+    sway: { amp: 0.9, freq: 1.6, inertia: 0.6 },
+    penetration: 0, pellets: 1, pelletSpread: 0,
+    audio: { punch: 0, body: 0, crack: 0, tail: 0, level: 0, tone: 0 },
+    model: { barrel: 0.02, receiver: 0.05, stock: 'none', handguard: 'none', mag: 'none', tint: 0x555a5e, accent: 0x8a8f94 },
+    attachments: []
   }
 ];
 

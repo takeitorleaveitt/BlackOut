@@ -6,6 +6,7 @@ import { el, button, header } from '../UI.js';
 import { audio } from '../../audio/AudioEngine.js';
 import { S, settings } from '../../core/Settings.js';
 import { MAP_INFO } from '../../shared/maps/index.js';
+import { PRIMARIES, SECONDARIES } from '../../shared/weapons.js';
 
 const ITEMS = [
   { key: 'play', label: 'PLAY', desc: 'DEPLOY TO A MATCH' },
@@ -43,7 +44,7 @@ export function createMainMenu(game) {
         el('div', el('b', 'FEED '), this.tcNode),
         el('div', el('b', 'BUILD '), '1.0.0 · WEBGL2'),
         el('div', el('b', 'OPERATOR '), S.name),
-        el('div', el('b', 'MAPS '), String(MAP_INFO.length), ' · ', el('b', 'WEAPONS '), '7'));
+        el('div', el('b', 'MAPS '), String(MAP_INFO.length), ' · ', el('b', 'WEAPONS '), String(PRIMARIES.length + SECONDARIES.length)));
 
       const right = el('div.menu-right', version);
 

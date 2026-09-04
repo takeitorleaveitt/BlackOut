@@ -47,6 +47,20 @@ export class LocalPlayer {
     this._breathT = 0;
     this._lastShotTime = 0;
     this._wallProbe = 2;
+
+    // The weapon-light attachment used to only exist as a light inside the
+    // isolated view-model scene (a separate render pass for the first-person
+    // gun/arms) — it made the gun's own barrel glow but, because that scene
+    // never touches the actual world geometry, it never lit up a single wall
+    // or hallway. That's what read as "the flashlight doesn't work": it
+    // visually did something, just not the thing a flashlight is for. This
+    // is the real one, living in the world scene the player actually walks
+    // through, aimed along the camera and gated on the same lightOn/attachment
+    // state so it only comes on when the equipped weapon actually has the
+    // attachment.
+    this.flashlight = new THREE.SpotLight(0xfff4dd, 0, 24, 0.36, 0.45, 1.4);
+    this.flashlight.target = new THREE.Object3D();
+    game.engine.scene.add(this.flashlight, this.flashlight.target);
   }
 
   // -------------------------------------------------------------------------
@@ -55,7 +69,8 @@ export class LocalPlayer {
     const secondary = WEAPON_BY_KEY[loadout.secondary] || WEAPON_BY_KEY.glock17;
     this.weapons = [
       new Weapon(primary, loadout.primaryAttachments || []),
-      new Weapon(secondary, loadout.secondaryAttachments || [])
+      new Weapon(secondary, loadout.secondaryAttachments || []),
+      new Weapon(WEAPON_BY_KEY.knife, [])
     ];
     this.slot = 0;
     this.game.viewmodel.equip(this.weapon);
@@ -110,6 +125,7 @@ export class LocalPlayer {
     if (code === binds.reload) this.weapon?.reload();
     if (code === binds.primary) this.switchTo(0);
     if (code === binds.secondary) this.switchTo(1);
+    if (code === binds.melee) this.switchTo(2);
     if (code === binds.inspect) this.weapon?.inspect();
     if (code === binds.flashlight) {
       if (this.weapon?.toggleLight()) this.game.audio.mech('safety');
@@ -210,6 +226,20 @@ export class LocalPlayer {
       dead: !this.alive
     });
 
+    // --- flashlight (real world-space light, not the cosmetic viewmodel one) -
+    const wantLight = !!w && !!w.lightOn && !!g.viewmodel.model?.attached?.light && this.alive;
+    this.flashlight.intensity = wantLight ? 26 : 0;
+    if (wantLight) {
+      const cam = g.engine.camera;
+      this._dir.set(0, 0, -1).applyQuaternion(cam.quaternion);
+      this.flashlight.position.copy(cam.position);
+      this.flashlight.target.position.set(
+        cam.position.x + this._dir.x * 8,
+        cam.position.y + this._dir.y * 8,
+        cam.position.z + this._dir.z * 8
+      );
+    }
+
     // --- breathing -----------------------------------------------------------
     this._breathT -= dt;
     if (this._breathT <= 0 && this.alive) {
@@ -307,17 +337,18 @@ export class LocalPlayer {
     );
     this.rig.addAimKick(shot.aimKick.y * 0.55, shot.aimKick.x * 0.5);
 
-    // muzzle flash + smoke at the actual muzzle
+    // muzzle flash + smoke at the actual muzzle (guns only — a knife has
+    // neither a muzzle nor a casing to eject)
     const mz = g.viewmodel.getMuzzle(this._muzzle, cam);
     const suppressed = !!def.flags?.suppressed;
-    if (mz) {
+    if (mz && !def.melee) {
       g.effects.flashes.flash(mz.pos, def.pellets > 1 ? 1.5 : 1.0, suppressed);
       g.effects.muzzleSmoke(mz.pos, mz.dir, suppressed ? 0.4 : 1);
       if (!suppressed) g.engine.postCtx.flash = 0.055;
     }
 
     // ejected casing
-    if (mz) {
+    if (mz && !def.melee) {
       const right = this._v.set(1, 0, 0).applyQuaternion(cam.quaternion);
       const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
       const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
@@ -332,7 +363,8 @@ export class LocalPlayer {
     }
 
     // report
-    g.audio.gunshot(def.audio, [cam.position.x, cam.position.y, cam.position.z], {
+    if (def.melee) g.audio.swing([cam.position.x, cam.position.y, cam.position.z]);
+    else g.audio.gunshot(def.audio, [cam.position.x, cam.position.y, cam.position.z], {
       own: true, suppressed
     });
 
@@ -385,7 +417,7 @@ export class LocalPlayer {
       : res.endPoint;
     const dx = end[0] - start[0], dy = end[1] - start[1], dz = end[2] - start[2];
     const dist = Math.hypot(dx, dy, dz) || 0.001;
-    if (Math.random() < (def.pellets > 1 ? 0.34 : 0.62)) {
+    if (!def.melee && Math.random() < (def.pellets > 1 ? 0.34 : 0.62)) {
       g.effects.tracers.fire(
         start, [dx / dist, dy / dist, dz / dist],
         Math.min(def.muzzleVelocity, 620), dist,

@@ -1,7 +1,7 @@
-// Other players.  Snapshots arrive at 20Hz, so positions are buffered and
-// rendered ~100ms in the past, interpolated between the two states that
-// bracket the render time.  Falls back to short extrapolation if the buffer
-// runs dry (a hitch, or packet loss).
+// Other players.  Snapshots arrive at the server tick rate, so positions are
+// buffered and rendered slightly in the past (INTERP_DELAY_MS), interpolated
+// between the two states that bracket the render time.  Falls back to short
+// extrapolation if the buffer runs dry (a hitch, or packet loss).
 
 import * as THREE from 'three';
 import { PlayerModel } from './PlayerModel.js';
@@ -10,6 +10,11 @@ import { INTERP_DELAY_MS, PLAYER_HEIGHT_STAND, PLAYER_HEIGHT_CROUCH, SPEED_WALK,
 import { WEAPON_BY_ID } from '../shared/weapons.js';
 
 const BUFFER = 24;
+
+// Alpha reads as the "blue" team, Bravo as "tan" — matches PlayerModel's
+// kit tint for each team, just bright and unlit so the marker actually pops
+// against the map instead of blending into it.
+const MARKER_COLOR = { 1: 0x4aa8ff, 2: 0xe0b070 };
 
 export class RemotePlayer {
   constructor(id, scene, info = {}) {
@@ -32,6 +37,32 @@ export class RemotePlayer {
     this.visible = true;
     this.lastSeen = performance.now();
     this.model.setWeapon(WEAPON_BY_ID[0]);
+
+    // Teammate marker: a small downward-pointing chevron that floats above
+    // the head, team-coloured, shown only when this player is on the local
+    // player's team. Kept as a scene child (not parented under model.root)
+    // so a team swap that rebuilds the model doesn't take it with it.
+    const markerGeo = new THREE.ConeGeometry(0.085, 0.16, 4);
+    this.markerMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, depthTest: false });
+    this.marker = new THREE.Mesh(markerGeo, this.markerMat);
+    this.marker.rotation.x = Math.PI;
+    this.marker.rotation.y = Math.PI / 4;
+    this.marker.renderOrder = 15;
+    this.marker.visible = false;
+    this.marker.frustumCulled = false;
+    scene.add(this.marker);
+    this._markerBob = Math.random() * 10;
+  }
+
+  /** Show/colour the teammate marker; called once a frame from the game with the local player's team. */
+  updateMarker(myTeam, dt) {
+    const friendly = myTeam && this.team === myTeam;
+    this.marker.visible = friendly && this.visible && !this.render.dead;
+    if (!this.marker.visible) return;
+    this.markerMat.color.setHex(MARKER_COLOR[this.team] || 0xffffff);
+    this._markerBob += dt * 2.4;
+    const bob = Math.sin(this._markerBob) * 0.03;
+    this.marker.position.set(this.render.x, this.render.y + this.height + 0.34 + bob, this.render.z);
   }
 
   setInfo(info) {
@@ -151,6 +182,9 @@ export class RemotePlayer {
   dispose() {
     this.scene.remove(this.model.root);
     this.model.dispose();
+    this.scene.remove(this.marker);
+    this.marker.geometry.dispose();
+    this.markerMat.dispose();
   }
 }
 

@@ -10,10 +10,10 @@ import * as THREE from 'three';
 import {
   makeImpulse, makeGunshot, makeBulletCrack, makeWhizz, makeImpact, makeFootstep,
   makeCasing, makeMech, makeBreath, makePain, makeUi, makeAmbience, makeMenuBed,
-  spaceLevel
+  makeSwing, spaceLevel
 } from './Synth.js';
 import { S } from '../core/Settings.js';
-import { clamp, rand } from '../shared/constants.js';
+import { clamp, rand, SURFACE } from '../shared/constants.js';
 
 const MAX_VOICES = 40;
 
@@ -98,7 +98,7 @@ export class AudioEngine {
     this.master.gain.value = m;
     this.bus.weapons.gain.value = (S.weaponVolume ?? 1) * 0.9;
     this.bus.effects.gain.value = (S.effectsVolume ?? 0.9);
-    this.bus.ambience.gain.value = (S.ambienceVolume ?? 0.7) * 0.8;
+    this.bus.ambience.gain.value = (S.ambienceVolume ?? 0.7) * 0.52;
     this.bus.voice.gain.value = (S.voiceVolume ?? 0.8);
     this.bus.music.gain.value = (S.musicVolume ?? 0.45) * 0.7;
     this.bus.ui.gain.value = (S.uiVolume ?? 0.6);
@@ -224,6 +224,46 @@ export class AudioEngine {
     return { src, gain };
   }
 
+  /**
+   * Pre-synthesise the sounds a match is about to need. Every make* call is
+   * cache-keyed and cheap on a hit, but the *first* call for a given
+   * (sound, variant) pair does real synthesis work — without this, that
+   * first-time cost landed randomly during play (the first footstep on a
+   * surface, the first shot of a weapon variant), reading as a stutter for
+   * no obvious reason. Spread across idle callbacks so warming the cache
+   * doesn't itself cause the hitch it's trying to avoid.
+   */
+  warmup(weaponDefs = []) {
+    if (!this.ctx) return;
+    const jobs = [];
+    for (const surface of Object.values(SURFACE)) {
+      jobs.push(() => makeFootstep(this.ctx, surface, 0));
+      jobs.push(() => makeImpact(this.ctx, surface, 0));
+      jobs.push(() => makeCasing(this.ctx, surface, false, 0));
+    }
+    for (const def of weaponDefs) {
+      if (!def?.audio || def.melee) continue;
+      jobs.push(() => makeGunshot(this.ctx, def.audio, 0, {}));
+      jobs.push(() => makeGunshot(this.ctx, def.audio, 0, { suppressed: true }));
+    }
+    jobs.push(() => makeSwing(this.ctx, 0));
+    jobs.push(() => makeBulletCrack(this.ctx, 0), () => makeWhizz(this.ctx, 0));
+    jobs.push(() => makeBreath(this.ctx, 'normal', 0), () => makeBreath(this.ctx, 'heavy', 0));
+    jobs.push(() => makePain(this.ctx, 0));
+    jobs.push(() => makeMech(this.ctx, 'select', 0), () => makeMech(this.ctx, 'magOut', 0), () => makeMech(this.ctx, 'magIn', 0));
+
+    const runNext = (deadline) => {
+      while (jobs.length && (!deadline || deadline.timeRemaining() > 2)) {
+        try { jobs.shift()(); } catch (e) { /* never let a warmup miss break the match */ }
+      }
+      if (jobs.length) schedule(runNext);
+    };
+    const schedule = window.requestIdleCallback
+      ? (fn) => window.requestIdleCallback(fn, { timeout: 200 })
+      : (fn) => setTimeout(() => fn(null), 16);
+    schedule(runNext);
+  }
+
   // -------------------------------------------------------------------------
   // game sounds
   // -------------------------------------------------------------------------
@@ -318,6 +358,14 @@ export class AudioEngine {
     this.play(makeCasing(this.ctx, surface || 'concrete', isShell, (Math.random() * 4) | 0), {
       pos, bus: 'effects', volume: 0.42, rate: rand(0.88, 1.18),
       reverb: 0.45, refDistance: 1.6, rolloff: 2.6, maxDistance: 22
+    });
+  }
+
+  swing(pos = null, volume = 1) {
+    if (!this.ctx) return;
+    this.play(makeSwing(this.ctx, (Math.random() * 4) | 0), {
+      pos, bus: 'weapons', volume: 0.85 * volume, rate: rand(0.92, 1.1),
+      reverb: 0.2, refDistance: 2, rolloff: 2.2, maxDistance: 20
     });
   }
 

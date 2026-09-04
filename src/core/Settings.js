@@ -44,10 +44,14 @@ export const DEFAULT_BINDS = {
 const DEFAULTS = {
   // profile
   name: '',
-  // graphics
-  preset: 'high',
+  // graphics — first-run default is the "low" preset (so a fresh install
+  // never opens into a stutter on weak hardware) but with render scale
+  // pushed to full resolution, since that's cheap on its own and the
+  // preset's other cuts (shadows, particles, effects) do the heavy lifting.
+  preset: 'low',
   fov: 84,
-  ...PRESETS.high,
+  ...PRESETS.low,
+  renderScale: 1.0,
   bodycam: 1.0,          // master strength of the bodycam look
   cameraShake: 1.0,
   weaponSway: 1.0,

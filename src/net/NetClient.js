@@ -2,8 +2,8 @@
 //
 // Input commands go out at 30Hz carrying the last few commands for redundancy
 // (so a dropped packet does not stall prediction), snapshots come back as
-// binary at 20Hz, and everything else is JSON.  Tracks RTT, jitter and packet
-// loss for the net graph.
+// binary at the server's tick rate, and everything else is JSON.  Tracks RTT,
+// jitter and packet loss for the net graph.
 
 import { bus } from '../core/EventBus.js';
 import { writeInput, readSnapshot, MSG } from '../shared/protocol.js';

@@ -45,7 +45,12 @@ export class PlayerModel {
       shinMesh.position.y = -0.22;
       const boot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.10, 0.26), black);
       boot.position.set(0, -0.45, 0.04);
-      shin.add(shinMesh, boot);
+      const sole = new THREE.Mesh(new THREE.BoxGeometry(0.145, 0.025, 0.27), black);
+      sole.position.set(0, -0.495, 0.04);
+      const kneePad = new THREE.Mesh(new THREE.BoxGeometry(0.155, 0.09, 0.06), trim);
+      kneePad.position.set(0, -0.19, -0.12);
+      shin.add(shinMesh, boot, sole);
+      thigh.add(kneePad);
       g.add(thigh, shin);
       g.position.set(sx * 0.11, 0, 0);
       g.userData.shin = shin;
@@ -57,18 +62,26 @@ export class PlayerModel {
     this.torso.position.y = 0.02;
     this.hips.add(this.torso);
 
+    // Forward is -Z at yaw 0 throughout movement/aim (see movement.js), and
+    // the weapon mount below is correctly built on that -Z side. All the
+    // "front of body" detail meshes here were mistakenly authored on +Z
+    // instead — the model's face/plate/pouches pointed the way the character
+    // came from, not the way they were walking or aiming, so every bot and
+    // remote player visually looked like they were facing backwards even
+    // though their underlying yaw was always correct. Mirrored onto -Z (and
+    // the backpack, which belongs on the back, onto +Z) to match.
     const chest = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.46, 0.24), kit);
     chest.position.y = 0.26;
     const plate = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.34, 0.10), trim);
-    plate.position.set(0, 0.28, 0.13);
+    plate.position.set(0, 0.28, -0.13);
     const belt = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.10, 0.24), pouch);
     belt.position.y = 0.03;
     const pouchL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.09), pouch);
-    pouchL.position.set(-0.13, 0.12, 0.16);
+    pouchL.position.set(-0.13, 0.12, -0.16);
     const pouchR = pouchL.clone();
     pouchR.position.x = 0.13;
     const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.34, 0.14), pouch);
-    backpack.position.set(0, 0.30, -0.18);
+    backpack.position.set(0, 0.30, 0.18);
     this.torso.add(chest, plate, belt, pouchL, pouchR, backpack);
 
     // head + helmet
@@ -80,12 +93,16 @@ export class PlayerModel {
     const helmet = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.14, 0.25), black);
     helmet.position.y = 0.18;
     const nvg = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.10), black);
-    nvg.position.set(0, 0.20, 0.15);
+    nvg.position.set(0, 0.20, -0.15);
     const cam = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), mat(0x101214, 0.4, 0.6));
-    cam.position.set(-0.13, 0.30, 0.10);   // the chest cam on the shoulder strap
+    cam.position.set(-0.13, 0.30, -0.10);   // the chest cam on the shoulder strap, facing forward
     const mask = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.06), black);
-    mask.position.set(0, 0.05, 0.10);
-    this.neck.add(head, helmet, nvg, mask);
+    mask.position.set(0, 0.05, -0.10);
+    const strapL = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.10, 0.025), black);
+    strapL.position.set(-0.10, 0.10, -0.03);
+    const strapR = strapL.clone();
+    strapR.position.x = 0.10;
+    this.neck.add(head, helmet, nvg, mask, strapL, strapR);
     this.torso.add(cam);
 
     // arms
@@ -94,13 +111,18 @@ export class PlayerModel {
     for (const [g, sx] of [[this.armL, -1], [this.armR, 1]]) {
       const upper = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.30, 0.12), kit);
       upper.position.y = -0.15;
+      const shoulderPad = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.10, 0.14), trim);
+      shoulderPad.position.y = 0.03;
+      upper.add(shoulderPad);
       const fore = new THREE.Group();
       fore.position.y = -0.30;
       const foreMesh = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.28, 0.11), kit);
       foreMesh.position.y = -0.14;
+      const elbowPad = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.07, 0.05), trim);
+      elbowPad.position.set(0, -0.01, -0.075);
       const glove = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.10, 0.10), black);
       glove.position.y = -0.30;
-      fore.add(foreMesh, glove);
+      fore.add(foreMesh, elbowPad, glove);
       g.add(upper, fore);
       g.position.set(sx * 0.26, 0.44, 0);
       g.userData.fore = fore;
@@ -202,17 +224,31 @@ export class PlayerModel {
     else this.reloadT = 0;
     const reload = st.reloading ? Math.sin(clamp(this.reloadT / 1.7, 0, 1) * Math.PI) : 0;
 
+    // The torso only leans a capped +-11 degrees for pitch, which made a
+    // teammate aiming up at a balcony or down at their feet look almost
+    // identical from outside — the actual "where are they looking" signal
+    // needs to be on the gun and arms, not buried in a subtle body lean.
+    const pitchLook = clamp(-(st.pitch || 0), -1.1, 1.1) * (1 - sp * 0.7);
+
+    // Rotation.x here swings the whole down-hanging arm group; positive
+    // values swing the hand toward world -Z (forward, where the weapon
+    // mount and the model's own face/chest actually are). This used to be
+    // negative, which put the gun-hand a full ~0.8 units behind the torso
+    // on the opposite side of the body from the weapon it's meant to be
+    // holding — from the front the arm read as reaching backward while the
+    // gun floated out in front on its own, which is what made the whole
+    // rig look like it was facing the wrong way.
     this.armR.rotation.set(
-      lerp(-1.30 + sp * 0.5 + recoil, -0.95, aim) + reload * 0.15,
+      lerp(1.30 - sp * 0.5 - recoil, 0.95, aim) - reload * 0.15 - pitchLook * 0.32,
       lerp(-0.30 + sp * 0.4, -0.08, aim),
       lerp(0.16, 0.06, aim)
     );
-    this.armL.rotation.set(-1.45 + sp * 0.75 + recoil + reload * 0.95, 0.55 - sp * 0.2 - aim * 0.4, -0.32 + reload * 0.2);
-    this.armL.userData.fore.rotation.x = -0.55 - sp * 0.35 + reload * 0.85;
-    this.armR.userData.fore.rotation.x = lerp(-0.35, -0.55, aim);
+    this.armL.rotation.set(1.45 - sp * 0.75 - recoil - reload * 0.95 - pitchLook * 0.30, 0.55 - sp * 0.2 - aim * 0.4, -0.32 + reload * 0.2);
+    this.armL.userData.fore.rotation.x = 0.55 + sp * 0.35 - reload * 0.85;
+    this.armR.userData.fore.rotation.x = lerp(0.35, 0.55, aim);
 
     this.weaponMount.rotation.set(
-      lerp(-0.12 + sp * 0.55 + recoil * 1.4, -0.02, aim) + reload * 0.1,
+      lerp(-0.12 + sp * 0.55 + recoil * 1.4, -0.02, aim) + reload * 0.1 + pitchLook * 0.55,
       lerp(-0.26 + sp * 0.55, -0.05, aim),
       sp * 0.35
     );

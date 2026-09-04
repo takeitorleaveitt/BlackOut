@@ -13,7 +13,7 @@ import { Room, makeRoomCode } from './Room.js';
 import { readInput, MSG } from '../src/shared/protocol.js';
 import { MODES, REGIONS } from '../src/shared/modes.js';
 import { ROTATION, MAP_INFO, mapsForMode } from '../src/shared/maps/index.js';
-import { INTERP_DELAY_MS, LAG_COMP_MAX_MS, clamp } from '../src/shared/constants.js';
+import { INTERP_DELAY_MS, LAG_COMP_MAX_MS, TICK_RATE, SNAPSHOT_RATE, clamp } from '../src/shared/constants.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -168,7 +168,7 @@ wss.on('connection', (ws, req) => {
   };
   clients.add(client);
 
-  send(client, { t: 'welcome', id: client.id, region: REGION, tickRate: 30, snapshotRate: 20 });
+  send(client, { t: 'welcome', id: client.id, region: REGION, tickRate: TICK_RATE, snapshotRate: SNAPSHOT_RATE });
 
   ws.on('message', (data, isBinary) => {
     try {

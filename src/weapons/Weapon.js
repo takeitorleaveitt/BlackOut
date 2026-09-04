@@ -169,7 +169,7 @@ export class Weapon {
       return null;
     }
     const d = this.def;
-    this.ammo--;
+    if (!d.melee) this.ammo--;
     this.cooldown = fireInterval(d);
     this.sinceShot = 0;
     this.heat = Math.min(1, this.heat + 0.08);

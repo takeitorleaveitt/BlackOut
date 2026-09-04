@@ -143,9 +143,11 @@ export class MatchSim {
       primary: primary.key, secondary: secondary.key,
       primaryAttachments: pAtt, secondaryAttachments: sAtt
     };
+    const knife = WEAPON_BY_KEY.knife;
     p.weapons = [
       { def: resolveWeapon(primary, pAtt), ammo: primary.magSize, reserve: primary.reserve },
-      { def: resolveWeapon(secondary, sAtt), ammo: secondary.magSize, reserve: secondary.reserve }
+      { def: resolveWeapon(secondary, sAtt), ammo: secondary.magSize, reserve: secondary.reserve },
+      { def: resolveWeapon(knife, []), ammo: knife.magSize, reserve: knife.reserve }
     ];
     p.slot = 0;
   }
@@ -214,8 +216,15 @@ export class MatchSim {
     const now = this.time;
     const minInterval = fireInterval(w.def) * 0.85;
     if (now - p.lastFire < minInterval) return;      // rate limit
-    if (w.ammo <= 0) return;
-    w.ammo--;
+    // Melee never runs dry — magSize on the knife exists only to size the HUD
+    // ammo readout, not to gate use. Without this guard the first stab of a
+    // life would burn the knife's one "round" and every later swing that
+    // life would be silently dropped here even though the client kept
+    // predicting and animating them.
+    if (!w.def.melee) {
+      if (w.ammo <= 0) return;
+      w.ammo--;
+    }
     p.lastFire = now;
     p.shotsFired++;
     p.lastShotAt = now;

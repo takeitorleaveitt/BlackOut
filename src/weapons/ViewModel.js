@@ -24,7 +24,8 @@ const HIP = {
   m870: { p: [0.156, -0.156, -0.66], r: [0.04, -0.08, 0.0] },
   glock17: { p: [0.120, -0.126, -0.48], r: [0.03, -0.09, 0.0] },
   deagle: { p: [0.128, -0.132, -0.50], r: [0.03, -0.09, 0.0] },
-  scarh: { p: [0.162, -0.162, -0.68], r: [0.04, -0.075, 0.0] }
+  scarh: { p: [0.162, -0.162, -0.68], r: [0.04, -0.075, 0.0] },
+  knife: { p: [0.096, -0.110, -0.28], r: [0.10, -0.14, 0.0] }
 };
 
 export class ViewModel {
@@ -137,6 +138,9 @@ export class ViewModel {
       this.leftArmBaseP.set(PISTOL_SUPPORT.p[0], PISTOL_SUPPORT.p[1], PISTOL_SUPPORT.p[2]);
       this.leftArmBaseR.set(PISTOL_SUPPORT.r[0], PISTOL_SUPPORT.r[1], PISTOL_SUPPORT.r[2]);
       this.leftArm.visible = true;
+    } else if (def.key === 'knife') {
+      // a knife is held one-handed
+      this.leftArm.visible = false;
     } else if (this.model.underMount) {
       const um = this.model.underMount.position;
       this.leftArmBaseP.set(um.x + SUPPORT_OFFSET.p[0], um.y + SUPPORT_OFFSET.p[1], um.z + SUPPORT_OFFSET.p[2]);

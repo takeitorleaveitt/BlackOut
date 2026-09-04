@@ -414,6 +414,29 @@ export function makeMech(ctx, kind, variant = 0) {
   return b;
 }
 
+/** Knife swing — a bright cutting transient sweeping down into a soft air tail. */
+export function makeSwing(ctx, variant = 0) {
+  const key = 'swing:' + variant;
+  if (cache.has(key)) return cache.get(key);
+  const sr = ctx.sampleRate;
+  const n = Math.floor(sr * 0.22);
+  const vr = 1 + (variant - 1.5) * 0.06;
+  const raw = noise(n);
+  const hi = raw.slice(), lo = raw.slice();
+  bandpass(hi, 2600 * vr, 1.1, sr);
+  bandpass(lo, 850 * vr, 1.0, sr);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const mix = i / n; // sweep from the sharp cut transient into the lower tail
+    out[i] = (hi[i] * (1 - mix) + lo[i] * mix) * env(i, n, 0.008, 0.13, 2.6);
+  }
+  highpass(out, 260, sr);
+  normalize(out, 0.5);
+  const b = toBuffer(ctx, [out]);
+  cache.set(key, b);
+  return b;
+}
+
 export function makeBreath(ctx, kind = 'normal', variant = 0) {
   const key = `breath:${kind}:${variant}`;
   if (cache.has(key)) return cache.get(key);

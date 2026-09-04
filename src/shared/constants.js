@@ -3,10 +3,22 @@
 
 export const TICK_RATE = 30;                  // authoritative server ticks / second
 export const TICK_MS = 1000 / TICK_RATE;
-export const SNAPSHOT_RATE = 20;              // state broadcasts / second
+// Snapshots used to broadcast at 20Hz against a 30Hz sim, so remote players
+// (teammates, enemies, bots) only got fresh authoritative state every 1.5
+// ticks — every other tick just replayed stale data through interpolation,
+// which read as extra input lag on anything you didn't control yourself.
+// Matching it to the tick rate means every simulated tick actually reaches
+// the network.
+export const SNAPSHOT_RATE = 30;              // state broadcasts / second
 export const SNAPSHOT_MS = 1000 / SNAPSHOT_RATE;
 export const MAX_INPUTS_PER_PACKET = 12;
-export const INTERP_DELAY_MS = 100;           // remote entity render delay
+// Remote entities are rendered this far in the past so there are always two
+// real snapshots to interpolate between. At 20Hz, 100ms was exactly two
+// snapshot intervals — the minimum safe buffer, but with nothing to spare.
+// Now that snapshots arrive every ~33ms, 70ms is still a comfortable margin
+// (~2 intervals) while shaving 30ms of pure added latency off every remote
+// player's visible position.
+export const INTERP_DELAY_MS = 70;            // remote entity render delay
 export const LAG_COMP_MAX_MS = 260;           // how far back the server will rewind hitboxes
 export const HISTORY_SECONDS = 1.0;
 
@@ -31,7 +43,7 @@ export const FRICTION_AIR = 0.15;
 export const JUMP_VELOCITY = 5.35;
 export const MAX_LEAN = 0.62;                 // radians of body roll when leaning
 export const LEAN_OFFSET = 0.46;              // lateral metres the head shifts when leaning
-export const LEAN_SPEED = 6.5;
+export const LEAN_SPEED = 10.5;
 export const CROUCH_SPEED = 9.0;
 export const SPRINT_MIN_FORWARD = 0.55;       // stick must be pushed this far forward to sprint
 

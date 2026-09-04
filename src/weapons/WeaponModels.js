@@ -37,6 +37,29 @@ function railStack(group, len, y, z0, mat = M.black) {
   }
 }
 
+// Peep-and-post iron sights. Both ends sit on the weapon's centreline (x=0)
+// at the same height the ADS pose centres on (see `ironHeight` below), so
+// once aimed the rear aperture and front post land stacked under the
+// crosshair with a real hole to look through — guns without an optic used
+// to have no sight geometry at all, so ADS just zoomed the receiver up to
+// fill the screen with nothing to actually aim with.
+function ironSights(g, y, rearZ, frontZ, mat = M.steelWorn) {
+  g.add(part(c(0.015, 0.015, 0.004, 8), mat, 0, y, rearZ, Math.PI / 2));   // rear aperture housing (disc)
+  g.add(part(c(0.008, 0.008, 0.005, 8), M.black, 0, y, rearZ, Math.PI / 2)); // the actual peep hole
+  g.add(part(b(0.006, 0.020, 0.012), mat, -0.017, y, rearZ));             // housing ears
+  g.add(part(b(0.006, 0.020, 0.012), mat, 0.017, y, rearZ));
+  g.add(part(b(0.022, 0.006, 0.016), mat, 0, y - 0.011, frontZ));         // front sight base
+  g.add(part(b(0.006, 0.026, 0.006), M.black, 0, y + 0.005, frontZ));     // front post
+}
+
+/** Notch-and-post for pistols — same centreline convention as ironSights(). */
+function pistolSights(g, y, rearZ, frontZ, mat = M.steelWorn) {
+  g.add(part(b(0.026, 0.008, 0.010), mat, 0, y, rearZ));
+  g.add(part(b(0.007, 0.010, 0.011), M.black, -0.008, y + 0.002, rearZ)); // notch walls
+  g.add(part(b(0.007, 0.010, 0.011), M.black, 0.008, y + 0.002, rearZ));
+  g.add(part(b(0.005, 0.018, 0.006), M.black, 0, y + 0.006, frontZ));     // front post
+}
+
 const BUILD = {
   m4a1(g) {
     g.add(part(b(0.062, 0.085, 0.30), M.polymer, 0, 0, -0.02));                 // lower receiver
@@ -51,6 +74,9 @@ const BUILD = {
     g.add(part(b(0.06, 0.09, 0.11), M.polymer, 0, -0.01, 0.21));                // collapsible stock
     g.add(part(b(0.055, 0.10, 0.03), M.polymer, 0, -0.015, 0.28));              // butt pad
     g.add(part(b(0.03, 0.055, 0.02), M.steel, 0, -0.055, -0.03));               // trigger guard
+    g.add(part(b(0.010, 0.020, 0.014), M.black, -0.032, -0.015, 0.005));        // selector switch
+    g.add(part(b(0.024, 0.024, 0.010), M.steel, 0, -0.02, 0.30));               // sling loop
+    ironSights(g, 0.086, 0.02, -0.40);
     g.name = 'm4a1';
   },
   ak74(g) {
@@ -64,6 +90,9 @@ const BUILD = {
     g.add(part(b(0.05, 0.075, 0.24), M.wood, 0, -0.02, 0.20, -0.06));           // fixed stock
     g.add(part(b(0.055, 0.10, 0.025), M.black, 0, -0.032, 0.315, -0.06));
     g.add(part(b(0.028, 0.05, 0.02), M.steel, 0, -0.06, -0.02));
+    g.add(part(b(0.012, 0.052, 0.10), M.steel, -0.037, 0.02, 0.02, 0, 0, 0.15)); // AK safety lever
+    g.add(part(b(0.026, 0.026, 0.012), M.steel, 0, -0.03, 0.34));               // sling loop
+    ironSights(g, 0.086, 0.06, -0.36);
     g.name = 'ak74';
   },
   mp5(g) {
@@ -76,6 +105,9 @@ const BUILD = {
     g.add(part(b(0.05, 0.07, 0.03), M.polymer, 0, 0.0, 0.27));
     g.add(part(c(0.014, 0.014, 0.07, 8), M.steel, 0.028, 0.03, -0.16, 0, 0, 0.4)); // cocking tube
     g.add(part(b(0.028, 0.05, 0.02), M.steel, 0, -0.05, -0.02));
+    g.add(part(b(0.010, 0.018, 0.012), M.black, -0.030, -0.01, 0.0));           // selector switch
+    g.add(part(b(0.022, 0.022, 0.010), M.steel, 0, 0.03, 0.02));                // sling loop
+    ironSights(g, 0.086, 0.02, -0.32);
     g.name = 'mp5';
   },
   mp7(g) {
@@ -88,6 +120,8 @@ const BUILD = {
     g.add(part(b(0.03, 0.075, 0.04), M.polymer, 0, -0.05, -0.15, -0.35));       // folding foregrip
     g.add(part(b(0.026, 0.026, 0.13), M.steel, 0, 0.005, 0.13));
     g.add(part(b(0.046, 0.06, 0.025), M.polymer, 0, 0.005, 0.20));
+    g.add(part(b(0.008, 0.016, 0.010), M.black, -0.026, -0.005, 0.02));         // selector switch
+    ironSights(g, 0.086, 0.04, -0.18);
     g.name = 'mp7';
   },
   m870(g) {
@@ -104,6 +138,7 @@ const BUILD = {
     g.add(part(b(0.032, 0.045, 0.14), M.polymer, 0, -0.02, -0.01));            // frame
     g.add(part(b(0.030, 0.115, 0.045), M.polymer, 0, -0.085, 0.03, 0.19));     // grip
     g.add(part(b(0.02, 0.035, 0.018), M.black, 0, -0.035, -0.015));            // trigger guard
+    pistolSights(g, 0.052, 0.03, -0.075);
     g.name = 'glock17';
   },
   deagle(g) {
@@ -112,7 +147,10 @@ const BUILD = {
     g.add(part(b(0.036, 0.006, 0.14), M.steelWorn, 0, 0.041, -0.11));          // vent rib
     g.add(part(b(0.036, 0.135, 0.05), M.polymer, 0, -0.10, 0.035, 0.17));      // grip, slight rake
     g.add(part(b(0.022, 0.038, 0.02), M.black, 0, -0.04, -0.02));              // trigger guard
-    g.add(part(b(0.010, 0.012, 0.02), M.black, 0, 0.045, -0.20));              // front sight post
+    g.add(part(b(0.010, 0.012, 0.02), M.black, 0, 0.052, -0.20));              // front sight post
+    g.add(part(b(0.026, 0.008, 0.010), M.steelWorn, 0, 0.052, 0.03));          // rear sight
+    g.add(part(b(0.007, 0.010, 0.011), M.black, -0.008, 0.054, 0.03));
+    g.add(part(b(0.007, 0.010, 0.011), M.black, 0.008, 0.054, 0.03));
     g.name = 'deagle';
   },
   scarh(g) {
@@ -126,7 +164,19 @@ const BUILD = {
     g.add(part(b(0.058, 0.10, 0.20), M.polymerTan, 0, -0.012, 0.20));          // folding stock
     g.add(part(b(0.06, 0.11, 0.03), M.polymer, 0, -0.02, 0.30));
     g.add(part(b(0.032, 0.055, 0.02), M.steel, 0, -0.06, -0.03));
+    g.add(part(b(0.012, 0.022, 0.016), M.black, -0.038, -0.02, 0.01));          // selector switch
+    g.add(part(b(0.026, 0.026, 0.012), M.steel, 0, -0.02, 0.36));               // sling loop
+    ironSights(g, 0.086, 0.04, -0.44, M.polymerTan);
     g.name = 'scarh';
+  },
+  knife(g) {
+    g.add(part(b(0.028, 0.032, 0.14), M.black, 0, -0.01, 0.06));            // grip
+    g.add(part(b(0.030, 0.006, 0.020), M.black, 0, 0.010, 0.005));          // finger ridge
+    g.add(part(b(0.052, 0.010, 0.028), M.steelWorn, 0, 0.016, -0.02));      // guard
+    g.add(part(b(0.024, 0.005, 0.24), M.steel, 0, 0.020, -0.16));           // blade
+    g.add(part(b(0.024, 0.005, 0.05), M.steelWorn, 0, 0.020, -0.045, 0, 0, 0.5)); // sharpened tip taper hint
+    g.add(part(b(0.010, 0.010, 0.03), M.black, 0, -0.01, 0.15));            // pommel
+    g.name = 'knife';
   }
 };
 
@@ -228,13 +278,13 @@ export function buildWeaponModel(weapon, attachments = []) {
   root.add(body);
   (BUILD[weapon.key] || BUILD.m4a1)(body);
 
-  const mag = (MAGS[weapon.key] || MAGS.m4a1)();
-  mag.name = 'magazine';
-  root.add(mag);
+  // A knife has no magazine or bolt to animate — skip both rather than
+  // fall back to the M4's parts, which would float a rifle mag off a blade.
+  const mag = weapon.melee ? null : (MAGS[weapon.key] || MAGS.m4a1)();
+  if (mag) { mag.name = 'magazine'; root.add(mag); }
 
-  const bolt = (BOLTS[weapon.key] || BOLTS.m4a1)();
-  bolt.name = 'bolt';
-  root.add(bolt);
+  const bolt = weapon.melee ? null : (BOLTS[weapon.key] || BOLTS.m4a1)();
+  if (bolt) { bolt.name = 'bolt'; root.add(bolt); }
 
   // the shotgun's forend cycles on its own
   let pump = null;
@@ -323,8 +373,10 @@ export function disposeWeaponModel(model) {
 export function buildWorldWeapon(weapon) {
   const g = new THREE.Group();
   (BUILD[weapon.key] || BUILD.m4a1)(g);
-  const mag = (MAGS[weapon.key] || MAGS.m4a1)();
-  g.add(mag);
-  if (BOLTS[weapon.key]) g.add(BOLTS[weapon.key]());
+  if (!weapon.melee) {
+    const mag = (MAGS[weapon.key] || MAGS.m4a1)();
+    g.add(mag);
+    if (BOLTS[weapon.key]) g.add(BOLTS[weapon.key]());
+  }
   return g;
 }
