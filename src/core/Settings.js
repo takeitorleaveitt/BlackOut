@@ -35,7 +35,7 @@ export const PRESETS = {
 
 export const DEFAULT_BINDS = {
   forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD',
-  jump: 'Space', crouch: 'ControlLeft', sprint: 'ShiftLeft', walk: 'AltLeft',
+  jump: 'Space', crouch: 'KeyC', sprint: 'ShiftLeft', walk: 'AltLeft',
   reload: 'KeyR', use: 'KeyF', leanLeft: 'KeyQ', leanRight: 'KeyE',
   primary: 'Digit1', secondary: 'Digit2', melee: 'KeyV', inspect: 'KeyI',
   scoreboard: 'Tab', flashlight: 'KeyT', chat: 'KeyY', ping: 'KeyG'

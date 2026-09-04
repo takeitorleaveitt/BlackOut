@@ -266,8 +266,11 @@ export class MapBuilder {
     return this;
   }
 
-  spawn(team, x, y, z, yaw = 0) {
-    const s = { p: [x, y, z], yaw };
+  spawn(team, x, y, z, yaw = 0, opts = {}) {
+    // `opts.side`/`opts.floor` are optional tags a mode can filter spawns
+    // by (Siege's three attacker approach sides, two defender floors) —
+    // every other mode just ignores them and gets the plain spawn point.
+    const s = { p: [x, y, z], yaw, side: opts.side, floor: opts.floor };
     if (team === 'ffa') this.spawns.ffa.push(s);
     else {
       this.spawns[team].push(s);
@@ -276,8 +279,8 @@ export class MapBuilder {
     return this;
   }
 
-  site(name, x, y, z, radius = 3.2) {
-    this.sites.push({ name, p: [x, y, z], radius });
+  site(name, x, y, z, radius = 3.2, opts = {}) {
+    this.sites.push({ name, p: [x, y, z], radius, floor: opts.floor });
     return this;
   }
 

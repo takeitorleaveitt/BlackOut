@@ -71,6 +71,7 @@ export class LocalNet {
     else if (kind === 'switch') this.sim.handleSwitch(this.id, data.slot | 0);
     else if (kind === 'plant') this.sim.handlePlant(this.id, data.down);
     else if (kind === 'defuse') this.sim.handleDefuse(this.id, data.down);
+    else if (kind === 'operator') this.sim.handleOperatorPick(this.id, data.key || null, { floor: data.floor, side: data.side });
   }
   requestRespawn() {
     const p = this.sim.players.get(this.id);

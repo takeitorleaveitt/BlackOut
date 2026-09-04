@@ -69,11 +69,14 @@ const rooms = new Map();
 const codes = new Map();
 
 function createPublicRoom(mode, map, opts = {}) {
+  // Fill to the mode's own capacity by default (Room.topUpBots() clamps to
+  // maxPlayers anyway) rather than a flat 6 — Siege/Quickplay cap at 8
+  // (4v4) and used to only ever fill to 6 (3v3) here.
   const room = new Room({
     name: `${MODES[mode].short} · ${map.toUpperCase()}`,
     mode, map, region: opts.region || REGION,
     persistent: true,
-    fillBots: opts.fillBots ?? 6,
+    fillBots: opts.fillBots ?? MODES[mode].maxPlayers ?? 6,
     botSkill: opts.botSkill || 'normal',
     options: opts.options
   });
@@ -91,7 +94,9 @@ function seedPublicRooms() {
     ['snd', 'highrise', 'na-west', 6],
     ['gunfight', 'killhouse', 'eu-west', 3],
     ['tdm', 'blackwood', 'ap-se', 6],
-    ['ffa', 'highrise', 'oce', 5]
+    ['ffa', 'highrise', 'oce', 5],
+    ['siege', 'district9', 'eu-west', 8],
+    ['quickplay', 'district9', 'na-east', 8]
   ];
   for (const [mode, map, region, bots] of seeds) {
     createPublicRoom(mode, map, { region, fillBots: bots });
@@ -293,6 +298,11 @@ function handle(client, msg) {
       break;
     case 'defuse':
       client.room?.sim.handleDefuse(client.id, !!msg.down);
+      break;
+    case 'operator':
+      client.room?.sim.handleOperatorPick(client.id, msg.key || null, {
+        floor: msg.floor | 0 || undefined, side: msg.side || undefined
+      });
       break;
     case 'respawn': {
       const p = client.room?.sim.players.get(client.id);

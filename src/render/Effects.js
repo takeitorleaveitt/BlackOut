@@ -668,10 +668,8 @@ export class Effects {
     }
   }
 
-  /** Muzzle smoke / heat wisp hanging in the air after a burst. Disabled. */
-  muzzleSmoke(pos, dir, amount = 1) {
-    // no-op: muzzle smoke removed
-  }
+  /** Muzzle smoke — removed per request; kept as a no-op so callers don't need changes. */
+  muzzleSmoke() {}
 
   bloodMist(point, dir) {
     const q = S.particles || 1;

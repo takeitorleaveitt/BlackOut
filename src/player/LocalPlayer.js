@@ -58,7 +58,7 @@ export class LocalPlayer {
     // through, aimed along the camera and gated on the same lightOn/attachment
     // state so it only comes on when the equipped weapon actually has the
     // attachment.
-    this.flashlight = new THREE.SpotLight(0xfff4dd, 0, 24, 0.36, 0.45, 1.4);
+    this.flashlight = new THREE.SpotLight(0xfff4dd, 0, 48, 0.36, 0.45, 1.15);
     this.flashlight.target = new THREE.Object3D();
     game.engine.scene.add(this.flashlight, this.flashlight.target);
   }
@@ -228,15 +228,15 @@ export class LocalPlayer {
 
     // --- flashlight (real world-space light, not the cosmetic viewmodel one) -
     const wantLight = !!w && !!w.lightOn && !!g.viewmodel.model?.attached?.light && this.alive;
-    this.flashlight.intensity = wantLight ? 26 : 0;
+    this.flashlight.intensity = wantLight ? 44 : 0;
     if (wantLight) {
       const cam = g.engine.camera;
       this._dir.set(0, 0, -1).applyQuaternion(cam.quaternion);
       this.flashlight.position.copy(cam.position);
       this.flashlight.target.position.set(
-        cam.position.x + this._dir.x * 8,
-        cam.position.y + this._dir.y * 8,
-        cam.position.z + this._dir.z * 8
+        cam.position.x + this._dir.x * 16,
+        cam.position.y + this._dir.y * 16,
+        cam.position.z + this._dir.z * 16
       );
     }
 

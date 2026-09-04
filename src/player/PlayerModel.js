@@ -17,13 +17,15 @@ const mat = (c, rough = 0.82, metal = 0.05) =>
   new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal });
 
 export class PlayerModel {
-  constructor(team = 0) {
+  /** `accent` (optional hex) overrides the trim colour — Siege operators
+   *  each get a small distinct tint on top of their team's base kit. */
+  constructor(team = 0, accent = null) {
     const col = TEAM_COLORS[team] || TEAM_COLORS[0];
     this.root = new THREE.Group();
     this.materials = [];
 
     const kit = mat(col.kit);
-    const trim = mat(col.trim, 0.7);
+    const trim = mat(accent ?? col.trim, 0.7);
     const pouch = mat(col.pouch, 0.9);
     const skin = mat(0x8a6b52, 0.9);
     const black = mat(0x1a1c1e, 0.7);
@@ -191,8 +193,6 @@ export class PlayerModel {
     this.hips.rotation.z = -(st.leanT || 0) * 0.30;
     this.aimT = lerp(this.aimT ?? 0, st.aiming && !st.sprinting ? 1 : 0, 1 - Math.exp(-10 * dt));
     const aim = this.aimT;
-    this.torso.rotation.x = lerp(0, 0.28, crouch) + clamp(-(st.pitch || 0) * 0.28, -0.2, 0.2) + aim * 0.05;
-    this.torso.rotation.z = -(st.leanT || 0) * 0.22;
     this.neck.rotation.x = clamp((st.pitch || 0) * 0.72, -0.9, 0.9);
 
     // gait
@@ -208,6 +208,18 @@ export class PlayerModel {
     this.legR.rotation.x = -s * 0.75 * amp - crouch * 0.6;
     this.legL.userData.shin.rotation.x = Math.max(0, -cS) * 0.85 * amp + crouch * 1.1;
     this.legR.userData.shin.rotation.x = Math.max(0, cS) * 0.85 * amp + crouch * 1.1;
+
+    // Torso used to be completely rigid while walking — only the legs swung,
+    // so a teammate jogging past read as gliding on rails from the waist up.
+    // A small vertical bob (double the leg's stride frequency, since both
+    // feet land once per full gait cycle) plus a hip-driven shoulder sway
+    // gives the upper body some actual weight, eased out during ADS/sprint
+    // where their own poses should read as steadier instead.
+    const walkBob = amp * (1 - aim * 0.6) * (1 - (this.sprintT || 0) * 0.4);
+    this.torso.position.y = 0.02 + Math.abs(cS) * 0.020 * walkBob;
+    this.torso.rotation.x = lerp(0, 0.28, crouch) + clamp(-(st.pitch || 0) * 0.28, -0.2, 0.2) + aim * 0.05;
+    this.torso.rotation.z = -(st.leanT || 0) * 0.22 + s * 0.03 * walkBob;
+    this.torso.rotation.y = s * 0.035 * walkBob;
 
     // arms: weapon-ready pose, with sprint carrying the gun down and across
     const sprintT = st.sprinting && moving ? 1 : 0;
@@ -252,11 +264,23 @@ export class PlayerModel {
       lerp(-0.26 + sp * 0.55, -0.05, aim),
       sp * 0.35
     );
-    this.weaponMount.position.set(
-      lerp(0.20 - sp * 0.03, 0.10, aim),
-      lerp(0.30 - sp * 0.10, 0.40, aim) - reload * 0.03,
-      lerp(-0.22 + sp * 0.05, -0.14, aim)
-    );
+    const wmX = lerp(0.20 - sp * 0.03, 0.10, aim);
+    const wmY = lerp(0.30 - sp * 0.10, 0.40, aim) - reload * 0.03;
+    const wmZ = lerp(-0.22 + sp * 0.05, -0.14, aim);
+    this.weaponMount.position.set(wmX, wmY, wmZ);
+
+    // The shoulders used to sit at a fixed torso-relative spot and only ever
+    // rotate, while the gun they're supposedly holding translates all over
+    // the place above (ADS pulls it in and up, sprint drops it down and
+    // across). A rotation-only shoulder can't follow a moving target, so
+    // teammates read as having their arms just floating out somewhere near
+    // a gun rather than actually gripping it. Dragging both shoulders along
+    // by the same delta the weapon mount moves — on top of their normal
+    // torso-relative rest spot — keeps the hands visually locked to the gun
+    // through ADS/sprint/reload instead of drifting apart from it.
+    const wmDX = wmX - 0.20, wmDY = wmY - 0.30, wmDZ = wmZ - (-0.22);
+    this.armR.position.set(0.26 + wmDX * 0.75, 0.44 + wmDY * 0.75, wmDZ * 0.75);
+    this.armL.position.set(-0.26 + wmDX * 0.55, 0.44 + wmDY * 0.55, wmDZ * 0.55);
   }
 
   dispose() {

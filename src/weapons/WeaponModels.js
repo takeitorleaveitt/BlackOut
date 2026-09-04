@@ -7,15 +7,19 @@
 
 import * as THREE from 'three';
 
+// Lightened and warmed up from the original near-black set — against the
+// game's lighting those read as a murky, low-contrast silhouette instead of
+// a clean blocky gun. A few shades lighter with a touch more warmth reads
+// far closer to the clean low-poly look the guns are going for.
 const M = {
-  polymer: new THREE.MeshStandardMaterial({ color: 0x1e2124, roughness: 0.72, metalness: 0.08 }),
-  polymerTan: new THREE.MeshStandardMaterial({ color: 0x4a4436, roughness: 0.74, metalness: 0.06 }),
-  steel: new THREE.MeshStandardMaterial({ color: 0x2b2e31, roughness: 0.38, metalness: 0.86 }),
-  steelWorn: new THREE.MeshStandardMaterial({ color: 0x4a4e52, roughness: 0.3, metalness: 0.92 }),
-  wood: new THREE.MeshStandardMaterial({ color: 0x6b4526, roughness: 0.66, metalness: 0.04 }),
-  black: new THREE.MeshStandardMaterial({ color: 0x131517, roughness: 0.6, metalness: 0.3 }),
-  glass: new THREE.MeshStandardMaterial({ color: 0x203040, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.55 }),
-  brass: new THREE.MeshStandardMaterial({ color: 0xb08a3a, roughness: 0.35, metalness: 0.9 })
+  polymer: new THREE.MeshStandardMaterial({ color: 0x33383d, roughness: 0.68, metalness: 0.10 }),
+  polymerTan: new THREE.MeshStandardMaterial({ color: 0x615a45, roughness: 0.70, metalness: 0.06 }),
+  steel: new THREE.MeshStandardMaterial({ color: 0x474b4f, roughness: 0.34, metalness: 0.85 }),
+  steelWorn: new THREE.MeshStandardMaterial({ color: 0x666b70, roughness: 0.28, metalness: 0.9 }),
+  wood: new THREE.MeshStandardMaterial({ color: 0x86593a, roughness: 0.62, metalness: 0.04 }),
+  black: new THREE.MeshStandardMaterial({ color: 0x232629, roughness: 0.55, metalness: 0.3 }),
+  glass: new THREE.MeshStandardMaterial({ color: 0x2c4560, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.55 }),
+  brass: new THREE.MeshStandardMaterial({ color: 0xc39a45, roughness: 0.32, metalness: 0.9 })
 };
 
 const b = (w, h, d) => new THREE.BoxGeometry(w, h, d);
