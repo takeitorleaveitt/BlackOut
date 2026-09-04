@@ -18,14 +18,14 @@ export function buildWarehouse() {
     env: {
       sky: 'overcast',
       sunDir: [-0.35, 0.72, 0.6],
-      sunColor: 0xbcc4cc, sunIntensity: 3.2,
-      ambientColor: 0x7a8694, ambientIntensity: 1.5,
+      sunColor: 0xd4dce4, sunIntensity: 4.0,
+      ambientColor: 0xa8b4c2, ambientIntensity: 2.5,
       hemiGround: 0x605a50,
-      fog: { color: 0x8e959c, near: 24, far: 132 },
-      exposure: 1.3,
+      fog: { color: 0xa8afb6, near: 60, far: 220 },
+      exposure: 1.45,
       reverb: 'outdoor',
       wind: 0.5, rain: 0.0,
-      dustMotes: 1.0
+      dustMotes: 0.0
     }
   });
 
@@ -72,7 +72,7 @@ export function buildWarehouse() {
   // office block on the mezzanine
   b.room(16, -12, 9, 8, 2.9, {
     y: MZ_Y, doors: [{ side: 'w', at: 0.6 }], windows: [{ side: 's', at: 0.5, gap: 4, sill: 1.0, top: 2.4 }],
-    mat: SURFACE.PLASTER, floorMat: SURFACE.CARPET, floor: false, ceil: true, reverb: 'office'
+    mat: SURFACE.PLASTER, floorMat: SURFACE.CONCRETE, floor: false, ceil: true, reverb: 'office'
   });
   b.prop('desk', 18, MZ_Y, -14, { yaw: 0.2 });
   b.prop('office_chair', 18, MZ_Y, -13, { yaw: 2.6 });

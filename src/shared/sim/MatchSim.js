@@ -317,9 +317,14 @@ export class MatchSim {
     attacker.hits++;
     if (hit.zone === 'head') attacker.headshots++;
 
+    // The hit point rides along so the client can put blood exactly where the
+    // authoritative hit landed. Blood is spawned from this event and nowhere
+    // else, which is what makes "blood came out" and "damage was dealt" the
+    // same statement rather than two independent guesses.
     this.emit(EV.HIT, {
       a: attacker.id, v: v.id, z: hit.zone, d: Math.round(dmg),
-      k: v.health <= 0 ? 1 : 0
+      k: v.health <= 0 ? 1 : 0,
+      p: round3(hit.point), dir: round3(hit.dir)
     });
     this.emit(EV.DAMAGE, {
       v: v.id, a: attacker.id, d: Math.round(dmg), z: hit.zone,

@@ -218,7 +218,7 @@ export class Room {
   }
 
   rotate() {
-    const rotation = this.mapRotation || ['warehouse', 'suburb', 'refinery', 'blackwood', 'garage', 'highrise'];
+    const rotation = this.mapRotation || ['warehouse', 'suburb', 'refinery', 'killhouse'];
     const i = rotation.indexOf(this.mapKey);
     const next = rotation[(i + 1) % rotation.length];
     this.startRequested = true;

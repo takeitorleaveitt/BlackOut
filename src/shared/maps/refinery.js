@@ -19,12 +19,12 @@ export function buildRefinery() {
       sky: 'day',
       sunDir: [0.45, 0.82, 0.35],
       sunColor: 0xfff3dd, sunIntensity: 4.4,
-      ambientColor: 0x9dadc8, ambientIntensity: 1.7,
+      ambientColor: 0xb8c6dc, ambientIntensity: 2.4,
       hemiGround: 0x7a7364,
-      fog: { color: 0xa9b4bf, near: 40, far: 190 },
-      exposure: 1.34,
+      fog: { color: 0xb9c2cc, near: 80, far: 260 },
+      exposure: 1.44,
       reverb: 'outdoor',
-      wind: 0.6, rain: 0, dustMotes: 0.7, heatHaze: 0.5
+      wind: 0.6, rain: 0, dustMotes: 0.0, heatHaze: 0.0
     }
   });
 

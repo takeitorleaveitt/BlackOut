@@ -18,13 +18,13 @@ export function buildSuburb() {
     env: {
       sky: 'dusk',
       sunDir: [0.75, 0.16, -0.4],
-      sunColor: 0xff9d5c, sunIntensity: 2.6,
-      ambientColor: 0x5a6888, ambientIntensity: 1.35,
+      sunColor: 0xffc494, sunIntensity: 3.6,
+      ambientColor: 0x94a2bc, ambientIntensity: 2.5,
       hemiGround: 0x564840,
-      fog: { color: 0x6a5a63, near: 18, far: 96 },
-      exposure: 1.34,
+      fog: { color: 0x9a8a93, near: 50, far: 190 },
+      exposure: 1.48,
       reverb: 'outdoor',
-      wind: 0.3, rain: 0.0, dustMotes: 0.4
+      wind: 0.3, rain: 0.0, dustMotes: 0.0
     }
   });
 
@@ -84,13 +84,13 @@ export function buildSuburb() {
   b.prop('cabinet', 3.6, 0.05, -7.2, { yaw: Math.PI });
 
   // --- first floor ---------------------------------------------------------
-  b.floor(0, 0, 20, 16, F2, SURFACE.CARPET, 0.3);
+  b.floor(0, 0, 20, 16, F2, SURFACE.WOOD, 0.3);
   // stairwell hole
   b.brushes.pop();
-  b.box(-5.2, F2 - 0.15, 0, 9.6, 0.3, 16, { mat: SURFACE.CARPET });
-  b.box(5.2, F2 - 0.15, 0, 9.6, 0.3, 16, { mat: SURFACE.CARPET });
-  b.box(0, F2 - 0.15, 5.6, 1.0, 0.3, 4.8, { mat: SURFACE.CARPET });
-  b.box(0, F2 - 0.15, -6.6, 1.0, 0.3, 2.8, { mat: SURFACE.CARPET });
+  b.box(-5.2, F2 - 0.15, 0, 9.6, 0.3, 16, { mat: SURFACE.WOOD });
+  b.box(5.2, F2 - 0.15, 0, 9.6, 0.3, 16, { mat: SURFACE.WOOD });
+  b.box(0, F2 - 0.15, 5.6, 1.0, 0.3, 4.8, { mat: SURFACE.WOOD });
+  b.box(0, F2 - 0.15, -6.6, 1.0, 0.3, 2.8, { mat: SURFACE.WOOD });
 
   b.wall(-10, -8, 10, -8, H, { y: F2, mat: SURFACE.PLASTER, thick: 0.3 });
   b.wallWindow(-10, -8, 10, -8, H, { y: F2, mat: SURFACE.PLASTER, thick: 0.3, at: 0.3, gap: 2.0 });

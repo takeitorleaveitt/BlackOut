@@ -31,13 +31,6 @@ export const MODES = {
     plantTimeSec: 4.0, defuseTimeSec: 7.0, maxPlayers: 10, minPlayers: 2,
     friendlyFireDefault: true, switchSidesAt: 6
   },
-  gunfight: {
-    key: 'gunfight', name: 'Gunfight', short: 'GF',
-    desc: 'Two on two, identical randomised kit, tiny arena. Rounds end fast.',
-    teams: true, respawn: false, rounds: true, randomLoadout: true,
-    roundsToWin: 6, roundTimeSec: 40, freezeSec: 4, maxPlayers: 4, minPlayers: 2,
-    friendlyFireDefault: true, compactMaps: true
-  },
 };
 
 export const MODE_LIST = Object.values(MODES);

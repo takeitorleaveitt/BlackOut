@@ -42,7 +42,7 @@ export const MSG = {
 export const EV = {
   SHOT: 1,       // {p:playerId, w:weaponId, o:[x,y,z], d:[x,y,z], s:seed}
   IMPACT: 2,     // {p:[x,y,z], n:[x,y,z], m:surface, w:weaponId}
-  HIT: 3,        // {a:attacker, v:victim, z:zone, d:damage, k:killed}
+  HIT: 3,        // {a:attacker, v:victim, z:zone, d:damage, k:killed, p:point, dir} — p/dir drive blood
   DAMAGE: 4,     // to the victim only: {a, d, dir:[x,y,z], z}
   KILL: 5,       // {a, v, w:weaponId, z:zone, hs:bool}
   DEATH: 6,

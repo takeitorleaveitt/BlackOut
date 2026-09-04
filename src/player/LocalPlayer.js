@@ -43,6 +43,9 @@ export class LocalPlayer {
 
     this._v = new THREE.Vector3();
     this._dir = new THREE.Vector3();
+    this._up = new THREE.Vector3();
+    this._fwd = new THREE.Vector3();
+    this._ejectPos = new THREE.Vector3();
     this._muzzle = {};
     this._breathT = 0;
     this._lastShotTime = 0;
@@ -175,7 +178,16 @@ export class LocalPlayer {
         pitch: this.rig.targetPitch,
         dt: TICK
       };
-      const mob = this.weapon ? this.weapon.def.mobility * lerp(1, this.weapon.def.adsMobility, this.weapon.adsT) : 1;
+      // Mobility MUST be the exact value the server will use for this same
+      // command, or prediction drifts and the reconciler yanks you back —
+      // that is the rubber-banding. This used to also fold in a per-weapon
+      // ADS mobility multiplier that neither the server nor the replay path
+      // below applied, so every step taken while aiming diverged: the client
+      // walked slow, the server walked fast, and the correction snapped you
+      // backwards. The ADS slowdown itself is not lost — shared movement
+      // already applies SPEED_ADS_MULT off the ADS button, which the server
+      // sees in the same command.
+      const mob = this.weapon ? this.weapon.def.mobility : 1;
       stepMovement(this.state, cmd, g.world, mob, this.alive && !this.frozen);
       this.pending.push({ cmd, state: snapshotState(this.state) });
       if (this.pending.length > 200) this.pending.shift();
@@ -350,22 +362,30 @@ export class LocalPlayer {
     const suppressed = !!def.flags?.suppressed;
     if (mz && !def.melee) {
       g.effects.flashes.flash(mz.pos, def.pellets > 1 ? 1.5 : 1.0, suppressed);
-      if (!suppressed) g.engine.postCtx.flash = 0.055;
+      // No full-screen white flash per shot — on an auto weapon that stacked
+      // into a permanent haze over the middle of the screen.
     }
 
     // ejected casing
     if (mz && !def.melee) {
+      // Scratch vectors, not fresh ones: an automatic weapon runs this ~13
+      // times a second, and allocating four Vector3s per round is exactly the
+      // kind of steady garbage that shows up later as a GC stutter mid-fight.
       const right = this._v.set(1, 0, 0).applyQuaternion(cam.quaternion);
-      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
-      const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
-      const ejectPos = g.viewmodel.toWorld(g.viewmodel.model.eject, new THREE.Vector3(), cam);
+      const up = this._up.set(0, 1, 0).applyQuaternion(cam.quaternion);
+      const dir = this._fwd.set(0, 0, -1).applyQuaternion(cam.quaternion);
+      const ejectPos = g.viewmodel.toWorld(g.viewmodel.model.eject, this._ejectPos, cam);
       const delay = def.pumpTime ? def.pumpTime * 0.5 : 0;
-      const doEject = () => g.effects.casings.eject(
-        ejectPos, dir, up, right, def.pellets > 1,
-        (p, surface, isShell) => g.audio.casing(surface, [p.x, p.y, p.z], isShell)
-      );
-      if (delay) setTimeout(doEject, delay * 1000);
-      else doEject();
+      const onLand = (p, surface, isShell) => g.audio.casing(surface, [p.x, p.y, p.z], isShell);
+      if (delay) {
+        // The pump-action ejects on a timer, so this call outlives the frame.
+        // It gets its own copies — handing the shared scratch vectors to a
+        // deferred callback would let a later shot rewrite them first.
+        const p = ejectPos.clone(), d = dir.clone(), u = up.clone(), r = right.clone();
+        setTimeout(() => g.effects.casings.eject(p, d, u, r, def.pellets > 1, onLand), delay * 1000);
+      } else {
+        g.effects.casings.eject(ejectPos, dir, up, right, def.pellets > 1, onLand);
+      }
     }
 
     // report
@@ -432,12 +452,13 @@ export class LocalPlayer {
       );
     }
     for (const imp of res.impacts) {
-      if (imp.surface === 'flesh') {
-        g.effects.bloodMist(imp.point, dir);
-      } else {
-        g.effects.impact(imp.point, imp.normal, imp.surface, imp.energy ?? 1);
-        g.audio.impact(imp.surface, imp.point, imp.energy ?? 1);
-      }
+      // Deliberately no predicted blood: flesh hits are drawn from the
+      // authoritative HIT event instead. Predicting them here meant a shot
+      // the server scored as a miss still sprayed blood, so blood stopped
+      // being a reliable signal that you actually damaged someone.
+      if (imp.surface === 'flesh') continue;
+      g.effects.impact(imp.point, imp.normal, imp.surface, imp.energy ?? 1);
+      g.audio.impact(imp.surface, imp.point, imp.energy ?? 1);
     }
   }
 
@@ -462,6 +483,13 @@ export class LocalPlayer {
     // matter (a real misprediction, not integration rounding).
     if (err < 0.12) return;
 
+    // Remember where the camera was before the correction. The simulation is
+    // snapped to the server immediately (so control stays authoritative and
+    // there is zero added input delay), but the *view* is carried across on
+    // a short decaying offset instead of teleporting. A correction you cannot
+    // see is a correction that does not feel like rubber-banding.
+    const preX = this.state.x, preY = this.state.y, preZ = this.state.z;
+
     // snap to the server state, then replay everything it has not seen yet
     this.state.x = self.x; this.state.y = self.y; this.state.z = self.z;
     this.state.vx = self.vx; this.state.vy = self.vy; this.state.vz = self.vz;
@@ -472,8 +500,17 @@ export class LocalPlayer {
       p.state = snapshotState(this.state);
     }
     if (err > 2.5) {
-      // a teleport (spawn / round reset): drop the camera smoothing too
+      // a teleport (spawn / round reset): show it instantly, no smoothing
       this.rig.smoothPos.set(this.state.x, this.state.y + eyeHeight(this.state), this.state.z);
+      this.rig.clearCorrection();
+    } else {
+      // an ordinary correction: hand the camera the leftover difference so it
+      // slides the last few centimetres over ~150ms instead of jumping.
+      this.rig.addCorrection(
+        preX - this.state.x,
+        preY - this.state.y,
+        preZ - this.state.z
+      );
     }
   }
 

@@ -16,13 +16,13 @@ export function buildKillhouse() {
     env: {
       sky: 'interior',
       sunDir: [0.3, 0.9, 0.2],
-      sunColor: 0xd8e4f0, sunIntensity: 1.3,
-      ambientColor: 0x555e6c, ambientIntensity: 1.5,
+      sunColor: 0xe4ecf6, sunIntensity: 2.6,
+      ambientColor: 0x98a3b4, ambientIntensity: 2.6,
       hemiGround: 0x1b1a18,
-      fog: { color: 0x2a2f36, near: 12, far: 60 },
-      exposure: 1.32,
+      fog: { color: 0x6b737d, near: 45, far: 170 },
+      exposure: 1.46,
       reverb: 'hall',
-      wind: 0, rain: 0, dustMotes: 0.8
+      wind: 0, rain: 0, dustMotes: 0.0
     }
   });
 

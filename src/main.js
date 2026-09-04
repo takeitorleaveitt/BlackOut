@@ -14,6 +14,7 @@ import { Effects } from './render/Effects.js';
 import { ViewModel } from './weapons/ViewModel.js';
 import { LocalPlayer } from './player/LocalPlayer.js';
 import { RemotePlayer } from './player/RemotePlayer.js';
+import { PlayerModel } from './player/PlayerModel.js';
 import { HUD } from './game/HUD.js';
 import { audio } from './audio/AudioEngine.js';
 import { NetClient } from './net/NetClient.js';
@@ -24,7 +25,7 @@ import { createPlayMenu, createServerBrowser, createPrivateMatch, createLobby, c
 import { createLoadout } from './ui/screens/Loadout.js';
 import { createSettings } from './ui/screens/SettingsScreen.js';
 import { createFriends, createPause, createEndMatch } from './ui/screens/Misc.js';
-import { getMap, MAP_INFO } from './shared/maps/index.js';
+import { getMap, MAP_INFO, MAP_KEYS } from './shared/maps/index.js';
 import { WEAPON_BY_ID, WEAPON_BY_KEY } from './shared/weapons.js';
 import { resolveWeapon } from './shared/attachments.js';
 import { buildWeaponModel, buildWorldWeapon } from './weapons/WeaponModels.js';
@@ -32,7 +33,7 @@ import { EV, SF } from './shared/protocol.js';
 import { INTERP_DELAY_MS, TEAM, clamp, lerp } from './shared/constants.js';
 import { REGIONS } from './shared/modes.js';
 
-const MENU_MAPS = ['warehouse', 'blackwood', 'refinery', 'highrise', 'garage', 'suburb'];
+const MENU_MAPS = ['warehouse', 'refinery', 'suburb', 'killhouse'];
 
 class Game {
   constructor() {
@@ -176,17 +177,25 @@ class Game {
       if (fn) await fn();
     };
 
-    await step(10, 'GENERATING MATERIALS…');
-    await step(28, 'BUILDING GEOMETRY…', () => {
+    await step(8, 'GENERATING MATERIALS…');
+    await step(20, 'BUILDING GEOMETRY…', () => {
       this.loadMenuMap(MENU_MAPS[0]);
     });
-    await step(46, 'FABRICATING WEAPONS…', () => {
+    // Build and cache every map's brush/prop data up front. getMap() memoises,
+    // so the first time a match loads one of these it is a cache read instead
+    // of a full level build — that build was a visible freeze on map change.
+    await step(40, 'SURVEYING SECTORS…', () => {
+      for (const key of MAP_KEYS) getMap(key);
+    });
+    await step(56, 'FABRICATING WEAPONS…', () => {
       this.preloadWeaponModels();
     });
-    await step(66, 'COMPILING SHADERS…', () => {
+    await step(70, 'BRIEFING OPERATORS…', () => {
+      this.preloadPlayerModels();
+    });
+    await step(86, 'COMPILING SHADERS…', () => {
       this.engine.renderer.compile(this.engine.scene, this.engine.camera);
     });
-    await step(84, 'ARMING OPTICS…');
     await step(96, 'READY');
 
     this.engine.start();
@@ -217,6 +226,21 @@ class Game {
     this.engine.renderer.compile(this.engine.scene, this.engine.camera);
     tmp.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
     this.engine.scene.remove(tmp);
+  }
+
+  /**
+   * Same idea for the character models: build one of each team's operator so
+   * their materials and shader programs are compiled before the first enemy
+   * or teammate spawns in, rather than hitching the frame they appear.
+   */
+  preloadPlayerModels() {
+    const tmp = new THREE.Group();
+    this.engine.scene.add(tmp);
+    const models = [new PlayerModel(1), new PlayerModel(2)];
+    for (const m of models) tmp.add(m.root);
+    this.engine.renderer.compile(this.engine.scene, this.engine.camera);
+    this.engine.scene.remove(tmp);
+    for (const m of models) m.dispose();
   }
 
   // -------------------------------------------------------------------------
@@ -613,6 +637,10 @@ class Game {
           }
           break;
         case EV.HIT:
+          // Blood is drawn here and only here — off the authoritative hit —
+          // so seeing blood always means damage was actually dealt, whether
+          // it came out of an enemy or out of you.
+          if (ev.p) this.effects.bloodMist(ev.p, ev.dir || [0, 0, 1]);
           if (ev.a === this.playerId) {
             bus.emit('hud:hit', ev.k);
             audio.ui(ev.k ? 'accept' : 'tick');

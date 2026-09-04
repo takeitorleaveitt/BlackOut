@@ -9,7 +9,7 @@ import {
   PLAYER_HEIGHT_STAND, PLAYER_HEIGHT_CROUCH, STEP_HEIGHT, MAX_LEAN, LEAN_SPEED,
   CROUCH_SPEED, SPRINT_MIN_FORWARD,
   SLIDE_SPEED, SLIDE_MIN_SPEED, SLIDE_TIME, SLIDE_END_SPEED, SLIDE_FRICTION,
-  SLIDE_COOLDOWN, SLIDE_STEER,
+  SLIDE_COOLDOWN, SLIDE_STEER, JUMP_BUFFER, COYOTE_TIME,
   clamp, lerp
 } from './constants.js';
 import { depenetrate } from './physics.js';
@@ -36,7 +36,10 @@ export function createMoveState(x = 0, y = 0, z = 0) {
     slideT: 0,           // seconds into the current slide
     slideCooldown: 0,
     slideStarted: false, // true for the single tick a slide begins (drives fx)
-    prevCrouchHeld: false
+    prevCrouchHeld: false,
+    // --- jump / bhop ---
+    jumpBuffer: 0,       // jump pressed recently, fires the moment we land
+    coyote: 0            // grace period to still jump just after leaving ground
   };
 }
 
@@ -169,13 +172,20 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
     }
     accelerate(s, wx, wz, wishSpeed * SLIDE_STEER, ACCEL_GROUND * 0.16, dt);
   } else if (s.grounded) {
-    // friction
-    const spd = Math.hypot(s.vx, s.vz);
-    if (spd > 0.01) {
-      const drop = Math.max(spd, 2.0) * FRICTION_GROUND * dt;
-      const k = Math.max(0, spd - drop) / spd;
-      s.vx *= k; s.vz *= k;
-    } else { s.vx = 0; s.vz = 0; }
+    // Bunny-hop window: if a jump is already buffered as we touch down, this
+    // tick is a bounce, not a stance — applying a full tick of ground friction
+    // here is what kills a hop chain and forces frame-perfect timing. Skipping
+    // friction on exactly that tick is what makes hopping chain smoothly,
+    // without granting any speed the player did not already have.
+    const willHop = canAct && s.jumpBuffer > 0 && s.crouchT < 0.4;
+    if (!willHop) {
+      const spd = Math.hypot(s.vx, s.vz);
+      if (spd > 0.01) {
+        const drop = Math.max(spd, 2.0) * FRICTION_GROUND * dt;
+        const k = Math.max(0, spd - drop) / spd;
+        s.vx *= k; s.vz *= k;
+      } else { s.vx = 0; s.vz = 0; }
+    }
     accelerate(s, wx, wz, wishSpeed, ACCEL_GROUND, dt);
   } else {
     accelerate(s, wx, wz, wishSpeed, ACCEL_AIR, dt);
@@ -183,13 +193,24 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
   }
 
   // --- jump ---------------------------------------------------------------
-  // Jumping cancels a slide, so a slide can be used to close distance and then
-  // hop straight out of it rather than committing you to the full duration.
-  if (canAct && (b & BTN.JUMP) && s.grounded && (s.crouchT < 0.4 || s.sliding)) {
+  // Jump, with the two affordances that make bunny-hopping practical instead
+  // of frame-perfect:
+  //  - a jump buffer: pressing jump slightly before you land still fires the
+  //    moment you touch down, so an early press is never swallowed;
+  //  - coyote time: you can still jump for a moment after walking off a ledge.
+  // Jumping also cancels a slide, so a slide can close distance and then hop
+  // straight out of it rather than committing to the full duration.
+  if (canAct && (b & BTN.JUMP)) s.jumpBuffer = JUMP_BUFFER;
+  else s.jumpBuffer = Math.max(0, s.jumpBuffer - dt);
+  s.coyote = s.grounded ? COYOTE_TIME : Math.max(0, s.coyote - dt);
+
+  if (s.jumpBuffer > 0 && s.coyote > 0 && (s.crouchT < 0.4 || s.sliding) && canAct) {
     if (s.sliding) { s.sliding = false; s.slideCooldown = SLIDE_COOLDOWN; }
     s.vy = JUMP_VELOCITY;
     s.grounded = false;
     s.jumped = true;
+    s.jumpBuffer = 0;
+    s.coyote = 0;
   } else s.jumped = false;
 
   // --- integrate + collide ------------------------------------------------
@@ -264,10 +285,17 @@ function accelerate(s, wx, wz, wishSpeed, accel, dt) {
   s.vz += wz * a;
 }
 
-/** Footstep cadence in metres, so sprinting steps land further apart. */
+/**
+ * Footstep cadence in metres, so sprinting steps land further apart.
+ *
+ * These were set for the old, slower base speeds; once the movement was sped
+ * up toward a Call-of-Duty pace the same distances fired footfalls roughly
+ * twice a second, which is why the steps sounded frantic. Longer strides put
+ * the cadence back to something a human could actually run at.
+ */
 export function stepInterval(s) {
-  if (s.crouchT > 0.5) return 1.05;
-  if (s.sprinting) return 1.32;
-  if (s.walking) return 1.15;
-  return 0.92;
+  if (s.crouchT > 0.5) return 1.60;
+  if (s.sprinting) return 2.15;
+  if (s.walking) return 1.75;
+  return 1.55;
 }

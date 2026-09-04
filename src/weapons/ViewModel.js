@@ -388,12 +388,27 @@ export class ViewModel {
       }
       case WS.INSPECTING: {
         const a = k;
-        ry = Math.sin(a * Math.PI * 2) * 0.55;
-        rz = Math.sin(a * Math.PI) * 0.42;
-        rx = Math.sin(a * Math.PI * 1.6) * 0.20;
-        ox = Math.sin(a * Math.PI) * -0.05;
-        oz = Math.sin(a * Math.PI) * 0.06;
-        boltZ = a > 0.55 && a < 0.75 ? pulse((a - 0.55) / 0.2) * 0.06 : 0;
+        if (w.def.melee) {
+          // The knife gets its own inspect: it is brought up close, spun once
+          // in the fingers and flipped over to show the other face of the
+          // blade, then dropped back to the ready pose. Nothing here checks a
+          // chamber or racks a bolt, because a knife has neither.
+          const bring = Math.sin(a * Math.PI);
+          oz = bring * 0.10;                       // pull it toward the eye
+          oy = bring * 0.035;
+          ox = bring * -0.03;
+          rz = Math.sin(a * Math.PI * 2) * 1.65;   // spin in the fingers
+          ry = Math.sin(a * Math.PI) * 0.75;       // turn to show the flat
+          rx = Math.sin(a * Math.PI * 3) * 0.18;   // small wrist flick
+          boltZ = 0;
+        } else {
+          ry = Math.sin(a * Math.PI * 2) * 0.55;
+          rz = Math.sin(a * Math.PI) * 0.42;
+          rx = Math.sin(a * Math.PI * 1.6) * 0.20;
+          ox = Math.sin(a * Math.PI) * -0.05;
+          oz = Math.sin(a * Math.PI) * 0.06;
+          boltZ = a > 0.55 && a < 0.75 ? pulse((a - 0.55) / 0.2) * 0.06 : 0;
+        }
         break;
       }
       default: {

@@ -1,18 +1,12 @@
 import { buildWarehouse } from './warehouse.js';
 import { buildSuburb } from './suburb.js';
 import { buildRefinery } from './refinery.js';
-import { buildBlackwood } from './blackwood.js';
-import { buildGarage } from './garage.js';
-import { buildHighrise } from './highrise.js';
 import { buildKillhouse } from './killhouse.js';
 
 const BUILDERS = {
   warehouse: buildWarehouse,
   suburb: buildSuburb,
   refinery: buildRefinery,
-  blackwood: buildBlackwood,
-  garage: buildGarage,
-  highrise: buildHighrise,
   killhouse: buildKillhouse
 };
 
@@ -39,14 +33,9 @@ export const MAP_INFO = MAP_KEYS.map((k) => {
   };
 });
 
-export const ROTATION = ['warehouse', 'suburb', 'refinery', 'blackwood', 'garage', 'highrise'];
-export const GUNFIGHT_MAPS = ['killhouse', 'suburb', 'garage'];
+export const ROTATION = ['warehouse', 'suburb', 'refinery', 'killhouse'];
 
-/**
- * Maps selectable for a mode.  Gunfight only ever uses the compact ones;
- * everything else may also be played on the shoothouse.
- */
-export function mapsForMode(modeKey) {
-  if (modeKey === 'gunfight') return GUNFIGHT_MAPS;
-  return [...ROTATION, 'killhouse'];
+/** Maps selectable for a mode. Every mode may use the whole rotation. */
+export function mapsForMode() {
+  return [...ROTATION];
 }

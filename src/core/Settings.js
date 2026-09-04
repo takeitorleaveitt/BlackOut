@@ -15,21 +15,21 @@ export const PRESETS = {
   },
   medium: {
     renderScale: 0.85, shadows: 'low', shadowRes: 1024, textureQuality: 'medium', aa: 'fxaa',
-    bloom: true, motionBlur: false, filmGrain: true, chromatic: true, lensDistortion: true,
+    bloom: true, motionBlur: false, filmGrain: false, chromatic: false, lensDistortion: false,
     lensFlare: false, ssao: false, particles: 0.7, decals: 90, decalLife: 14,
-    lights: 'medium', fog: true, anisotropy: 4, viewDistance: 0.85, compression: true, dustMotes: true
+    lights: 'medium', fog: true, anisotropy: 4, viewDistance: 0.85, compression: false, dustMotes: true
   },
   high: {
     renderScale: 1.0, shadows: 'high', shadowRes: 2048, textureQuality: 'high', aa: 'fxaa',
-    bloom: true, motionBlur: true, filmGrain: true, chromatic: true, lensDistortion: true,
-    lensFlare: true, ssao: false, particles: 1.0, decals: 160, decalLife: 22,
-    lights: 'high', fog: true, anisotropy: 8, viewDistance: 1.0, compression: true, dustMotes: true
+    bloom: true, motionBlur: false, filmGrain: false, chromatic: false, lensDistortion: false,
+    lensFlare: false, ssao: false, particles: 1.0, decals: 160, decalLife: 22,
+    lights: 'high', fog: true, anisotropy: 8, viewDistance: 1.0, compression: false, dustMotes: true
   },
   ultra: {
     renderScale: 1.0, shadows: 'ultra', shadowRes: 4096, textureQuality: 'high', aa: 'fxaa',
-    bloom: true, motionBlur: true, filmGrain: true, chromatic: true, lensDistortion: true,
-    lensFlare: true, ssao: true, particles: 1.4, decals: 260, decalLife: 30,
-    lights: 'ultra', fog: true, anisotropy: 16, viewDistance: 1.25, compression: true, dustMotes: true
+    bloom: true, motionBlur: false, filmGrain: false, chromatic: false, lensDistortion: false,
+    lensFlare: false, ssao: true, particles: 1.4, decals: 260, decalLife: 30,
+    lights: 'ultra', fog: true, anisotropy: 16, viewDistance: 1.25, compression: false, dustMotes: true
   }
 };
 
@@ -52,13 +52,13 @@ const DEFAULTS = {
   fov: 84,
   ...PRESETS.low,
   renderScale: 1.0,
-  bodycam: 1.0,          // master strength of the bodycam look
+  bodycam: 0.35,          // master strength of the bodycam look
   cameraShake: 1.0,
   weaponSway: 1.0,
   headBob: 1.0,
   exposure: 1.0,
   brightness: 1.0,
-  vignette: 1.0,
+  vignette: 0.30,
   fpsCap: 0,
   showFps: true,
   showPing: true,

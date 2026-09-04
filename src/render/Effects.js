@@ -536,10 +536,12 @@ class FlashSystem {
     f.core.scale.setScalar(0.001);
     f.star.scale.setScalar(0.001);
     f.star.rotation.z = Math.random() * Math.PI;
-    f.life = suppressed ? 0.035 : 0.06;
+    f.life = suppressed ? 0.025 : 0.045;
     f.maxLife = f.life;
     f.scale = scale * (suppressed ? 0.35 : 1);
-    f.light.intensity = suppressed ? 4 : 40 * scale;
+    // The point light was bright enough to wash a whole wall white when
+    // shooting indoors at close range; enough to register as a pop, no more.
+    f.light.intensity = suppressed ? 2 : 9 * scale;
     this.active.push(f);
   }
 
@@ -555,9 +557,14 @@ class FlashSystem {
         continue;
       }
       const t = f.life / f.maxLife;
-      const s = f.scale * 0.14;
-      f.core.scale.setScalar(s * 2.1 * t + 0.008);
-      f.star.scale.set(s * 4.6 * t, s * 1.2 * t, 1);
+      // Small and tight. These sprites sit barely half a metre from the eye,
+      // so the old scale blew a soft white disc across a third of the screen
+      // on every shot — which is what read as smoke hanging in front of the
+      // gun. A muzzle flash should be a brief spark at the barrel, not a
+      // cloud you have to see past.
+      const s = f.scale * 0.045;
+      f.core.scale.setScalar(s * 1.5 * t + 0.004);
+      f.star.scale.set(s * 3.0 * t, s * 0.8 * t, 1);
       f.star.lookAt(camera.position);
       f.light.intensity *= 0.7;
     }
@@ -602,6 +609,12 @@ export class Effects {
     const isFlesh = surface === 'flesh';
     if (!isFlesh) this.decals.add(point, normal, surface, surface === 'glass' ? 0.16 : 0.11);
 
+    // Particle size here is a screen-space point size scaled by 300/distance,
+    // so the old 1.6-4.2 range drew soft discs ~80px across at ordinary
+    // engagement range. Fired in bursts they piled into one pale cloud
+    // sitting on the wall — that cloud is what read as smoke hanging around
+    // after shooting. These are meant to be chips of masonry, so they are
+    // now sized and timed like chips.
     const n = Math.round((isFlesh ? 10 : 8) * q * clamp(energy, 0.3, 1.2));
     for (let i = 0; i < n; i++) {
       const sp = isFlesh ? rand(1.2, 3.4) : rand(1.4, 4.8) * energy;
@@ -611,8 +624,9 @@ export class Effects {
         normal[1] * sp + rand(-0.4, 2.2),
         normal[2] * sp + rand(-1.4, 1.4),
         col,
-        isFlesh ? rand(1.4, 3.0) : rand(1.6, 4.2),
-        isFlesh ? rand(0.4, 0.8) : rand(0.5, 1.3),
+        isFlesh ? rand(0.7, 1.4) : rand(0.5, 1.3),
+        // ...and gone quickly, so nothing accumulates while holding the trigger
+        isFlesh ? rand(0.3, 0.6) : rand(0.22, 0.45),
         isFlesh ? 9 : 7.5, isFlesh ? 2.6 : 1.6
       );
     }
@@ -668,7 +682,10 @@ export class Effects {
         point[0], point[1], point[2],
         dir[0] * rand(1.5, 4.5) + rand(-1, 1), rand(-0.5, 1.6),
         dir[2] * rand(1.5, 4.5) + rand(-1, 1),
-        [0.42, 0.03, 0.03], rand(2.2, 5.0), rand(0.35, 0.8), 8, 2.2
+        // Sized like spatter, not like a cloud — same screen-space scaling
+        // problem the masonry chips had. Still unmistakably red and readable
+        // as a hit, which is the whole point of drawing it.
+        [0.42, 0.03, 0.03], rand(0.9, 2.0), rand(0.3, 0.6), 8, 2.2
       );
     }
   }

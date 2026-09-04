@@ -263,7 +263,10 @@ export const WEAPONS = [
     // damage is well above MAX_HEALTH (100) even through the weakest
     // (leg, x0.72) hit-zone multiplier so a stab kills from full health from
     // any angle, not just center-mass.
-    damage: 200, damageMin: 0, falloffStart: 1.4, falloffEnd: 1.6,
+    // Genuine knife reach — a stab, not a lunge. Past ~1.2 m the falloff
+    // closes to zero damage over a few centimetres, so the blade simply does
+    // not connect at ranges where a gun would.
+    damage: 200, damageMin: 0, falloffStart: 1.15, falloffEnd: 1.30,
     rpm: 110, auto: false, burst: 0,
     muzzleVelocity: 260, dropScale: 0,
     magSize: 1, reserve: 1,
@@ -276,7 +279,8 @@ export const WEAPONS = [
       firstShotMult: 1, kickBack: 0,
       pattern: pattern('0,0')
     },
-    weight: 0.6, mobility: 1.16, adsMobility: 1.0,
+    // Exactly 10% quicker than carrying a gun — the reason to swap to it.
+    weight: 0.6, mobility: 1.10, adsMobility: 1.0,
     sway: { amp: 0.9, freq: 1.6, inertia: 0.6 },
     penetration: 0, pellets: 1, pelletSpread: 0,
     audio: { punch: 0, body: 0, crack: 0, tail: 0, level: 0, tone: 0 },

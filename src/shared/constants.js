@@ -65,6 +65,14 @@ export const LEAN_SPEED = 10.5;
 export const CROUCH_SPEED = 9.0;
 export const SPRINT_MIN_FORWARD = 0.55;       // stick must be pushed this far forward to sprint
 
+// --- jump feel / bunny hopping ---
+// A jump pressed within JUMP_BUFFER of landing fires on touchdown instead of
+// being dropped, and COYOTE_TIME lets you still jump just after walking off an
+// edge. Together with skipping ground friction on the bounce tick, these turn
+// bunny hopping from frame-perfect into something you can actually hold.
+export const JUMP_BUFFER = 0.16;
+export const COYOTE_TIME = 0.12;
+
 // --- combat ---
 export const MAX_HEALTH = 100;
 export const RESPAWN_DELAY_MS = 4200;

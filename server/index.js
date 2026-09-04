@@ -89,12 +89,11 @@ function seedPublicRooms() {
   const seeds = [
     ['tdm', 'warehouse', 'eu-west', 7],
     ['tdm', 'refinery', 'na-east', 8],
-    ['ffa', 'garage', 'eu-north', 6],
+    ['ffa', 'killhouse', 'eu-north', 6],
     ['elimination', 'suburb', 'eu-west', 5],
-    ['snd', 'highrise', 'na-west', 6],
-    ['gunfight', 'killhouse', 'eu-west', 3],
-    ['tdm', 'blackwood', 'ap-se', 6],
-    ['ffa', 'highrise', 'oce', 5]
+    ['snd', 'refinery', 'na-west', 6],
+    ['tdm', 'suburb', 'ap-se', 6],
+    ['ffa', 'warehouse', 'oce', 5]
   ];
   for (const [mode, map, region, bots] of seeds) {
     createPublicRoom(mode, map, { region, fillBots: bots });

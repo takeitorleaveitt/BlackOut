@@ -47,8 +47,22 @@ export class CameraRig {
     this.eyeY = 1.66;
     this.pos = new THREE.Vector3();
     this.smoothPos = new THREE.Vector3();
+    // Leftover visual offset from a server correction, decayed to zero over a
+    // few frames so reconciliation is felt as nothing rather than as a snap.
+    this.correction = new THREE.Vector3();
     this._first = true;
   }
+
+  /** Carry a reconciliation delta on the view instead of teleporting it. */
+  addCorrection(dx, dy, dz) {
+    // Cap it: a correction big enough to matter visually is better shown than
+    // smeared, and an unbounded offset could hide a real desync.
+    this.correction.x = clamp(this.correction.x + dx, -0.6, 0.6);
+    this.correction.y = clamp(this.correction.y + dy, -0.6, 0.6);
+    this.correction.z = clamp(this.correction.z + dz, -0.6, 0.6);
+  }
+
+  clearCorrection() { this.correction.set(0, 0, 0); }
 
   reset(x, y, z, yaw = 0) {
     this.targetYaw = this.yaw = yaw;
@@ -218,6 +232,12 @@ export class CameraRig {
     this.smoothPos.x = this.pos.x;
     this.smoothPos.z = this.pos.z;
     this.smoothPos.y = smoothDamp(this.smoothPos.y, this.pos.y, 60, dt);
+
+    // Bleed off any server-correction offset (~150ms to effectively zero).
+    const decay = Math.exp(-22 * dt);
+    this.correction.multiplyScalar(decay);
+    if (this.correction.lengthSq() < 1e-8) this.correction.set(0, 0, 0);
+    this.smoothPos.add(this.correction);
 
     const cam = this.camera;
     cam.position.set(

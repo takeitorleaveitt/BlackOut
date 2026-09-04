@@ -339,15 +339,19 @@ export class AudioEngine {
     if (!this.ctx) return;
     this.play(makeFootstep(this.ctx, surface, (Math.random() * 4) | 0), {
       pos: own ? null : pos,
+      // Your own steps sit well back in the mix — they are constant, so at the
+      // old level they dominated everything you actually needed to hear.
+      // Enemy steps stay loud enough to locate, which is the only footstep
+      // that matters competitively.
       bus: 'effects',
-      volume: (own ? 0.32 : 0.72) * volume,
+      volume: (own ? 0.14 : 0.52) * volume,
       rate: rand(0.9, 1.12),
       reverb: 0.3, refDistance: 2.5, rolloff: 2.0, maxDistance: 42
     });
-    if (Math.random() < (own ? 0.35 : 0.2)) {
+    if (Math.random() < (own ? 0.18 : 0.2)) {
       this.play(makeMech(this.ctx, 'cloth', (Math.random() * 4) | 0), {
         pos: own ? null : pos, bus: 'effects',
-        volume: (own ? 0.18 : 0.3) * volume, rate: rand(0.85, 1.2),
+        volume: (own ? 0.08 : 0.22) * volume, rate: rand(0.85, 1.2),
         reverb: 0.2, refDistance: 2, rolloff: 2.4, maxDistance: 26
       });
     }

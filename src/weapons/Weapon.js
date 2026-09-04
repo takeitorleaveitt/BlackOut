@@ -82,7 +82,10 @@ export class Weapon {
     this.stateT += dt;
 
     // --- ADS ---------------------------------------------------------------
-    const blockAds = ctx.sprinting || this.state === WS.DRAWING ||
+    // A knife has no sights to aim down, so it never enters ADS at all —
+    // right-click on a blade should do nothing rather than zooming it like
+    // a gun.
+    const blockAds = this.def.melee || ctx.sprinting || this.state === WS.DRAWING ||
       this.state === WS.HOLSTERING || this.state === WS.INSPECTING;
     const target = this.wantAds && !blockAds && !this.isReloading ? 1 : 0;
     const rate = target > this.adsT ? 1 / Math.max(0.05, this.def.adsTime) : 1 / Math.max(0.05, this.def.adsTime * 0.8);
@@ -201,6 +204,10 @@ export class Weapon {
 
   reload() {
     const d = this.def;
+    // There is nothing to reload on a blade. Without this the knife would run
+    // the whole magazine-swap state machine, which is a large part of why it
+    // felt like a gun that happens to be shaped differently.
+    if (d.melee) return false;
     if (this.isReloading || this.reserve <= 0 || this.ammo >= d.magSize) return false;
     if (this.state === WS.DRAWING || this.state === WS.HOLSTERING) return false;
     this.emptyReload = this.ammo === 0;

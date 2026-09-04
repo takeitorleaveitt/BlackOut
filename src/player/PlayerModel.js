@@ -43,10 +43,14 @@ export class PlayerModel {
       shin.position.y = -0.44;
       const shinMesh = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.44, 0.15), kit);
       shinMesh.position.y = -0.22;
+      // Forward is -Z for this model (same convention the arms and the knee
+      // pad below use). The boot and sole were offset to +Z, i.e. the toes
+      // stuck out behind the ankle — the feet were literally on backwards,
+      // which is what makes the legs read as facing the wrong way.
       const boot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.10, 0.26), black);
-      boot.position.set(0, -0.45, 0.04);
+      boot.position.set(0, -0.45, -0.05);
       const sole = new THREE.Mesh(new THREE.BoxGeometry(0.145, 0.025, 0.27), black);
-      sole.position.set(0, -0.495, 0.04);
+      sole.position.set(0, -0.495, -0.05);
       const kneePad = new THREE.Mesh(new THREE.BoxGeometry(0.155, 0.09, 0.06), trim);
       kneePad.position.set(0, -0.19, -0.12);
       shin.add(shinMesh, boot, sole);
@@ -204,8 +208,12 @@ export class PlayerModel {
     const s = Math.sin(this.gait), cS = Math.cos(this.gait);
     this.legL.rotation.x = s * 0.75 * amp - crouch * 0.6;
     this.legR.rotation.x = -s * 0.75 * amp - crouch * 0.6;
-    this.legL.userData.shin.rotation.x = Math.max(0, -cS) * 0.85 * amp + crouch * 1.1;
-    this.legR.userData.shin.rotation.x = Math.max(0, cS) * 0.85 * amp + crouch * 1.1;
+    // A knee only folds one way: the heel comes up and BACK, which with
+    // forward = -Z means a negative rotation. These were positive, bending
+    // the shins forward like a bird's leg — the other half of why the legs
+    // looked like they were on backwards.
+    this.legL.userData.shin.rotation.x = -(Math.max(0, -cS) * 0.85 * amp + crouch * 1.1);
+    this.legR.userData.shin.rotation.x = -(Math.max(0, cS) * 0.85 * amp + crouch * 1.1);
 
     // Torso used to be completely rigid while walking — only the legs swung,
     // so a teammate jogging past read as gliding on rails from the waist up.
