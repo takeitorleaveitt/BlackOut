@@ -38,6 +38,7 @@ export class OperatorPicker {
     s.textContent = `
       #operator-root { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
         background: rgba(4,6,7,0.72); backdrop-filter: blur(2px); }
+      #operator-root[hidden] { display: none; }
       .op-modal { width: min(920px, 92vw); max-height: 86vh; overflow: auto; background: var(--panel-2);
         border: 1px solid var(--line); padding: 26px 30px; font-family: var(--mono, monospace); }
       .op-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
