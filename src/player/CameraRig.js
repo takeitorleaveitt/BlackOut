@@ -101,16 +101,7 @@ export class CameraRig {
     // --- angle smoothing: this is the "weight" of the camera ---------------
     const stiffness = 34 - (1 - (S.bodycam ?? 1)) * 12;
     const prevYaw = this.yaw, prevPitch = this.pitch;
-    // smoothDamp is a plain scalar exponential — it has no idea yaw wraps at
-    // +-PI, so a fast flick that crosses that seam (targetYaw jumps from say
-    // 3.13 to -3.13) used to read as a ~2*PI error and yank the camera almost
-    // all the way around the LONG way in a single frame before snapping back
-    // straight. Smooth toward the shortest wrapped delta instead so a fast
-    // turn always spins the short way, however far it goes.
-    let dYawTarget = this.targetYaw - this.yaw;
-    if (dYawTarget > Math.PI) dYawTarget -= Math.PI * 2;
-    if (dYawTarget < -Math.PI) dYawTarget += Math.PI * 2;
-    this.yaw = smoothDamp(this.yaw, this.yaw + dYawTarget, stiffness, dt);
+    this.yaw = smoothDamp(this.yaw, this.targetYaw, stiffness, dt);
     this.pitch = smoothDamp(this.pitch, this.targetPitch, stiffness * 1.1, dt);
     // unwrap for rate computation
     let dYaw = this.yaw - prevYaw;

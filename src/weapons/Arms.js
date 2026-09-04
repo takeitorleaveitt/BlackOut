@@ -71,8 +71,5 @@ export const GRIP_ANCHOR = {
 // Support-hand offset relative to each weapon's `underMount` node (already
 // positioned at the handguard by buildWeaponModel). Pistols have no support
 // hand position on the gun itself, so they use a two-handed cup instead.
-// The X offset pulls the forearm out to the side of the handguard rather
-// than tucking it directly underneath — sitting dead-centre left it almost
-// entirely hidden behind the gun's own body from the camera's angle.
-export const SUPPORT_OFFSET = { p: [-0.052, -0.015, -0.02], r: [0.34, -0.10, 0.0] };
-export const PISTOL_SUPPORT = { p: [-0.01, -0.15, 0.13], r: [0.34, -0.20, -0.1] };
+export const SUPPORT_OFFSET = { p: [0, -0.01, -0.02], r: [0.32, 0.0, 0.0] };
+export const PISTOL_SUPPORT = { p: [0.02, -0.14, 0.12], r: [0.34, -0.15, -0.1] };

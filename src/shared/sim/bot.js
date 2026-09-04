@@ -5,16 +5,11 @@
 import { BTN, clamp, mulberry32, lerp } from '../constants.js';
 import { eyeHeight, playerHeight } from '../movement.js';
 
-// Bots were tracking and correcting onto target so fast, with so little
-// jitter, that even "normal" read as an aimbot. Reaction time roughly
-// doubled, aim jitter roughly doubled-to-tripled, and tracking speed cut by
-// nearly half across every tier — the ordering (easy < normal < hard <
-// elite) is unchanged, the whole curve just got more human.
 const SKILLS = {
-  easy: { react: 0.62, aimError: 0.150, aimSpeed: 2.6, burst: [2, 5], pause: [0.55, 1.3], range: 38, hearing: 20 },
-  normal: { react: 0.42, aimError: 0.095, aimSpeed: 4.2, burst: [3, 7], pause: [0.4, 0.9], range: 52, hearing: 26 },
-  hard: { react: 0.26, aimError: 0.055, aimSpeed: 6.8, burst: [4, 9], pause: [0.25, 0.6], range: 70, hearing: 34 },
-  elite: { react: 0.16, aimError: 0.030, aimSpeed: 10.0, burst: [5, 12], pause: [0.15, 0.4], range: 90, hearing: 40 }
+  easy: { react: 0.42, aimError: 0.075, aimSpeed: 4.5, burst: [3, 7], pause: [0.35, 0.9], range: 42, hearing: 22 },
+  normal: { react: 0.26, aimError: 0.042, aimSpeed: 7.5, burst: [4, 9], pause: [0.2, 0.6], range: 58, hearing: 30 },
+  hard: { react: 0.16, aimError: 0.022, aimSpeed: 11.5, burst: [5, 12], pause: [0.12, 0.4], range: 78, hearing: 38 },
+  elite: { react: 0.10, aimError: 0.012, aimSpeed: 16.0, burst: [6, 16], pause: [0.08, 0.3], range: 95, hearing: 45 }
 };
 
 export class BotBrain {
@@ -139,7 +134,7 @@ export class BotBrain {
         this.burstLeft = Math.round(lerp(sk.burst[0], sk.burst[1], this.rng()));
       }
       // aim down sights at range
-      if (bestD > 12 && this.rng() < 0.7) buttons |= BTN.ADS;
+      if (bestD > 12 && this.rng() < 0.9) buttons |= BTN.ADS;
       if (bestD < 5.5 && this.rng() < 0.02) buttons |= BTN.CROUCH;
     }
     if (ctx.ammo === 0 || (ctx.ammo !== undefined && ctx.ammo <= 2 && !engaging)) reload = true;
