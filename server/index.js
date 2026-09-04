@@ -109,12 +109,17 @@ function listRooms() {
   return out;
 }
 
-function findQuickMatch(modeKey) {
+function findQuickMatch(modeKey, opts = {}) {
+  // `opts.bots === false` marks a player-only playlist (Quick Match and
+  // Standard). Those must not be matched into a room that is padded with
+  // bots, and any room opened for them starts empty so it fills with humans.
+  const wantBots = opts.bots !== false;
   let best = null, bestScore = -1;
   for (const r of rooms.values()) {
     if (r.private || r.closed) continue;
     if (modeKey && r.modeKey !== modeKey) continue;
     if (r.humanCount >= r.maxPlayers) continue;
+    if (!wantBots && r.botCount > 0) continue;
     // prefer rooms that already have people, but are not full
     const score = r.humanCount * 10 - (r.humanCount >= r.maxPlayers - 1 ? 50 : 0) + Math.random() * 3;
     if (score > bestScore) { bestScore = score; best = r; }
@@ -122,7 +127,9 @@ function findQuickMatch(modeKey) {
   if (!best) {
     const mode = modeKey || 'tdm';
     const maps = mapsForMode(mode);
-    best = createPublicRoom(mode, maps[(Math.random() * maps.length) | 0]);
+    best = createPublicRoom(mode, maps[(Math.random() * maps.length) | 0], {
+      fillBots: wantBots ? undefined : 0
+    });
   }
   return best;
 }
@@ -202,12 +209,35 @@ function send(client, obj) {
   try { client.ws.send(JSON.stringify(obj)); } catch (e) { /* dropped */ }
 }
 
+/**
+ * Callsigns must be unique across everyone currently connected, and 3-17
+ * characters. The server is the only place that can enforce uniqueness, since
+ * it is the only party that can see the other players. A name already in use
+ * gets a numeric suffix rather than being rejected outright, so a duplicate
+ * never blocks someone from playing.
+ */
+function uniqueName(raw, self) {
+  let base = raw.toUpperCase().replace(/[^A-Z0-9 _-]/g, '').trim().slice(0, 17);
+  if (base.length < 3) base = 'OPERATOR';
+  const taken = new Set();
+  for (const c of clients) if (c !== self && c.name) taken.add(c.name);
+  if (!taken.has(base)) return base;
+  for (let n = 2; n < 1000; n++) {
+    const suffix = String(n);
+    const candidate = base.slice(0, 17 - suffix.length) + suffix;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return base;
+}
+
 function handle(client, msg) {
   switch (msg.t) {
     case 'hello': {
-      client.name = String(msg.name || 'OPERATOR').slice(0, 18).toUpperCase();
+      client.name = uniqueName(String(msg.name || 'OPERATOR'), client);
       client.loadout = sanitizeLoadout(msg.loadout);
-      send(client, { t: 'hello', id: client.id, region: REGION });
+      // Echo the name back: it may have been altered to keep it unique, and
+      // the client needs to know what it is actually called.
+      send(client, { t: 'hello', id: client.id, region: REGION, name: client.name });
       break;
     }
     case 'ping':
@@ -225,7 +255,9 @@ function handle(client, msg) {
       send(client, { t: 'roomList', rooms: listRooms(), region: REGION });
       break;
     case 'quickMatch': {
-      const room = findQuickMatch(msg.mode);
+      const room = findQuickMatch(msg.mode, {
+        bots: msg.bots, roundsToWin: msg.roundsToWin, playlist: msg.playlist
+      });
       joinRoom(client, room);
       break;
     }

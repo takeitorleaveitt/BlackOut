@@ -2,7 +2,7 @@
 
 import { el, clear, button, header, footer, toggle, pingClass, fmtTime } from '../UI.js';
 import { audio } from '../../audio/AudioEngine.js';
-import { MODE_LIST, MODES, REGIONS } from '../../shared/modes.js';
+import { MODE_LIST, MODES, REGIONS, PLAYLIST_LIST, PLAYLISTS } from '../../shared/modes.js';
 import { MAP_INFO, mapsForMode } from '../../shared/maps/index.js';
 import { S, settings } from '../../core/Settings.js';
 
@@ -15,10 +15,11 @@ export function createPlayMenu(game) {
     build(node, _ui) {
       ui = _ui;
       const cards = [
-        {
-          k: 'QM', n: 'QUICK MATCH', d: 'Drop into the first server with a free slot. Fastest way into a firefight.',
-          go: () => game.quickMatch()
-        },
+        ...PLAYLIST_LIST.map((pl) => ({
+          k: pl.key === 'quickmatch' ? 'QM' : pl.key === 'standard' ? 'ST' : 'FFA',
+          n: pl.name, d: pl.desc,
+          go: () => game.playPlaylist(pl.key)
+        })),
         {
           k: 'SB', n: 'SERVER BROWSER', d: 'Pick your map, mode, region and ping by hand.',
           go: () => ui.show('browser')

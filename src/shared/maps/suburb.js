@@ -41,12 +41,31 @@ export function buildSuburb() {
   // --- ground floor --------------------------------------------------------
   // exterior shell 20 x 16
   b.floor(0, 0, 20, 16, 0.05, SURFACE.WOOD, 0.3);
-  b.wallDoor(-10, -8, 10, -8, H, 0.62, 1.15, { mat: SURFACE.PLASTER, thick: 0.3 });   // front door
-  b.wallWindow(-10, -8, 10, -8, H, { mat: SURFACE.PLASTER, thick: 0.3, at: 0.25, gap: 2.2 });
-  b.wallWindow(-10, 8, 10, 8, H, { mat: SURFACE.PLASTER, thick: 0.3, at: 0.3, gap: 2.6 });
-  b.wallDoor(-10, 8, 10, 8, H, 0.75, 1.3, { mat: SURFACE.PLASTER, thick: 0.3 });      // back door
-  b.wallWindow(-10, -8, -10, 8, H, { mat: SURFACE.PLASTER, thick: 0.3, at: 0.4, gap: 2.0 });
-  b.wall(10, -8, 10, 8, H, { mat: SURFACE.PLASTER, thick: 0.3 });
+  // Each elevation is built in ONE call carrying all of its openings, so the
+  // doors and windows coexist instead of filling each other in. The ground
+  // floor used to be near-solid on two sides — a box with two ways in and
+  // barely a sightline. It now has a proper front door with windows either
+  // side, a back door onto the garden, and glass on both flanks, so the
+  // house can be entered, watched and fought over from several angles.
+  const SHELL = { mat: SURFACE.PLASTER, thick: 0.3 };
+  b.wallOpenings(-10, -8, 10, -8, H, [                     // front elevation
+    { kind: 'window', at: 0.25, gap: 2.2 },
+    { kind: 'door', at: 0.62, gap: 1.15 },
+    { kind: 'window', at: 0.86, gap: 1.8 }
+  ], SHELL);
+  b.wallOpenings(-10, 8, 10, 8, H, [                       // rear elevation
+    { kind: 'window', at: 0.30, gap: 2.6 },
+    { kind: 'door', at: 0.75, gap: 1.3 },
+    { kind: 'window', at: 0.94, gap: 1.4 }
+  ], SHELL);
+  b.wallOpenings(-10, -8, -10, 8, H, [                     // west flank
+    { kind: 'window', at: 0.30, gap: 2.0 },
+    { kind: 'window', at: 0.74, gap: 1.8 }
+  ], SHELL);
+  b.wallOpenings(10, -8, 10, 8, H, [                       // east flank
+    { kind: 'window', at: 0.32, gap: 2.0 },
+    { kind: 'window', at: 0.72, gap: 2.0 }
+  ], SHELL);
   b.ceiling(0, 0, 20.6, 16.6, H, SURFACE.PLASTER, 0.3);
   b.zone(0, H / 2, 0, 20, H, 16, 'house');
 
@@ -92,11 +111,26 @@ export function buildSuburb() {
   b.box(0, F2 - 0.15, 5.6, 1.0, 0.3, 4.8, { mat: SURFACE.WOOD });
   b.box(0, F2 - 0.15, -6.6, 1.0, 0.3, 2.8, { mat: SURFACE.WOOD });
 
-  b.wall(-10, -8, 10, -8, H, { y: F2, mat: SURFACE.PLASTER, thick: 0.3 });
-  b.wallWindow(-10, -8, 10, -8, H, { y: F2, mat: SURFACE.PLASTER, thick: 0.3, at: 0.3, gap: 2.0 });
-  b.wallWindow(-10, 8, 10, 8, H, { y: F2, mat: SURFACE.PLASTER, thick: 0.3, at: 0.65, gap: 2.4 });
-  b.wall(-10, -8, -10, 8, H, { y: F2, mat: SURFACE.PLASTER, thick: 0.3 });
-  b.wall(10, -8, 10, 8, H, { y: F2, mat: SURFACE.PLASTER, thick: 0.3 });
+  // Upstairs gets a window per bedroom instead of two for the whole floor, so
+  // the first floor is worth holding and can be shot from — and, with the
+  // stairs, is a real second storey rather than a loft.
+  const SHELL2 = { y: F2, mat: SURFACE.PLASTER, thick: 0.3 };
+  b.wallOpenings(-10, -8, 10, -8, H, [
+    { kind: 'window', at: 0.30, gap: 2.0 },
+    { kind: 'window', at: 0.72, gap: 1.9 }
+  ], SHELL2);
+  b.wallOpenings(-10, 8, 10, 8, H, [
+    { kind: 'window', at: 0.28, gap: 2.0 },
+    { kind: 'window', at: 0.65, gap: 2.4 }
+  ], SHELL2);
+  b.wallOpenings(-10, -8, -10, 8, H, [
+    { kind: 'window', at: 0.30, gap: 1.9 },
+    { kind: 'window', at: 0.74, gap: 1.9 }
+  ], SHELL2);
+  b.wallOpenings(10, -8, 10, 8, H, [
+    { kind: 'window', at: 0.30, gap: 1.9 },
+    { kind: 'window', at: 0.74, gap: 1.9 }
+  ], SHELL2);
   b.ceiling(0, 0, 20.6, 16.6, F2 + H, SURFACE.PLASTER, 0.35);
   b.zone(0, F2 + H / 2, 0, 20, H, 16, 'house');
 

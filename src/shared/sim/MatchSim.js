@@ -263,6 +263,53 @@ export class MatchSim {
     const spread = clamp(shot.spread ?? w.def.spreadHip, 0, w.def.spreadMax * 1.3);
     const victims = new Map();
 
+    // --- melee: a slash, resolved on its own terms ------------------------
+    // A blade sweeps an arc rather than firing a round down a single line, so
+    // three rays are cast across the swing and only the NEAREST victim is cut
+    // — the arc widens the swing without letting one slash deal damage three
+    // times. A hit taken from behind is multiplied into an instant kill; from
+    // the front the same slash takes two.
+    if (w.def.melee) {
+      let best = null;
+      for (const off of [-0.16, 0, 0.16]) {
+        const ca = Math.cos(off), sa = Math.sin(off);
+        const d = [
+          shot.dir[0] * ca - shot.dir[2] * sa,
+          shot.dir[1],
+          shot.dir[0] * sa + shot.dir[2] * ca
+        ];
+        const res = simulateBullet({
+          world: this.world, origin, dir: d, weapon: w.def,
+          shooterId: p.id, shooterTeam: this.options.friendlyFire ? 0 : p.team,
+          targetsAt, friendlyFire: this.options.friendlyFire,
+          recordPath: false, rng
+        });
+        for (const h of res.hits) {
+          if (!best || h.distance < best.distance) best = { ...h, dir: d };
+        }
+      }
+      if (best) {
+        const victim = this.players.get(best.id);
+        let dmg = best.damage;
+        let zone = best.zone;
+        if (victim) {
+          // Victim's facing, in the same convention movement uses (forward is
+          // -Z at yaw 0). If the attacker sits behind that facing, it's a
+          // backstab.
+          const vy = victim.state.yaw;
+          const fx = -Math.sin(vy), fz = -Math.cos(vy);
+          const tx = origin[0] - victim.state.x, tz = origin[2] - victim.state.z;
+          if (fx * tx + fz * tz < 0) {
+            dmg *= w.def.backstab || 1;
+            zone = 'backstab';
+          }
+        }
+        victims.set(best.id, { damage: dmg, zone, mult: best.mult, point: best.point, dir: best.dir });
+      }
+      for (const [vid, v] of victims) this.applyDamage(p, vid, v);
+      return;
+    }
+
     for (let i = 0; i < pellets; i++) {
       const deg = pellets > 1
         ? w.def.pelletSpread * (0.35 + rng() * 0.8)

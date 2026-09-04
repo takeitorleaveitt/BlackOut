@@ -8,6 +8,25 @@ import { Input } from '../../core/Input.js';
 
 const TABS = ['GRAPHICS', 'BODYCAM', 'AUDIO', 'CONTROLS', 'GAMEPLAY'];
 
+const NAME_MIN = 3;
+const NAME_MAX = 17;
+const NAME_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/** null when acceptable, otherwise the reason to show the player. */
+export function validateName(v) {
+  if (v.length < NAME_MIN) return `TOO SHORT — MIN ${NAME_MIN}`;
+  if (v.length > NAME_MAX) return `TOO LONG — MAX ${NAME_MAX}`;
+  if (!/^[A-Z0-9 _-]+$/.test(v)) return 'LETTERS, NUMBERS, - _ ONLY';
+  return null;
+}
+
+/** Milliseconds remaining before the callsign may be changed again. */
+export function nameChangeCooldownMs() {
+  const last = S.nameChangedAt || 0;
+  if (!last) return 0;
+  return Math.max(0, NAME_COOLDOWN_MS - (Date.now() - last));
+}
+
 export function createSettings(game) {
   let ui = null, pane = null, active = 'GRAPHICS';
 
@@ -70,12 +89,9 @@ export function createSettings(game) {
         'Master strength of the whole body-worn camera look.'),
       sliderRow('Camera shake', 'cameraShake', 0, 2, 0.05, (v) => `${Math.round(v * 100)}%`),
       sliderRow('Head bob', 'headBob', 0, 2, 0.05, (v) => `${Math.round(v * 100)}%`),
-      sliderRow('Weapon sway', 'weaponSway', 0, 2, 0.05, (v) => `${Math.round(v * 100)}%`),
       el('h3.sec', 'Post-processing'),
       toggleRow('Bloom', 'bloom'),
       toggleRow('Motion blur', 'motionBlur'),
-      toggleRow('Film grain', 'filmGrain'),
-      toggleRow('Chromatic aberration', 'chromatic'),
       toggleRow('Lens distortion', 'lensDistortion', 'The fisheye barrel of a wide-angle body camera.'),
       toggleRow('Lens glare', 'lensFlare'),
       toggleRow('Compression artefacts', 'compression', 'Macroblocking and scanlines from a cheap recorder.'),
@@ -115,7 +131,6 @@ export function createSettings(game) {
     wrap.appendChild(toggleRow('Toggle ADS', 'toggleAds'));
     wrap.appendChild(toggleRow('Toggle crouch', 'toggleCrouch'));
     wrap.appendChild(toggleRow('Toggle sprint', 'toggleSprint'));
-    wrap.appendChild(toggleRow('Auto sprint', 'autoSprint'));
 
     wrap.appendChild(el('h3.sec', 'Key bindings'));
     const grid = el('div.grid.c2');
@@ -143,22 +158,50 @@ export function createSettings(game) {
   }
 
   function gameplay() {
+    // Callsigns are 3-17 characters and may only be changed once a day. The
+    // day limit is enforced against the timestamp of the last accepted change;
+    // uniqueness is checked by the server when joining, since only it can see
+    // the other players.
+    const nameStatus = el('div.val');
     const nameInput = el('input', {
-      type: 'text', value: S.name, maxlength: 18,
+      type: 'text', value: S.name, maxlength: 17,
       onchange: (e) => {
-        const v = e.target.value.trim().toUpperCase().slice(0, 18) || 'OPERATOR';
+        const v = e.target.value.trim().toUpperCase().slice(0, 17);
+        const err = validateName(v);
+        if (err) {
+          nameStatus.textContent = err;
+          e.target.value = S.name;
+          audio.ui('deny');
+          return;
+        }
+        const wait = nameChangeCooldownMs();
+        if (wait > 0) {
+          const hrs = Math.ceil(wait / 3600000);
+          nameStatus.textContent = `LOCKED — ${hrs}H LEFT`;
+          e.target.value = S.name;
+          audio.ui('deny');
+          return;
+        }
         set('name', v);
+        set('nameChangedAt', Date.now());
         e.target.value = v;
+        nameStatus.textContent = 'SAVED — LOCKED FOR 24H';
         game.onNameChanged();
       }
     });
+    {
+      const wait = nameChangeCooldownMs();
+      nameStatus.textContent = wait > 0
+        ? `LOCKED — ${Math.ceil(wait / 3600000)}H LEFT`
+        : '3-17 CHARACTERS · ONE CHANGE PER DAY';
+    }
     const urlInput = el('input', {
       type: 'text', value: S.serverUrl, placeholder: 'auto (same host)',
       onchange: (e) => set('serverUrl', e.target.value.trim())
     });
     return el('div',
       el('h3.sec', 'Profile'),
-      settingRow('Callsign', nameInput, el('div.val')),
+      settingRow('Callsign', nameInput, nameStatus),
       el('h3.sec', 'Network'),
       settingRow('Server URL', urlInput, el('div.val'), 'Leave blank to use the server this page came from.'),
       selectRow('Preferred region', 'region', [['auto', 'AUTO'], ...['eu-west', 'eu-north', 'na-east', 'na-west', 'sa-east', 'ap-se', 'ap-ne', 'oce'].map((r) => [r, r.toUpperCase()])]),

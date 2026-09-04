@@ -31,7 +31,7 @@ import { resolveWeapon } from './shared/attachments.js';
 import { buildWeaponModel, buildWorldWeapon } from './weapons/WeaponModels.js';
 import { EV, SF } from './shared/protocol.js';
 import { INTERP_DELAY_MS, TEAM, clamp, lerp } from './shared/constants.js';
-import { REGIONS } from './shared/modes.js';
+import { REGIONS, PLAYLISTS } from './shared/modes.js';
 
 const MENU_MAPS = ['warehouse', 'refinery', 'suburb', 'killhouse'];
 
@@ -65,6 +65,8 @@ class Game {
     this.scoreboardOpen = false;
     this.pingCache = new Map();
     this._accumNet = 0;
+    // Cheat codes, entered from the main menu. Offline-only (see applyCheatCode).
+    this.cheats = { walls: false, auto: false, aimbot: false };
 
     this.ui = new UI(document.getElementById('ui-root'));
     this.hud = new HUD(document.getElementById('hud-root'), this);
@@ -339,6 +341,73 @@ class Game {
     } catch (e) { /* toast already shown */ }
   }
 
+  /**
+   * Enter matchmaking for a named playlist. The playlist decides which modes
+   * are eligible, the win target, and whether bots may fill the lobby at all
+   * — Quick Match and Standard are player-only, so they queue for humans
+   * rather than padding the match out with bots.
+   */
+  async playPlaylist(key) {
+    const pl = PLAYLISTS[key];
+    if (!pl) return;
+    const mode = pl.modes[(Math.random() * pl.modes.length) | 0];
+    try {
+      const net = await this.ensureOnline();
+      this.ui.toast(pl.bots
+        ? `Searching — ${pl.name}…`
+        : `Searching for real players — ${pl.name}…`);
+      net.quickMatch(mode, { playlist: pl.key, roundsToWin: pl.roundsToWin, bots: pl.bots });
+    } catch (e) { /* toast already shown */ }
+  }
+
+  /**
+   * Toggle a cheat by code. Returns { ok, message } for the console to show.
+   *
+   * WALLS  — enemies draw through geometry.
+   * AUTO   — pulls the trigger by itself when an enemy is under the crosshair.
+   * AIMBOT — drags aim toward the nearest visible enemy, deliberately sloppy.
+   *
+   * All three only take effect in offline matches against bots. They are
+   * ignored online: two of the three playlists exist specifically to put you
+   * against real people, and an aimbot that worked there would be a cheating
+   * tool rather than a cheat code.
+   */
+  applyCheatCode(code) {
+    const map = { WALLS: 'walls', AUTO: 'auto', AIMBOT: 'aimbot' };
+    const key = map[code];
+    if (!key) return { ok: false, message: code ? 'UNKNOWN CODE' : 'CODE' };
+    this.cheats[key] = !this.cheats[key];
+    if (key === 'walls') this.applyWallhack(this.cheats.walls);
+    return {
+      ok: true,
+      message: `${code} ${this.cheats[key] ? 'ON' : 'OFF'} · OFFLINE ONLY`
+    };
+  }
+
+  /** True only when this match is local bots, never online against people. */
+  get cheatsActive() {
+    return this.mode === 'match' && !!this.net?.offline;
+  }
+
+  /** Draw enemy models through walls (or stop doing so). */
+  applyWallhack(on) {
+    for (const r of this.remotes.values()) this.setSeeThrough(r, on);
+  }
+
+  setSeeThrough(remote, on) {
+    remote.model?.root.traverse((o) => {
+      if (!o.isMesh || !o.material) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        m.depthTest = !on;
+        m.transparent = on ? true : m.transparent;
+        m.opacity = on ? 0.85 : 1;
+        m.needsUpdate = true;
+      }
+      o.renderOrder = on ? 900 : 0;
+    });
+  }
+
   async joinRoom(id) {
     try { (await this.ensureOnline()).joinRoom(id); } catch (e) { /* ignore */ }
   }
@@ -600,6 +669,8 @@ class Game {
         const info = this.roomPlayerList.find((x) => x.id === p.id);
         r = new RemotePlayer(p.id, this.engine.scene, { name: info?.name, team: p.team });
         this.remotes.set(p.id, r);
+        // a newly-seen enemy has to pick up the wallhack state too
+        if (this.cheats.walls && this.cheatsActive) this.setSeeThrough(r, true);
       }
       if (r.team !== p.team) r.setInfo({ team: p.team });
       r.push(p, serverTime);

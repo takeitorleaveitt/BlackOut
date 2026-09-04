@@ -199,7 +199,10 @@ export class ViewModel {
     this.setAspect(cam.aspect);
     // The root stays at the origin: everything below is already view space.
 
-    const swayScale = (S.weaponSway ?? 1) * (w.def.sway.amp || 1);
+    // Weapon sway is no longer a setting: it is fixed at half strength for
+    // everyone, so it stays a bit of weapon weight rather than something
+    // that can be tuned away for an advantage.
+    const swayScale = 0.5 * (w.def.sway.amp || 1);
     const inertia = w.def.sway.inertia || 1;
     const ads = w.adsT;
 

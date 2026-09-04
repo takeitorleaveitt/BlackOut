@@ -25,8 +25,29 @@ const M = {
   wood: new THREE.MeshStandardMaterial({ color: 0x86593a, roughness: 0.62, metalness: 0.04 }),
   black: new THREE.MeshStandardMaterial({ color: 0x232629, roughness: 0.55, metalness: 0.3 }),
   glass: new THREE.MeshStandardMaterial({ color: 0x2c4560, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.55 }),
+  // Optic glass is barely there on purpose — a sight you cannot see the
+  // target through is not a sight. Just enough tint to read as coated glass.
+  lens: new THREE.MeshBasicMaterial({
+    color: 0x8fb4c8, transparent: true, opacity: 0.13,
+    depthWrite: false, toneMapped: false
+  }),
   brass: new THREE.MeshStandardMaterial({ color: 0xc39a45, roughness: 0.32, metalness: 0.9 })
 };
+
+/**
+ * One unlit reticle element. Unaffected by scene lighting, drawn after
+ * everything else and without depth testing so it always sits visibly in the
+ * sight window rather than being swallowed by the optic housing.
+ */
+function reticle(size, color, x, y, z) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(size, size, size),
+    new THREE.MeshBasicMaterial({ color, toneMapped: false, depthTest: false, depthWrite: false })
+  );
+  m.position.set(x, y, z);
+  m.renderOrder = 999;
+  return m;
+}
 
 const b = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const c = (r1, r2, h, s = 10) => new THREE.CylinderGeometry(r1, r2, h, s);
@@ -186,17 +207,45 @@ export function buildAttachment(key) {
   const g = new THREE.Group();
   g.name = key;
   switch (key) {
-    case 'reddot':
-      g.add(part(b(0.032, 0.030, 0.055), M.black, 0, 0.024, 0));
-      g.add(part(b(0.026, 0.026, 0.002), M.glass, 0, 0.028, -0.026));
-      g.add(part(b(0.036, 0.012, 0.030), M.black, 0, 0.006, 0));
-      g.userData.opticHeight = 0.052;
+    // Both optics are built as an OPEN frame — four thin bars around an empty
+    // middle — rather than the solid block they used to be. That is what lets
+    // you actually look through the sight when aimed instead of pressing your
+    // eye against a lump of geometry. The reticle is unlit, drawn last and
+    // with depth testing off, so it reads as a projected dot floating in the
+    // window at any range. The view model renders in its own isolated pass,
+    // so drawing it "through" geometry only means through the gun, not the
+    // world.
+    case 'reddot': {
+      const H = 0.030;                 // reticle height above the rail
+      const r = 0.026, t = 0.005, d = 0.042;
+      g.add(part(b(r * 2 + t, t, d), M.black, 0, H + r, 0));      // hood top
+      g.add(part(b(r * 2 + t, t, d), M.black, 0, H - r, 0));      // hood bottom
+      g.add(part(b(t, r * 2, d), M.black, -r, H, 0));             // left wall
+      g.add(part(b(t, r * 2, d), M.black, r, H, 0));              // right wall
+      g.add(part(b(0.034, H - r, 0.030), M.black, 0, (H - r) * 0.5, 0)); // mount
+      g.add(part(b(r * 2, r * 2, 0.0015), M.lens, 0, H, -0.018)); // glass
+      g.add(reticle(0.0050, 0xff2a1a, 0, H, 0.004));
+      g.userData.opticHeight = H;
       break;
-    case 'holo':
-      g.add(part(b(0.040, 0.040, 0.075), M.black, 0, 0.028, 0));
-      g.add(part(b(0.034, 0.034, 0.002), M.glass, 0, 0.030, -0.036));
-      g.add(part(b(0.044, 0.012, 0.040), M.black, 0, 0.006, 0));
-      g.userData.opticHeight = 0.058;
+    }
+    case 'holo': {
+      const H = 0.034;                 // taller window, sits a touch higher
+      const rx = 0.034, ry = 0.028, t = 0.005, d = 0.052;
+      g.add(part(b(rx * 2 + t, t, d), M.black, 0, H + ry, 0));
+      g.add(part(b(rx * 2 + t, t, d), M.black, 0, H - ry, 0));
+      g.add(part(b(t, ry * 2, d), M.black, -rx, H, 0));
+      g.add(part(b(t, ry * 2, d), M.black, rx, H, 0));
+      g.add(part(b(0.042, H - ry, 0.038), M.black, 0, (H - ry) * 0.5, 0));
+      g.add(part(b(rx * 2, ry * 2, 0.0015), M.lens, 0, H, -0.024));
+      // ringed reticle: centre dot inside a broken circle of segments
+      g.add(reticle(0.0045, 0xff2a1a, 0, H, 0.006));
+      const rr = 0.013;
+      for (const [dx, dy] of [[0, rr], [0, -rr], [rr, 0], [-rr, 0]]) {
+        g.add(reticle(0.0030, 0xff2a1a, dx, H + dy, 0.006));
+      }
+      g.userData.opticHeight = H;
+      break;
+    }
       break;
     case 'suppressor':
       g.add(part(b(0.042, 0.042, 0.17), M.black, 0, 0, -0.06));
@@ -314,7 +363,12 @@ export function buildWeaponModel(weapon, attachments = []) {
   // iron sight height when there is no optic fitted
   const ironHeight = isPistol ? 0.052 : weapon.key === 'm870' ? 0.064 : 0.086;
 
-  root.traverse((o) => { o.frustumCulled = false; if (o.isMesh) o.renderOrder = 10; });
+  // Don't stomp a part that has deliberately asked to draw later (the optic
+  // reticles use renderOrder 999 so they sit on top of their own housing).
+  root.traverse((o) => {
+    o.frustumCulled = false;
+    if (o.isMesh && o.renderOrder < 10) o.renderOrder = 10;
+  });
 
   return {
     root, body, mag, bolt, pump, muzzle, eject, optics, underMount, sideMount,

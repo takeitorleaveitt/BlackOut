@@ -182,7 +182,7 @@ export class NetClient {
   }
 
   hello(name, loadout) { this.send({ t: 'hello', name, loadout }); }
-  quickMatch(mode) { this.send({ t: 'quickMatch', mode }); }
+  quickMatch(mode, opts = {}) { this.send({ t: 'quickMatch', mode, ...opts }); }
   joinRoom(roomId) { this.send({ t: 'join', roomId }); }
   joinCode(code) { this.send({ t: 'join', code }); }
   createRoom(settings) { this.send({ t: 'roomCreate', settings }); }

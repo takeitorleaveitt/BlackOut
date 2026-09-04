@@ -108,8 +108,10 @@ export class PostFX {
     const strength = S.bodycam ?? 1;
     u.uStrength.value = strength;
     u.uDistortion.value = S.lensDistortion ? 0.30 : 0.0;
-    u.uChroma.value = S.chromatic ? 0.75 : 0.0;
-    u.uGrain.value = S.filmGrain ? 0.55 : 0.0;
+    // Chromatic aberration and film grain are gone from the game, not just
+    // switched off — the shader keeps the uniforms, pinned at zero.
+    u.uChroma.value = 0.0;
+    u.uGrain.value = 0.0;
     u.uScanline.value = S.compression ? 0.32 : 0.0;
     u.uCompression.value = S.compression ? 0.45 : 0.0;
     u.uGlare.value = S.lensFlare ? 0.4 : 0.0;

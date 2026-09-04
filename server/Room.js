@@ -63,6 +63,13 @@ export class Room {
   get maxPlayers() { return this.options.maxPlayers; }
   get humanCount() { return this.clients.size; }
   get playerCount() { return this.sim.players.size; }
+  /** Bots currently in the match — matchmaking uses this to keep the
+   *  player-only playlists free of bot-padded rooms. */
+  get botCount() {
+    let n = 0;
+    for (const p of this.sim.players.values()) if (p.bot) n++;
+    return n;
+  }
 
   info() {
     const map = getMap(this.mapKey);

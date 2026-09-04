@@ -5,12 +5,12 @@ export const ATTACHMENTS = {
   reddot: {
     key: 'reddot', name: 'MRDS Red Dot', slot: 'optic',
     desc: 'Fast unmagnified dot. Cleaner sight picture with a small ADS cost.',
-    mods: { adsTime: 1.05, spreadAds: 0.88, adsFov: 0.94 }
+    mods: { adsTime: 1.05, spreadAds: 0.88, adsFov: 0.86 }
   },
   holo: {
     key: 'holo', name: 'Holographic Sight', slot: 'optic',
     desc: 'Wider window and a ringed reticle. Slower to raise than the dot.',
-    mods: { adsTime: 1.12, spreadAds: 0.82, adsFov: 0.88 }
+    mods: { adsTime: 1.12, spreadAds: 0.82, adsFov: 0.80 }
   },
   suppressor: {
     key: 'suppressor', name: 'Suppressor', slot: 'muzzle',

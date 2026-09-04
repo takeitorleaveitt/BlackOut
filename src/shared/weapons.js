@@ -263,10 +263,16 @@ export const WEAPONS = [
     // damage is well above MAX_HEALTH (100) even through the weakest
     // (leg, x0.72) hit-zone multiplier so a stab kills from full health from
     // any angle, not just center-mass.
-    // Genuine knife reach — a stab, not a lunge. Past ~1.2 m the falloff
+    // Genuine knife reach — a slash, not a lunge. Past ~1.2 m the falloff
     // closes to zero damage over a few centimetres, so the blade simply does
     // not connect at ranges where a gun would.
-    damage: 200, damageMin: 0, falloffStart: 1.15, falloffEnd: 1.30,
+    //
+    // 55 base means two clean slashes from the front (the weakest hit zone,
+    // legs at x0.72, still leaves the second swing lethal), while a hit taken
+    // from behind is multiplied by backstab into an instant kill. The melee
+    // resolution in MatchSim.handleShot does the angle test.
+    damage: 55, damageMin: 0, falloffStart: 1.15, falloffEnd: 1.30,
+    backstab: 4.0,
     rpm: 110, auto: false, burst: 0,
     muzzleVelocity: 260, dropScale: 0,
     magSize: 1, reserve: 1,

@@ -148,6 +148,64 @@ export class MapBuilder {
     return this;
   }
 
+  /**
+   * One wall carrying SEVERAL openings.
+   *
+   * Calling wallDoor/wallWindow twice on the same wall line does not work:
+   * each call rebuilds the whole wall around its own single gap, so the
+   * second call's solid segments fill in the first call's hole. This builds
+   * the wall once, walking the openings in order along its length, so a
+   * facade can have as many windows and doors as it needs.
+   *
+   * `openings` is an array of { at, gap, kind: 'window' | 'door', sill, top,
+   * doorH } — `at` being the centre as a 0..1 fraction of the wall's length.
+   */
+  wallOpenings(x1, z1, x2, z2, h = 3.2, openings = [], opts = {}) {
+    const len = Math.hypot(x2 - x1, z2 - z1) || 1;
+    const y0 = opts.y ?? 0;
+    const lp = (t) => [x1 + (x2 - x1) * t, z1 + (z2 - z1) * t];
+
+    const cuts = openings
+      .map((o) => {
+        const gap = o.gap ?? (o.kind === 'door' ? 1.15 : 1.8);
+        return {
+          ...o,
+          t0: Math.max(0, (o.at ?? 0.5) - gap / (2 * len)),
+          t1: Math.min(1, (o.at ?? 0.5) + gap / (2 * len))
+        };
+      })
+      .sort((a, b) => a.t0 - b.t0);
+
+    let cursor = 0;
+    for (const c of cuts) {
+      if (c.t0 < cursor) continue;                 // overlaps the previous one
+      if (c.t0 > cursor + 0.001) {
+        const p = lp(cursor), q = lp(c.t0);
+        this.wall(p[0], p[1], q[0], q[1], h, opts);
+      }
+      const a = lp(c.t0), b = lp(c.t1);
+      if (c.kind === 'door') {
+        const doorH = c.doorH ?? opts.doorH ?? 2.15;
+        if (h > doorH) this.wall(a[0], a[1], b[0], b[1], h - doorH, { ...opts, y: y0 + doorH });
+        this.decor.push({ type: 'doorframe', a, b, h: doorH, y: y0 });
+      } else {
+        const sill = c.sill ?? opts.sill ?? 0.95;
+        const top = c.top ?? opts.top ?? 2.25;
+        this.wall(a[0], a[1], b[0], b[1], sill, { ...opts, y: y0 });
+        if (h > top) this.wall(a[0], a[1], b[0], b[1], h - top, { ...opts, y: y0 + top });
+        this.wall(a[0], a[1], b[0], b[1], top - sill, {
+          ...opts, y: y0 + sill, thick: 0.06, mat: SURFACE.GLASS, breakable: true, opaque: false
+        });
+      }
+      cursor = c.t1;
+    }
+    if (cursor < 0.999) {
+      const p = lp(cursor), q = lp(1);
+      this.wall(p[0], p[1], q[0], q[1], h, opts);
+    }
+    return this;
+  }
+
   /** Four walls with optional openings. `doors` is an array of 'n'|'s'|'e'|'w'. */
   room(cx, cz, w, d, h, opts = {}) {
     const doors = opts.doors || [];

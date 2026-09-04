@@ -48,15 +48,15 @@ export const FRICTION_AIR = 0.15;
 export const JUMP_VELOCITY = 5.55;
 
 // --- slide (sprint + hold crouch) ---
-export const SLIDE_SPEED = 8.60;              // launch speed out of the sprint
+export const SLIDE_SPEED = 9.20;              // launch speed out of the sprint
 export const SLIDE_MIN_SPEED = 3.60;          // must already be moving this fast
-export const SLIDE_TIME = 0.85;               // longest a slide can last
+export const SLIDE_TIME = 1.00;               // longest a slide can last
 export const SLIDE_END_SPEED = 2.60;          // slide ends once it decays to this
 // Glide drag, far below ground friction. Sized so the slide decays from
 // SLIDE_SPEED down to SLIDE_END_SPEED just as SLIDE_TIME runs out, which
 // makes the slide end because it naturally ran out of momentum rather than
 // being cut short by the timer — about four metres of ground covered.
-export const SLIDE_FRICTION = 1.50;
+export const SLIDE_FRICTION = 1.28;
 export const SLIDE_COOLDOWN = 0.60;           // gap before another slide can start
 export const SLIDE_STEER = 0.30;              // how much you can still steer mid-slide
 export const MAX_LEAN = 0.62;                 // radians of body roll when leaning
@@ -65,13 +65,11 @@ export const LEAN_SPEED = 10.5;
 export const CROUCH_SPEED = 9.0;
 export const SPRINT_MIN_FORWARD = 0.55;       // stick must be pushed this far forward to sprint
 
-// --- jump feel / bunny hopping ---
-// A jump pressed within JUMP_BUFFER of landing fires on touchdown instead of
-// being dropped, and COYOTE_TIME lets you still jump just after walking off an
-// edge. Together with skipping ground friction on the bounce tick, these turn
-// bunny hopping from frame-perfect into something you can actually hold.
-export const JUMP_BUFFER = 0.16;
-export const COYOTE_TIME = 0.12;
+// --- jump ---
+// A hard one-second gate between jumps. Deliberately long: it removes bunny
+// hopping as a movement option entirely rather than merely making it awkward,
+// so ground speed is the only way to cross open space.
+export const JUMP_COOLDOWN = 1.0;
 
 // --- combat ---
 export const MAX_HEALTH = 100;

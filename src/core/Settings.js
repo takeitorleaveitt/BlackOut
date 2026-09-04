@@ -9,26 +9,26 @@ const KEY = 'bp.settings.v1';
 export const PRESETS = {
   low: {
     renderScale: 0.72, shadows: 'off', shadowRes: 512, textureQuality: 'low', aa: 'off',
-    bloom: false, motionBlur: false, filmGrain: false, chromatic: false, lensDistortion: false,
-    lensFlare: false, ssao: false, particles: 0.4, decals: 40, decalLife: 8,
+    bloom: false, motionBlur: false, lensDistortion: false,
+    lensFlare: false, ssao: false, particles: 0.25, decals: 40, decalLife: 8,
     lights: 'low', fog: true, anisotropy: 1, viewDistance: 0.7, compression: false, dustMotes: false
   },
   medium: {
     renderScale: 0.85, shadows: 'low', shadowRes: 1024, textureQuality: 'medium', aa: 'fxaa',
-    bloom: true, motionBlur: false, filmGrain: false, chromatic: false, lensDistortion: false,
-    lensFlare: false, ssao: false, particles: 0.7, decals: 90, decalLife: 14,
+    bloom: true, motionBlur: false, lensDistortion: false,
+    lensFlare: false, ssao: false, particles: 0.4, decals: 90, decalLife: 14,
     lights: 'medium', fog: true, anisotropy: 4, viewDistance: 0.85, compression: false, dustMotes: true
   },
   high: {
     renderScale: 1.0, shadows: 'high', shadowRes: 2048, textureQuality: 'high', aa: 'fxaa',
-    bloom: true, motionBlur: false, filmGrain: false, chromatic: false, lensDistortion: false,
-    lensFlare: false, ssao: false, particles: 1.0, decals: 160, decalLife: 22,
+    bloom: true, motionBlur: false, lensDistortion: false,
+    lensFlare: false, ssao: false, particles: 0.6, decals: 160, decalLife: 22,
     lights: 'high', fog: true, anisotropy: 8, viewDistance: 1.0, compression: false, dustMotes: true
   },
   ultra: {
     renderScale: 1.0, shadows: 'ultra', shadowRes: 4096, textureQuality: 'high', aa: 'fxaa',
-    bloom: true, motionBlur: false, filmGrain: false, chromatic: false, lensDistortion: false,
-    lensFlare: false, ssao: true, particles: 1.4, decals: 260, decalLife: 30,
+    bloom: true, motionBlur: false, lensDistortion: false,
+    lensFlare: false, ssao: true, particles: 0.8, decals: 260, decalLife: 30,
     lights: 'ultra', fog: true, anisotropy: 16, viewDistance: 1.25, compression: false, dustMotes: true
   }
 };
@@ -37,13 +37,14 @@ export const DEFAULT_BINDS = {
   forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD',
   jump: 'Space', crouch: 'KeyC', sprint: 'ShiftLeft', walk: 'AltLeft',
   reload: 'KeyR', use: 'KeyF', leanLeft: 'KeyQ', leanRight: 'KeyE',
-  primary: 'Digit1', secondary: 'Digit2', melee: 'KeyV', inspect: 'KeyI',
+  primary: 'Digit1', secondary: 'Digit2', melee: 'Digit3', inspect: 'KeyI',
   scoreboard: 'Tab', flashlight: 'KeyT', chat: 'KeyY', ping: 'KeyG'
 };
 
 const DEFAULTS = {
   // profile
   name: '',
+  nameChangedAt: 0,      // last accepted callsign change (one per day)
   // graphics — first-run default is the "low" preset (so a fresh install
   // never opens into a stutter on weak hardware) but with render scale
   // pushed to full resolution, since that's cheap on its own and the
@@ -54,7 +55,6 @@ const DEFAULTS = {
   renderScale: 1.0,
   bodycam: 0.35,          // master strength of the bodycam look
   cameraShake: 1.0,
-  weaponSway: 1.0,
   headBob: 1.0,
   exposure: 1.0,
   brightness: 1.0,
@@ -81,7 +81,6 @@ const DEFAULTS = {
   toggleAds: false,
   toggleCrouch: false,
   toggleSprint: false,
-  autoSprint: false,
   binds: { ...DEFAULT_BINDS },
   // loadout (persisted so it survives reloads)
   loadout: {
