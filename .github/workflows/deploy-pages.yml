@@ -17,12 +17,15 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+          cache: npm
+      - run: npm ci --no-audit --no-fund --fetch-timeout=60000
+        timeout-minutes: 5
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
