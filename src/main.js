@@ -424,6 +424,7 @@ class Game {
     audio.setWorld(this.world);
     audio.stopMenuMusic();
     audio.startAmbience(map.ambientSounds);
+    audio.warmup(Object.values(WEAPON_BY_KEY));
     this.effects.clear();
     for (const r of this.remotes.values()) r.dispose();
     this.remotes.clear();
@@ -656,9 +657,22 @@ class Game {
     }
     const cam = this.engine.camera.position;
     const t = clamp((cam.x - pos[0]) * dir[0] + (cam.y - pos[1]) * dir[1] + (cam.z - pos[2]) * dir[2], 0, travel);
-    const missBy = Math.hypot(pos[0] + dir[0] * t - cam.x, pos[1] + dir[1] * t - cam.y, pos[2] + dir[2] * t - cam.z);
+    const cx = pos[0] + dir[0] * t, cy = pos[1] + dir[1] * t, cz = pos[2] + dir[2] * t;
+    const missBy = Math.hypot(cx - cam.x, cy - cam.y, cz - cam.z);
+    // The closest-approach point being near the camera is only a "near miss"
+    // if nothing solid is actually between them — otherwise a shot fired in
+    // an entirely different room, on the other side of a wall, could still
+    // mathematically pass close to the player's position and play a
+    // supersonic crack with no visible cause.
     if (missBy < 3.2 && t > 2) {
-      audio.bulletCrack([cam.x + dir[0] * 1.2, cam.y + dir[1] * 1.2, cam.z + dir[2] * 1.2], 1 - missBy / 3.2);
+      const toClosest = missBy || 0.001;
+      const blocked = this.world?.raycast(
+        cam.x, cam.y, cam.z, (cx - cam.x) / toClosest, (cy - cam.y) / toClosest, (cz - cam.z) / toClosest,
+        Math.max(0, toClosest - 0.15)
+      );
+      if (!blocked) {
+        audio.bulletCrack([cam.x + dir[0] * 1.2, cam.y + dir[1] * 1.2, cam.z + dir[2] * 1.2], 1 - missBy / 3.2);
+      }
     }
   }
 
@@ -769,6 +783,7 @@ class Game {
         const surf = this.world?.supportY(pos[0], pos[1], pos[2], 0.34, 0.4).surface || 'concrete';
         audio.footstep(surf, pos, vol);
       });
+      r.updateMarker(this.player.team, dt);
     }
 
     this.worldRenderer.update(dt, time, this.engine.camera.position);
