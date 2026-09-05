@@ -88,9 +88,28 @@ export class Weapon {
     const blockAds = this.def.melee || ctx.sprinting || this.state === WS.DRAWING ||
       this.state === WS.HOLSTERING || this.state === WS.INSPECTING;
     const target = this.wantAds && !blockAds && !this.isReloading ? 1 : 0;
-    const rate = target > this.adsT ? 1 / Math.max(0.05, this.def.adsTime) : 1 / Math.max(0.05, this.def.adsTime * 0.8);
-    this.adsT = clamp(this.adsT + (target - this.adsT > 0 ? rate * dt : -rate * dt), 0, 1);
-    if (Math.abs(target - this.adsT) < 0.01) this.adsT = target;
+    // Move toward the target and STOP there.
+    //
+    // This used to add or subtract a fixed step based on the sign of
+    // (target - adsT), with the equal case falling into the subtract branch.
+    // So the moment adsT reached 1 and the target stayed 1, every frame
+    // stepped backwards and the next frame stepped forward again — a
+    // permanent oscillation between fully aimed and several per cent back
+    // toward the hip, for as long as the aim button was held. On screen that
+    // is the weapon vibrating at half the frame rate, which reads as a
+    // second ghosted copy of the gun. That is the "two guns while aiming"
+    // bug, and it was never a post-processing filter: clamping the step to
+    // the target is the whole fix.
+    const diff = target - this.adsT;
+    if (diff !== 0) {
+      const rate = diff > 0
+        ? 1 / Math.max(0.05, this.def.adsTime)
+        : 1 / Math.max(0.05, this.def.adsTime * 0.8);
+      const step = rate * dt;
+      this.adsT = diff > 0
+        ? Math.min(target, this.adsT + step)
+        : Math.max(target, this.adsT - step);
+    }
 
     // --- state machine -----------------------------------------------------
     switch (this.state) {
