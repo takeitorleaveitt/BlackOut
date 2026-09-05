@@ -167,7 +167,7 @@ export class Engine {
       this.envRT = this.pmrem.fromScene(this.envScene, 0, 0.1, 200);
       this.scene.environment = this.envRT.texture;
       this.scene.environmentIntensity = env.sky === 'night' ? 0.7
-        : env.sky === 'interior' ? 0.9 : 1.0;
+        : env.sky === 'interior' ? 1.15 : 1.0;
     } catch (e) {
       console.warn('env probe failed', e);
     }

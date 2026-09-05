@@ -49,6 +49,7 @@ export const WEAPON_PRICE = {
 };
 
 export const ATTACHMENT_PRICE = {
+  acog: 350,
   holo: 150,
   compensator: 100,
   reddot: 0,
@@ -79,5 +80,5 @@ export const BUY_CATEGORIES = [
   { key: 'pistols', name: 'Pistols', slot: 'secondary', items: ['glock17', 'deagle'] },
   { key: 'smg', name: 'Mid-Tier', slot: 'primary', items: ['mp7', 'mp5', 'm870'] },
   { key: 'rifles', name: 'Rifles', slot: 'primary', items: ['m4a1', 'ak74', 'scarh', 'm40'] },
-  { key: 'gear', name: 'Attachments', slot: 'attachment', items: ['holo', 'compensator', 'reddot', 'scope', 'suppressor', 'grip', 'laser', 'flashlight'] }
+  { key: 'gear', name: 'Attachments', slot: 'attachment', items: ['acog', 'holo', 'compensator', 'reddot', 'scope', 'suppressor', 'grip', 'laser', 'flashlight'] }
 ];

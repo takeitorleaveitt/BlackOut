@@ -12,6 +12,17 @@ export const ATTACHMENTS = {
     desc: 'Wider window and a ringed reticle. Slower to raise than the dot.',
     mods: { adsTime: 1.12, spreadAds: 0.82, adsFov: 0.80 }
   },
+  acog: {
+    key: 'acog', name: 'ACOG 2x', slot: 'optic',
+    desc: 'Short prismatic scope with an illuminated chevron. Two times magnification and a steadier aim, at the cost of speed and peripheral vision.',
+    // A true 2x over the weapon's own unmagnified aim. On a rifle whose ADS
+    // FOV is 0.62 of the base 84 degrees, halving the tangent of the half
+    // angle lands at 0.53 of that — 52 degrees down to 27.5.
+    mods: { adsTime: 1.28, spreadAds: 0.74, adsFov: 0.53, mobility: 0.98, sway: 0.92 },
+    // Not `scoped`: the full-screen picture belongs to the telescopic sight.
+    // A 2x prism is something you look THROUGH with the weapon still in view.
+    flags: { magnified: true }
+  },
   scope: {
     key: 'scope', name: 'Telescopic Scope', slot: 'optic',
     desc: 'Long-range glass with a mil-dot reticle. Deep magnification, slow to settle, and useless up close.',

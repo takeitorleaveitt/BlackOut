@@ -47,16 +47,25 @@ export const DEFAULT_MODE = 'tdm';
  * whether bots are allowed to fill it at all. Quick Match and Standard are
  * player-only: they will wait for humans rather than pad the lobby out.
  */
+/**
+ * `maps` restricts a playlist to part of the rotation. A map that is too small
+ * or too fast for a playlist's pace does not belong in it: Killhouse is a
+ * knife-fight box and has no business in a first-to-three, and neither it nor
+ * Willow Lane holds up over the length of a Standard match. Leave `maps` off
+ * and the playlist gets the whole rotation.
+ */
 export const PLAYLISTS = {
   quickmatch: {
     key: 'quickmatch', name: 'QUICK MATCH',
     desc: 'Against real players only. Team Deathmatch or Elimination, first to 3.',
-    modes: ['tdm', 'elimination'], roundsToWin: 3, bots: false, minPlayers: 8
+    modes: ['tdm', 'elimination'], roundsToWin: 3, bots: false, minPlayers: 8,
+    maps: ['warehouse', 'suburb', 'refinery']
   },
   standard: {
     key: 'standard', name: 'STANDARD',
     desc: 'Against real players only. Team Deathmatch, first to 6.',
-    modes: ['tdm'], roundsToWin: 6, bots: false, minPlayers: 8
+    modes: ['tdm'], roundsToWin: 6, bots: false, minPlayers: 8,
+    maps: ['warehouse', 'refinery']
   },
   freeforall: {
     key: 'freeforall', name: 'FREE FOR ALL',
@@ -64,6 +73,18 @@ export const PLAYLISTS = {
     modes: ['ffa'], roundsToWin: 3, bots: true, minPlayers: 1
   }
 };
+
+/**
+ * The maps a playlist may pick from, intersected with what the mode allows.
+ * Falls back to the mode's own list for anything not in a playlist (private
+ * matches, the server browser, offline).
+ */
+export function mapsForPlaylist(playlistKey, modeKey, allMaps) {
+  const pl = PLAYLISTS[playlistKey];
+  if (!pl || !pl.maps) return allMaps;
+  const allowed = allMaps.filter((m) => pl.maps.includes(m));
+  return allowed.length ? allowed : allMaps;
+}
 
 export const PLAYLIST_LIST = Object.values(PLAYLISTS);
 

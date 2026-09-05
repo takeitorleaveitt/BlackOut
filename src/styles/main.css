@@ -216,6 +216,14 @@ h3.sec:first-child { margin-top: 0; }
 }
 .menu-badge b { color: var(--accent-dim); font-weight: 400; }
 
+/* The build stamp, bottom-left of the main menu. Sits over the live map like
+   the rest of the chrome, low-contrast enough to read as a watermark. */
+.version-tag {
+  position: absolute; left: 34px; bottom: 22px; z-index: 2;
+  font: 10px/1 var(--mono); letter-spacing: 0.24em; text-transform: uppercase;
+  color: var(--ink-faint); pointer-events: none;
+}
+
 /* ---------- after action report ----------
    The XP the match paid, and where that leaves the level bar. Reading it is
    the whole reason the report stays up before the return-to-menu timer fires. */

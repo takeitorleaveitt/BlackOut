@@ -44,9 +44,17 @@ const MAX_DROP = 4.0;
 // movement code climbs it in tick-sized increments, not one 0.9 m stride.
 // Sampling at cell spacing and applying the raw step height is what
 // disconnected every ramp on the map from everything at the top of it.
-const MAX_RISE = 0.78;
-// Give up rather than burn a frame on a hopeless search.
-const MAX_EXPANSIONS = 9000;
+// Raised from 0.78 once continuous() below started sampling properly. A 0.9 m
+// grid across a stair flight aliases: most cells step up by the average rise,
+// but wherever the sample lands a tread further along it jumps by half as much
+// again. On Refinery that produced exactly one 0.86 m cell in an otherwise
+// even flight, and one broken link is a whole catwalk nobody can reach.
+const MAX_RISE = 0.95;
+// Give up rather than burn a frame on a hopeless search. Generous enough to
+// cross the biggest map corner to corner: at 9000 the longest routes on
+// Refinery ran out of budget and came back as "unreachable" on a graph where
+// they plainly were not.
+const MAX_EXPANSIONS = 40000;
 // How far off a requested height a node may be and still count as "the same
 // floor" when resolving a world point onto the grid.
 const SAME_FLOOR = 1.2;
@@ -198,12 +206,21 @@ export class NavGrid {
    * ends, on a wall it is level with the bottom one.
    */
   continuous(n, m) {
-    const midY = this.world.groundHeight(
-      (n.x + m.x) / 2, (n.z + m.z) / 2, Math.max(n.y, m.y) + 0.6
-    );
-    if (midY === -Infinity) return false;
-    return Math.abs(midY - n.y) <= STEP_HEIGHT + 0.02
-      && Math.abs(m.y - midY) <= STEP_HEIGHT + 0.02;
+    // Three samples across the gap, not one. A single midpoint can sit on a
+    // tread that happens to be halfway up a ledge and call it a ramp; the
+    // whole run has to climb evenly for this to be a flight of stairs.
+    const top = Math.max(n.y, m.y) + 0.6;
+    let prev = n.y;
+    for (let i = 1; i <= 3; i++) {
+      const t = i / 4;
+      const y = this.world.groundHeight(
+        n.x + (m.x - n.x) * t, n.z + (m.z - n.z) * t, top
+      );
+      if (y === -Infinity) return false;
+      if (Math.abs(y - prev) > STEP_HEIGHT + 0.04) return false;
+      prev = y;
+    }
+    return Math.abs(m.y - prev) <= STEP_HEIGHT + 0.04;
   }
 
   get size() { return this.nodes.length; }

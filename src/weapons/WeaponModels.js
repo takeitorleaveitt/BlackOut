@@ -49,6 +49,17 @@ function reticle(size, color, x, y, z) {
   return m;
 }
 
+/** A flat reticle bar — same rules as reticle(), but not a cube. */
+function reticleBar(w, h, color, x, y, z) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, 0.0018),
+    new THREE.MeshBasicMaterial({ color, toneMapped: false, depthTest: false, depthWrite: false })
+  );
+  m.position.set(x, y, z);
+  m.renderOrder = 999;
+  return m;
+}
+
 const b = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const c = (r1, r2, h, s = 10) => new THREE.CylinderGeometry(r1, r2, h, s);
 
@@ -278,7 +289,38 @@ export function buildAttachment(key) {
       g.userData.opticHeight = H;
       break;
     }
+    // A short prismatic 2x. Stubbier than the telescopic sight and mounted low
+    // enough to look through with the weapon still filling the lower screen —
+    // the reticle is a chevron with a stadia line under it, which is the shape
+    // that makes an ACOG read as an ACOG rather than another red dot.
+    case 'acog': {
+      const H = 0.042;
+      const r = 0.024, len = 0.135;
+      g.add(part(b(r * 2, r * 2, len), M.black, 0, H, -0.012));            // body
+      g.add(part(b(0.056, 0.052, 0.030), M.black, 0, H, -0.086));          // objective housing
+      g.add(part(b(0.050, 0.046, 0.026), M.black, 0, H, 0.062));           // ocular housing
+      g.add(part(b(0.020, 0.014, 0.052), M.steelWorn, 0, H + 0.026, -0.02)); // fibre-optic ridge
+      g.add(part(b(0.030, 0.022, 0.018), M.steelWorn, 0.028, H, -0.02));   // windage turret
+      g.add(part(b(0.044, 0.012, 0.062), M.steelWorn, 0, 0.006, 0));       // rail clamp
+      g.add(part(b(0.048, 0.006, 0.018), M.black, 0, 0.005, 0.026));       // clamp lever
+      g.add(part(b(0.028, H - 0.014, 0.046), M.black, 0, 0.012 + (H - 0.014) * 0.5, 0)); // riser
+      g.add(part(b(0.048, 0.044, 0.0015), M.lens, 0, H, -0.101));          // objective glass
+      g.add(part(b(0.040, 0.038, 0.0015), M.lens, 0, H, 0.075));           // ocular glass
+      // Chevron: a tapered stack of segments meeting at a point, with the
+      // stadia line dropping away below it.
+      const RZ = 0.066;
+      for (let i = 0; i < 5; i++) {
+        const wdt = 0.0022 + i * 0.0022;
+        const yy = H + 0.0075 + i * 0.0022;
+        g.add(reticleBar(wdt, 0.0020, 0xff2a1a, 0, yy, RZ));
+      }
+      g.add(reticle(0.0022, 0xff2a1a, 0, H + 0.0052, RZ));                 // tip
+      for (let i = 1; i <= 4; i++) {
+        g.add(reticleBar(0.0060 - i * 0.0008, 0.0016, 0xff2a1a, 0, H - i * 0.0075, RZ));
+      }
+      g.userData.opticHeight = H;
       break;
+    }
     // A telescopic scope, not a red dot: a long tube on two rings with an
     // objective bell at the front. The reticle here is only what you see with
     // the weapon unscoped or mid-transition — once the aim settles, the HUD
@@ -428,7 +470,7 @@ export function buildWeaponModel(weapon, attachments = []) {
   for (const key of attachments) {
     const a = buildAttachment(key);
     if (!a) continue;
-    if (key === 'reddot' || key === 'holo') {
+    if (key === 'reddot' || key === 'holo' || key === 'acog') {
       optics.add(a);
       opticHeight = railY + (a.userData.opticHeight || 0.05);
     } else if (key === 'suppressor' || key === 'compensator') {

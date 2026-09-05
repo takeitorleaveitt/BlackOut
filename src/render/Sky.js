@@ -78,7 +78,11 @@ const PRESETS = {
   overcast: { top: 0x8b959f, horizon: 0xc8d0d6, bottom: 0x6a6f75, sunSize: 0.030, stars: 0, clouds: 0.85, haze: 0.6, intensity: 1.6 },
   dusk: { top: 0x24356a, horizon: 0xe08a44, bottom: 0x33262e, sunSize: 0.017, stars: 0.25, clouds: 0.5, haze: 0.7, intensity: 1.35 },
   night: { top: 0x080d18, horizon: 0x18243a, bottom: 0x05080c, sunSize: 0.011, stars: 1.0, clouds: 0.25, haze: 0.2, intensity: 1.0 },
-  interior: { top: 0x141a1f, horizon: 0x1e252b, bottom: 0x0c0f12, sunSize: 0.0, stars: 0, clouds: 0, haze: 0, intensity: 1.0 }
+  // 'interior' doubles as the image-based light for enclosed maps, and the IBL
+  // is where most of a surface's fill actually comes from — a near-black one
+  // meant Killhouse rendered nearly black no matter how far its hemisphere and
+  // point lights were pushed. It is a lit room, not an unlit one.
+  interior: { top: 0x4c545c, horizon: 0x6e777e, bottom: 0x383d42, sunSize: 0.0, stars: 0, clouds: 0, haze: 0, intensity: 1.5 }
 };
 
 export class Sky {

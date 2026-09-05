@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Room, makeRoomCode } from './Room.js';
 import { readInput, MSG } from '../src/shared/protocol.js';
-import { MODES, REGIONS } from '../src/shared/modes.js';
+import { MODES, REGIONS, PLAYLISTS, mapsForPlaylist } from '../src/shared/modes.js';
 import { ROTATION, MAP_INFO, mapsForMode } from '../src/shared/maps/index.js';
 import { INTERP_DELAY_MS, LAG_COMP_MAX_MS, TICK_RATE, SNAPSHOT_RATE, clamp } from '../src/shared/constants.js';
 
@@ -117,19 +117,25 @@ function findQuickMatch(modeKey, opts = {}) {
   const wantBots = opts.bots !== false;
   // A squad needs one seat per member, not just one for the leader.
   const seats = Math.max(1, opts.seats | 0 || 1);
+  const pl = PLAYLISTS[opts.playlist];
+  const allowedMaps = pl && pl.maps ? pl.maps : null;
   let best = null, bestScore = -1;
   for (const r of rooms.values()) {
     if (r.private || r.closed) continue;
     if (modeKey && r.modeKey !== modeKey) continue;
     if (r.humanCount + seats > r.maxPlayers) continue;
     if (!wantBots && r.botCount > 0) continue;
+    // A playlist that excludes a map must not be matched INTO a live room
+    // running it either, or the restriction only holds for the first person
+    // through the door.
+    if (allowedMaps && !allowedMaps.includes(r.mapKey)) continue;
     // prefer rooms that already have people, but are not full
     const score = r.humanCount * 10 - (r.humanCount >= r.maxPlayers - 1 ? 50 : 0) + Math.random() * 3;
     if (score > bestScore) { bestScore = score; best = r; }
   }
   if (!best) {
     const mode = modeKey || 'tdm';
-    const maps = mapsForMode(mode);
+    const maps = mapsForPlaylist(opts.playlist, mode, mapsForMode(mode));
     best = createPublicRoom(mode, maps[(Math.random() * maps.length) | 0], {
       fillBots: wantBots ? undefined : 0,
       // A player-only playlist holds in warmup until this many humans have

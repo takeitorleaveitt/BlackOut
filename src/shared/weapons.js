@@ -41,7 +41,7 @@ export const WEAPONS = [
     penetration: 0.72, pellets: 1, pelletSpread: 0,
     audio: { punch: 92, body: 320, crack: 3400, tail: 0.44, level: 0.95, tone: 0.55 },
     model: { barrel: 0.40, receiver: 0.30, stock: 'collapsible', handguard: 'quad', mag: 'stanag', tint: 0x2b2c2e, accent: 0x3a3c3f },
-    attachments: ['reddot', 'holo', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
+    attachments: ['reddot', 'holo', 'acog', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
   },
   {
     id: 1,
@@ -70,7 +70,7 @@ export const WEAPONS = [
     penetration: 0.80, pellets: 1, pelletSpread: 0,
     audio: { punch: 74, body: 250, crack: 2900, tail: 0.52, level: 1.05, tone: 0.40 },
     model: { barrel: 0.42, receiver: 0.32, stock: 'fixed', handguard: 'wood', mag: 'curved', tint: 0x2a2622, accent: 0x5a3a1e },
-    attachments: ['reddot', 'holo', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
+    attachments: ['reddot', 'holo', 'acog', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
   },
   {
     id: 2,
@@ -99,7 +99,7 @@ export const WEAPONS = [
     penetration: 0.42, pellets: 1, pelletSpread: 0,
     audio: { punch: 118, body: 400, crack: 2200, tail: 0.30, level: 0.80, tone: 0.68 },
     model: { barrel: 0.24, receiver: 0.28, stock: 'retractable', handguard: 'tri', mag: 'straight', tint: 0x232426, accent: 0x2e3033 },
-    attachments: ['reddot', 'holo', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
+    attachments: ['reddot', 'holo', 'acog', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
   },
   {
     id: 3,
@@ -128,7 +128,7 @@ export const WEAPONS = [
     penetration: 0.58, pellets: 1, pelletSpread: 0,
     audio: { punch: 140, body: 470, crack: 3900, tail: 0.24, level: 0.74, tone: 0.80 },
     model: { barrel: 0.18, receiver: 0.24, stock: 'stub', handguard: 'polymer', mag: 'short', tint: 0x1f2022, accent: 0x2a2c2e },
-    attachments: ['reddot', 'holo', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
+    attachments: ['reddot', 'holo', 'acog', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
   },
   {
     id: 4,
@@ -245,7 +245,7 @@ export const WEAPONS = [
     penetration: 0.95, pellets: 1, pelletSpread: 0,
     audio: { punch: 62, body: 210, crack: 2600, tail: 0.60, level: 1.18, tone: 0.32 },
     model: { barrel: 0.44, receiver: 0.34, stock: 'folding', handguard: 'rail', mag: 'battle', tint: 0x3b3a2e, accent: 0x4a4838 },
-    attachments: ['reddot', 'holo', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
+    attachments: ['reddot', 'holo', 'acog', 'suppressor', 'compensator', 'grip', 'flashlight', 'laser']
   },
   {
     id: 8,

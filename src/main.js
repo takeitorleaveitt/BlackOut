@@ -47,7 +47,7 @@ const PING_RANGE = 85;
 // Attachments that change the weapon's silhouette, and so its geometry. These
 // are the variants worth building up front; a suppressor or a laser is a small
 // addition to a model that already exists.
-const OPTIC_KEYS = new Set(['reddot', 'holo', 'scope']);
+const OPTIC_KEYS = new Set(['reddot', 'holo', 'acog', 'scope']);
 
 class Game {
   constructor() {

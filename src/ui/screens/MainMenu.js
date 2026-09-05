@@ -7,6 +7,7 @@ import { audio } from '../../audio/AudioEngine.js';
 import { MAP_INFO } from '../../shared/maps/index.js';
 import { PRIMARIES, SECONDARIES } from '../../shared/weapons.js';
 import { createSquadPanel } from './SquadPanel.js';
+import { GAME_VERSION, GAME_VERSION_LABEL } from '../../shared/version.js';
 
 const ITEMS = [
   { key: 'play', label: 'PLAY', desc: 'DEPLOY TO A MATCH' },
@@ -42,7 +43,7 @@ export function createMainMenu(game) {
       this.tcNode = el('span', '00:00:00');
       const version = el('div.menu-badge',
         el('div', el('b', 'FEED '), this.tcNode),
-        el('div', el('b', 'BUILD '), '1.0.0 · WEBGL2'),
+        el('div', el('b', 'BUILD '), GAME_VERSION + ' · WEBGL2'),
         el('div', el('b', 'MAPS '), String(MAP_INFO.length), ' · ', el('b', 'WEAPONS '), String(PRIMARIES.length + SECONDARIES.length)));
 
       // Operator card and squad live in the top-right corner, the way a Siege
@@ -52,6 +53,7 @@ export function createMainMenu(game) {
 
       node.appendChild(header('MAIN MENU', el('span', el('b', 'CH '), '01')));
       node.appendChild(el('div.body', nav, right));
+      node.appendChild(el('div.version-tag', GAME_VERSION_LABEL));
       node.appendChild(el('div.ftr',
         el('div.telemetry',
           el('span', el('b', '↑↓ '), 'NAVIGATE'),

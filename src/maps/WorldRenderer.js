@@ -13,7 +13,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { S } from '../core/Settings.js';
 import { SURFACE } from '../shared/constants.js';
 
-const LIGHT_BUDGET = { low: 4, medium: 8, high: 14, ultra: 22 };
+const LIGHT_BUDGET = { low: 6, medium: 10, high: 16, ultra: 24 };
 // Map light intensities are authored as relative "fixture brightness"; this
 // converts them into the renderer's physical units.  Decay is deliberately
 // below the physical 2.0 so a ceiling fixture still reaches the floor of a
