@@ -44,6 +44,41 @@ export function createMoveState(x = 0, y = 0, z = 0) {
   };
 }
 
+/**
+ * Every field a move state carries. Both the ones createMoveState() declares
+ * and the per-tick outputs stepMovement() writes (landed, jumped, speed,
+ * leanT), because reconciliation has to restore all of them — see
+ * cloneMoveState below.
+ */
+const MOVE_KEYS = [
+  ...Object.keys(createMoveState()),
+  'landed', 'jumped', 'speed'
+].filter((k, i, a) => a.indexOf(k) === i);
+
+/**
+ * Full copy of a move state.
+ *
+ * Client reconciliation replays every unacknowledged command, so anything
+ * stepMovement() accumulates has to be rewound to its value *before* those
+ * commands ran or the replay adds it a second time. That has bitten this
+ * codebase repeatedly — the jump cooldown, then the jump itself, and most
+ * recently footsteps: stepDistance was re-accumulated on every correction,
+ * so the step cadence ran fast and lurched out of phase. Snapshotting the
+ * whole state rather than just position and velocity closes the class of bug
+ * rather than one instance of it.
+ */
+export function cloneMoveState(s, out = {}) {
+  for (const k of MOVE_KEYS) out[k] = s[k];
+  return out;
+}
+
+/** Write a cloneMoveState() snapshot back over a live state. */
+export function restoreMoveState(s, snap) {
+  if (!snap) return s;
+  for (const k of MOVE_KEYS) s[k] = snap[k];
+  return s;
+}
+
 export function playerHeight(s) {
   return lerp(PLAYER_HEIGHT_STAND, PLAYER_HEIGHT_CROUCH, s.crouchT);
 }
@@ -304,9 +339,18 @@ function accelerate(s, wx, wz, wishSpeed, accel, dt) {
  * twice a second, which is why the steps sounded frantic. Longer strides put
  * the cadence back to something a human could actually run at.
  */
+/**
+ * Metres of ground covered between footfalls.
+ *
+ * These are distances, not times, so the cadence scales with speed on its
+ * own. They were tuned when the movement speeds were much lower and never
+ * revisited afterwards, which left a sprint firing about three footfalls a
+ * second — a patter rather than a run. Raised across the board so a sprint
+ * lands roughly 2.2 times a second and an ordinary run about 1.8.
+ */
 export function stepInterval(s) {
-  if (s.crouchT > 0.5) return 1.60;
-  if (s.sprinting) return 2.15;
-  if (s.walking) return 1.75;
-  return 1.55;
+  if (s.crouchT > 0.5) return 2.30;
+  if (s.sprinting) return 3.00;
+  if (s.walking) return 2.55;
+  return 2.25;
 }

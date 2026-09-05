@@ -5,7 +5,8 @@
 import * as THREE from 'three';
 import { CameraRig } from './CameraRig.js';
 import { Weapon, WS } from '../weapons/Weapon.js';
-import { createMoveState, stepMovement, playerHeight, eyeHeight, stepInterval } from '../shared/movement.js';
+import { createMoveState, stepMovement, playerHeight, eyeHeight, stepInterval,
+  cloneMoveState, restoreMoveState } from '../shared/movement.js';
 import { BTN, MAX_HEALTH, PLAYER_RADIUS, clamp, lerp } from '../shared/constants.js';
 import { simulateBullet, applySpread } from '../shared/ballistics.js';
 import { mulberry32 } from '../shared/constants.js';
@@ -199,8 +200,12 @@ export class LocalPlayer {
       // already applies SPEED_ADS_MULT off the ADS button, which the server
       // sees in the same command.
       const mob = this.weapon ? this.weapon.def.mobility : 1;
+      // The snapshot is taken BEFORE the command runs: reconciliation needs
+      // the state as it was going in, so a replay reproduces the command
+      // instead of stacking on top of what the live pass already did.
+      const before = cloneMoveState(this.state);
       stepMovement(this.state, cmd, g.world, mob, this.alive && !this.frozen);
-      this.pending.push({ cmd, state: snapshotState(this.state) });
+      this.pending.push({ cmd, before });
       if (this.pending.length > 200) this.pending.shift();
       g.net?.sendInput(cmd);
       this.onMoved(TICK);
@@ -264,11 +269,19 @@ export class LocalPlayer {
     }
 
     // --- breathing -----------------------------------------------------------
+    // Breathing is exertion, and only exertion. It used to roll a 35% chance
+    // every 3.4 seconds even while standing perfectly still, which dropped a
+    // lone 0.9-second swell of filtered noise into an otherwise silent room
+    // at gaps averaging ten seconds and running to a minute. With nothing on
+    // screen to explain it, it did not read as the operator breathing — it
+    // read as a random scraping noise, which is exactly what it was reported
+    // as. Now you only hear it when you are actually winded or hurt, where
+    // the cause is obvious.
     this._breathT -= dt;
     if (this._breathT <= 0 && this.alive) {
       const winded = this.rig.stamina < 0.55 || this.health < 55;
-      this._breathT = winded ? 1.05 : 3.4;
-      if (winded || Math.random() < 0.35) this.game.audio.breath(winded, winded ? 1 : 0.5);
+      this._breathT = winded ? 1.15 : 2.0;
+      if (winded) this.game.audio.breath(true, 1);
     }
 
     // --- audio muffling from damage -----------------------------------------
@@ -563,14 +576,24 @@ export class LocalPlayer {
     // see is a correction that does not feel like rubber-banding.
     const preX = this.state.x, preY = this.state.y, preZ = this.state.z;
 
-    // snap to the server state, then replay everything it has not seen yet
+    // Rewind to the state the first unacknowledged command started from, then
+    // snap position and velocity to the server and replay from there.
+    //
+    // Rewinding matters as much as the snap does. The server only sends
+    // position, velocity and grounded, so everything else stepMovement()
+    // accumulates — step distance, crouch blend, slide and air timers —
+    // used to carry the live pass's value into the replay and get advanced a
+    // second time. Footsteps were the visible symptom: every correction
+    // pushed stepDistance forward by the whole pending window, so the cadence
+    // ran fast and jumped phase.
+    restoreMoveState(this.state, this.pending[0]?.before);
     this.state.x = self.x; this.state.y = self.y; this.state.z = self.z;
     this.state.vx = self.vx; this.state.vy = self.vy; this.state.vz = self.vz;
     this.state.grounded = !!(self.flags & 64);
     const mob = this.weapon ? this.weapon.def.mobility : 1;
     for (const p of this.pending) {
+      cloneMoveState(this.state, p.before);
       stepMovement(this.state, p.cmd, this.game.world, mob, this.alive);
-      p.state = snapshotState(this.state);
     }
     if (err > 2.5) {
       // a teleport (spawn / round reset): show it instantly, no smoothing
@@ -619,6 +642,4 @@ export class LocalPlayer {
   }
 }
 
-function snapshotState(s) {
-  return { x: s.x, y: s.y, z: s.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded };
-}
+

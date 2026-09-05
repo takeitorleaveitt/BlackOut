@@ -16,7 +16,7 @@ import { avatarSvg, avatarForName } from '../Avatar.js';
 export function createSquadPanel(game, ui) {
   const av = account.avatar;
 
-  const portrait = el('div.op-portrait', { html: avatarSvg(av, 76) });
+  const portrait = el('div.op-portrait', { html: avatarSvg(av, 54) });
   const nameNode = el('div.op-name', S.name);
   const lvlNum = el('b', String(account.level));
   const xpFill = el('i');
@@ -53,8 +53,9 @@ export function createSquadPanel(game, ui) {
     inviteBanner,
     el('div.squad-actions',
       inviteInput,
-      button('INVITE', doInvite, { cls: 'sm' }),
-      leaveBtn));
+      el('div.squad-buttons',
+        button('INVITE', doInvite, { cls: 'sm' }),
+        leaveBtn)));
 
   const node = el('div.op-block', card, panel);
 
@@ -68,28 +69,35 @@ export function createSquadPanel(game, ui) {
     const filled = slots.filter(Boolean).length;
     countNode.textContent = `${filled}/${slots.length}`;
 
+    // One slot per row, stacked: four names side by side had to be truncated
+    // to nine characters to fit, and a 17-character callsign is the whole
+    // point of the roster.
     clear(slotRow);
-    for (const m of slots) {
+    slots.forEach((m, i) => {
       if (!m) {
         slotRow.appendChild(el('div.squad-slot.empty', {
           onclick: () => { audio.ui('click'); inviteInput.focus(); },
           onmouseenter: () => audio.ui('hover'),
           title: 'Invite a friend'
-        }, el('div.plus', '+'), el('div.lbl', 'INVITE')));
-        continue;
+        },
+          el('div.pic', el('span.plus', '+')),
+          el('div.lbl', 'EMPTY SLOT'),
+          el('div.role', 'INVITE')));
+        return;
       }
       const you = m.name === S.name || m.id === game.onlineNet?.id;
-      const tile = el('div.squad-slot' + (m.leader ? '.leader' : '') + (you ? '.you' : ''),
-        el('div.pic', { html: avatarSvg(you ? av : avatarForName(m.name), 40) }),
-        el('div.lbl', m.name.length > 9 ? m.name.slice(0, 9) : m.name),
-        m.leader ? el('div.crown', '★') : null);
+      const row = el('div.squad-slot' + (m.leader ? '.leader' : '') + (you ? '.you' : ''),
+        el('div.pic', { html: avatarSvg(you ? av : avatarForName(m.name), 30) }),
+        el('div.lbl', m.name),
+        el('div.role', m.leader ? '★ LEADER' : you ? 'YOU' : 'SQUAD'));
       // The leader can drop anyone but themselves.
       if (!you && game.isSquadLeader) {
-        tile.title = 'Click to remove from squad';
-        tile.addEventListener('click', () => { audio.ui('back'); game.squadKick(m.id); });
+        row.title = 'Click to remove from squad';
+        row.classList.add('kickable');
+        row.addEventListener('click', () => { audio.ui('back'); game.squadKick(m.id); });
       }
-      slotRow.appendChild(tile);
-    }
+      slotRow.appendChild(row);
+    });
 
     leaveBtn.disabled = filled < 2;
     panel.classList.toggle('follower', !game.isSquadLeader);

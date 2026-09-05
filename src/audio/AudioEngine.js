@@ -346,6 +346,11 @@ export class AudioEngine {
       bus: 'effects',
       volume: (own ? 0.14 : 0.52) * volume,
       rate: rand(0.9, 1.12),
+      // Your own footfalls are exempt from the voice cap. They are the one
+      // sound whose absence is immediately obvious — a firefight would fill
+      // the 40 voices with shots, casings and impacts and silently swallow
+      // them, which reads as "the footsteps sometimes don't play".
+      important: !!own,
       reverb: 0.3, refDistance: 2.5, rolloff: 2.0, maxDistance: 42
     });
     if (Math.random() < (own ? 0.18 : 0.2)) {

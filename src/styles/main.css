@@ -221,7 +221,7 @@ h3.sec:first-child { margin-top: 0; }
    underneath. Both sit over the live map, so everything carries its own
    panel background rather than relying on a screen-wide scrim. */
 .op-block {
-  position: absolute; top: 34px; right: 40px; width: 340px;
+  position: absolute; top: 34px; right: 40px; width: 300px;
   display: flex; flex-direction: column; gap: 10px;
 }
 
@@ -238,11 +238,11 @@ h3.sec:first-child { margin-top: 0; }
 .op-card:hover .op-portrait { border-color: var(--line-hot); }
 .op-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
 .op-name {
-  font: 400 15px/1 var(--sans); letter-spacing: 0.2em; text-transform: uppercase; color: #fff;
+  font: 400 13px/1 var(--sans); letter-spacing: 0.18em; text-transform: uppercase; color: #fff;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .op-level { font: 10px/1 var(--mono); letter-spacing: 0.24em; color: var(--ink-faint); }
-.op-level b { color: var(--accent); font-weight: 500; font-size: 13px; }
+.op-level b { color: var(--accent); font-weight: 500; font-size: 12px; }
 .op-xp { height: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
 .op-xp i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.4s var(--ease); }
 .op-hint { font: 9px/1 var(--mono); letter-spacing: 0.22em; color: var(--ink-faint); opacity: 0; transition: opacity 0.18s; }
@@ -258,30 +258,42 @@ h3.sec:first-child { margin-top: 0; }
   text-transform: uppercase; padding-bottom: 9px; margin-bottom: 10px; border-bottom: 1px solid var(--line);
 }
 .squad-count { color: var(--ink-faint); letter-spacing: 0.16em; }
-.squad-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+/* One slot per row rather than four across: a stack reads as a roster, and a
+   17-character callsign fits without being cut to nine. */
+.squad-slots { display: flex; flex-direction: column; gap: 4px; }
 .squad-slot {
-  position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: 7px 3px; border: 1px solid var(--line); background: rgba(0,0,0,0.35);
+  position: relative; display: flex; align-items: center; gap: 9px;
+  padding: 5px 8px; border: 1px solid var(--line); background: rgba(0,0,0,0.35);
+  border-left: 2px solid var(--line);
   transition: border-color 0.16s, background 0.16s;
 }
-.squad-slot .pic { line-height: 0; }
+.squad-slot .pic { flex: 0 0 30px; height: 30px; line-height: 0; }
 .squad-slot .lbl {
-  font: 8px/1 var(--mono); letter-spacing: 0.1em; color: var(--ink-dim);
-  text-transform: uppercase; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 1; min-width: 0;
+  font: 10px/1 var(--mono); letter-spacing: 0.1em; color: var(--ink-dim);
+  text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.squad-slot.you { border-color: rgba(200,255,77,0.4); background: rgba(200,255,77,0.06); }
+.squad-slot .role {
+  flex: 0 0 auto; font: 8px/1 var(--mono); letter-spacing: 0.14em;
+  color: var(--ink-faint); text-transform: uppercase;
+}
+.squad-slot.you { border-left-color: var(--accent); background: rgba(200,255,77,0.06); }
 .squad-slot.you .lbl { color: var(--ink); }
-.squad-slot.leader .crown {
-  position: absolute; top: -1px; right: 2px; font-size: 9px; color: var(--accent); line-height: 1;
-}
-.squad-slot.empty { cursor: pointer; border-style: dashed; opacity: 0.6; }
+.squad-slot.leader .role { color: var(--accent); }
+.squad-slot.kickable { cursor: pointer; }
+.squad-slot.kickable:hover { border-color: rgba(255,68,56,0.5); background: rgba(255,68,56,0.08); }
+.squad-slot.empty { cursor: pointer; border-style: dashed; opacity: 0.55; }
 .squad-slot.empty:hover { opacity: 1; border-color: var(--line-hot); }
-.squad-slot.empty .plus { font: 300 22px/40px var(--sans); color: var(--ink-faint); height: 40px; }
+.squad-slot.empty .pic {
+  display: grid; place-items: center; border: 1px dashed var(--line); background: rgba(0,0,0,0.3);
+}
+.squad-slot.empty .plus { font: 300 16px/1 var(--sans); color: var(--ink-faint); }
 .squad-slot.empty .lbl { color: var(--ink-faint); }
 
-.squad-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
-.squad-actions .squad-invite { flex: 1; padding: 6px 8px; font-size: 10px; }
-.squad-actions .btn.sm { flex: 0 0 auto; white-space: nowrap; }
+.squad-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.squad-actions .squad-invite { width: 100%; padding: 6px 8px; font-size: 10px; }
+.squad-buttons { display: flex; gap: 6px; }
+.squad-buttons .btn.sm { flex: 1; white-space: nowrap; }
 /* Everyone but the leader gets the invite controls dimmed — they can still
    read the squad, they just are not the one who deploys it. */
 .squad-panel.follower .squad-actions .btn.sm:not(.danger) { opacity: 0.4; pointer-events: none; }
