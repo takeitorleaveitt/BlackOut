@@ -219,7 +219,10 @@ h3.sec:first-child { margin-top: 0; }
 /* The build stamp, bottom-left of the main menu. Sits over the live map like
    the rest of the chrome, low-contrast enough to read as a watermark. */
 .version-tag {
-  position: absolute; left: 34px; bottom: 22px; z-index: 2;
+  /* Clear of the key-hint footer, which is ~45px tall (16px padding either
+     side of an 11px line plus its top border) — at 22px this sat on top of
+     "NAVIGATE". */
+  position: absolute; left: 34px; bottom: 62px; z-index: 2;
   font: 10px/1 var(--mono); letter-spacing: 0.24em; text-transform: uppercase;
   color: var(--ink-faint); pointer-events: none;
 }

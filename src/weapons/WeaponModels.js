@@ -295,28 +295,50 @@ export function buildAttachment(key) {
     // that makes an ACOG read as an ACOG rather than another red dot.
     case 'acog': {
       const H = 0.042;
-      const r = 0.024, len = 0.135;
-      g.add(part(b(r * 2, r * 2, len), M.black, 0, H, -0.012));            // body
-      g.add(part(b(0.056, 0.052, 0.030), M.black, 0, H, -0.086));          // objective housing
-      g.add(part(b(0.050, 0.046, 0.026), M.black, 0, H, 0.062));           // ocular housing
-      g.add(part(b(0.020, 0.014, 0.052), M.steelWorn, 0, H + 0.026, -0.02)); // fibre-optic ridge
-      g.add(part(b(0.030, 0.022, 0.018), M.steelWorn, 0.028, H, -0.02));   // windage turret
+      const r = 0.024, t = 0.0045, len = 0.135;
+      // The body is FOUR WALLS, not a solid block. A prism you cannot see
+      // through is not a sight — a block here filled the sight window with a
+      // flat grey panel and the chevron floated on top of it. Same reason the
+      // red dot and holo are built as frames.
+      g.add(part(b(r * 2 + t, t, len), M.black, 0, H + r, -0.012));        // top
+      g.add(part(b(r * 2 + t, t, len), M.black, 0, H - r, -0.012));        // bottom
+      g.add(part(b(t, r * 2, len), M.black, -r, H, -0.012));               // left
+      g.add(part(b(t, r * 2, len), M.black, r, H, -0.012));                // right
+      // Objective and ocular housings are rings around the same clear bore.
+      const ring = (w, h, d, z) => {
+        g.add(part(b(w, t, d), M.black, 0, H + h / 2, z));
+        g.add(part(b(w, t, d), M.black, 0, H - h / 2, z));
+        g.add(part(b(t, h - t, d), M.black, -w / 2 + t / 2, H, z));
+        g.add(part(b(t, h - t, d), M.black, w / 2 - t / 2, H, z));
+      };
+      ring(0.056, 0.052, 0.030, -0.086);                                   // objective
+      ring(0.050, 0.046, 0.026, 0.062);                                    // ocular
+      g.add(part(b(0.020, 0.014, 0.052), M.steelWorn, 0, H + r + 0.010, -0.02)); // fibre-optic ridge
+      g.add(part(b(0.030, 0.022, 0.018), M.steelWorn, r + 0.012, H, -0.02));     // windage turret
       g.add(part(b(0.044, 0.012, 0.062), M.steelWorn, 0, 0.006, 0));       // rail clamp
       g.add(part(b(0.048, 0.006, 0.018), M.black, 0, 0.005, 0.026));       // clamp lever
-      g.add(part(b(0.028, H - 0.014, 0.046), M.black, 0, 0.012 + (H - 0.014) * 0.5, 0)); // riser
+      g.add(part(b(0.028, H - r - 0.012, 0.046), M.black, 0, 0.012 + (H - r - 0.012) * 0.5, 0)); // riser
       g.add(part(b(0.048, 0.044, 0.0015), M.lens, 0, H, -0.101));          // objective glass
       g.add(part(b(0.040, 0.038, 0.0015), M.lens, 0, H, 0.075));           // ocular glass
-      // Chevron: a tapered stack of segments meeting at a point, with the
-      // stadia line dropping away below it.
+      // Reticle: a chevron POINTING UP with a shaft through it, then a stadia
+      // ladder dropping away below — the ACOG picture. It used to be a wedge
+      // pointing down, which is a different sight entirely. The ladder is a
+      // dark red rather than the black of the real thing: black reads fine
+      // against sky and disappears completely in an interior.
       const RZ = 0.066;
-      for (let i = 0; i < 5; i++) {
-        const wdt = 0.0022 + i * 0.0022;
-        const yy = H + 0.0075 + i * 0.0022;
-        g.add(reticleBar(wdt, 0.0020, 0xff2a1a, 0, yy, RZ));
+      const RED = 0xff2a1a, DIM = 0x8e2016;
+      const ROW = 0.0009, ROWS = 4;
+      const BASE = H - ROWS * ROW;    // where the head ends and the post begins
+      for (let i = 0; i < ROWS; i++) {                                     // arrowhead, tip on the axis
+        g.add(reticleBar(0.0010 + i * 0.0012, ROW, RED, 0, H - ROW / 2 - i * ROW, RZ));
       }
-      g.add(reticle(0.0022, 0xff2a1a, 0, H + 0.0052, RZ));                 // tip
-      for (let i = 1; i <= 4; i++) {
-        g.add(reticleBar(0.0060 - i * 0.0008, 0.0016, 0xff2a1a, 0, H - i * 0.0075, RZ));
+      // The post hangs straight off the base of the head — no gap. An
+      // arrowhead floating above its own stadia line reads as two marks
+      // rather than one sight picture.
+      const POST = 0.0105;
+      g.add(reticleBar(0.0009, POST, DIM, 0, BASE - POST / 2, RZ));
+      for (let i = 1; i <= 2; i++) {
+        g.add(reticleBar(0.0036 - i * 0.0009, 0.0009, DIM, 0, BASE - i * 0.0035, RZ));
       }
       g.userData.opticHeight = H;
       break;

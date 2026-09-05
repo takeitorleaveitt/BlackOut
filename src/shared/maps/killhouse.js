@@ -2,15 +2,19 @@ import { MapBuilder } from './kit.js';
 import { SURFACE } from '../constants.js';
 
 /**
- * KILLHOUSE — CQB training shoothouse.
+ * AIRSOFT RANGE — a run-down indoor site, weeks off being shut for good.
  *
  * Twice the footprint it used to be: 60 metres square against 30. The old one
  * was a single 26-metre box with two plywood dividers and a small block in the
  * middle, which meant three lanes that all looked the same and a round that
- * was over before you had decided anything. At this size it is a shoothouse
- * you can actually clear — rooms with doors, a corridor spine, a stack of
+ * was over before you had decided anything. At this size it is a course you
+ * can actually clear — rooms with doors, a corridor spine, a stack of
  * shipping containers to fight over and a raised observation gantry down one
  * side — while staying what it is: close, fast, no long angles.
+ *
+ * The fiction is an operator who stopped spending money on the place a while
+ * ago: plywood that has been shot through and patched, a gantry going to rust,
+ * half the strip lights on a bad ballast.
  *
  * The plan is a spine and two wings, mirrored north to south so neither spawn
  * has the better side:
@@ -30,9 +34,9 @@ import { SURFACE } from '../constants.js';
 export function buildKillhouse() {
   const b = new MapBuilder({
     key: 'killhouse',
-    name: 'Killhouse',
-    subtitle: 'CQB Training Shoothouse',
-    desc: 'Sixty metres of shoothouse: a corridor spine, four cleared rooms, a container yard and a gantry over it. Close, fast, no long angles.',
+    name: 'Airsoft Range',
+    subtitle: 'Indoor Site — Closing Down',
+    desc: 'An old airsoft site a fortnight from being shut for good: sagging plywood, a corridor spine, four cleared rooms, a container yard and a rusting gantry over it. Close, fast, no long angles.',
     size: [60, 60],
     compact: true,
     env: {

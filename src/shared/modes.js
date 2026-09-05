@@ -49,10 +49,10 @@ export const DEFAULT_MODE = 'tdm';
  */
 /**
  * `maps` restricts a playlist to part of the rotation. A map that is too small
- * or too fast for a playlist's pace does not belong in it: Killhouse is a
- * knife-fight box and has no business in a first-to-three, and neither it nor
- * Willow Lane holds up over the length of a Standard match. Leave `maps` off
- * and the playlist gets the whole rotation.
+ * or too fast for a playlist's pace does not belong in it: the Airsoft Range
+ * is a knife-fight box with no business in a first-to-three, and neither it
+ * nor Willow Lane holds up over the length of a Standard match. Leave `maps`
+ * off and the playlist gets the whole rotation.
  */
 export const PLAYLISTS = {
   quickmatch: {
