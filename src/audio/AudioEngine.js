@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import {
   makeImpulse, makeGunshot, makeBulletCrack, makeWhizz, makeImpact, makeFootstep,
-  makeCasing, makeMech, makeBreath, makePain, makeUi, makeAmbience, makeMenuBed,
+  makeCasing, makeMech, makePain, makeUi, makeAmbience, makeMenuBed,
   makeSwing, spaceLevel
 } from './Synth.js';
 import { S } from '../core/Settings.js';
@@ -310,7 +310,6 @@ export class AudioEngine {
     }
     jobs.push(() => makeSwing(this.ctx, 0));
     jobs.push(() => makeBulletCrack(this.ctx, 0), () => makeWhizz(this.ctx, 0));
-    jobs.push(() => makeBreath(this.ctx, 'normal', 0), () => makeBreath(this.ctx, 'heavy', 0));
     jobs.push(() => makePain(this.ctx, 0));
     jobs.push(() => makeMech(this.ctx, 'select', 0), () => makeMech(this.ctx, 'magOut', 0), () => makeMech(this.ctx, 'magIn', 0));
 
@@ -445,13 +444,6 @@ export class AudioEngine {
     this.play(makeMech(this.ctx, kind, (Math.random() * 4) | 0), {
       pos, bus: 'weapons', volume: 0.75 * volume, rate: rand(0.94, 1.07),
       reverb: 0.25, refDistance: 2, rolloff: 2.2, maxDistance: 26
-    });
-  }
-
-  breath(heavy = false, volume = 1) {
-    if (!this.ctx) return;
-    this.play(makeBreath(this.ctx, heavy ? 'heavy' : 'normal', (Math.random() * 3) | 0), {
-      bus: 'voice', volume: (heavy ? 0.5 : 0.24) * volume, rate: rand(0.94, 1.08), reverb: 0.1
     });
   }
 

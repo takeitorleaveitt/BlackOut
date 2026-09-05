@@ -437,27 +437,6 @@ export function makeSwing(ctx, variant = 0) {
   return b;
 }
 
-export function makeBreath(ctx, kind = 'normal', variant = 0) {
-  const key = `breath:${kind}:${variant}`;
-  if (cache.has(key)) return cache.get(key);
-  const sr = ctx.sampleRate;
-  const heavy = kind === 'heavy';
-  const dur = heavy ? 0.62 : 0.9;
-  const n = Math.floor(sr * dur);
-  const out = noise(n);
-  for (let i = 0; i < n; i++) {
-    const t = i / n;
-    const shape = Math.sin(Math.PI * Math.pow(t, heavy ? 0.75 : 1.0));
-    out[i] *= shape * shape;
-  }
-  bandpass(out, heavy ? 620 : 420, 0.7, sr);
-  lowpass(out, heavy ? 2400 : 1400, sr);
-  normalize(out, heavy ? 0.55 : 0.28);
-  const b = toBuffer(ctx, [out]);
-  cache.set(key, b);
-  return b;
-}
-
 export function makePain(ctx, variant = 0) {
   const key = 'pain:' + variant;
   if (cache.has(key)) return cache.get(key);

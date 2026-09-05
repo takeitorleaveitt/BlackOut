@@ -48,7 +48,6 @@ export class LocalPlayer {
     this._fwd = new THREE.Vector3();
     this._ejectPos = new THREE.Vector3();
     this._muzzle = {};
-    this._breathT = 0;
     this._lastShotTime = 0;
     this._wallProbe = 2;
 
@@ -268,21 +267,12 @@ export class LocalPlayer {
       );
     }
 
-    // --- breathing -----------------------------------------------------------
-    // Breathing is exertion, and only exertion. It used to roll a 35% chance
-    // every 3.4 seconds even while standing perfectly still, which dropped a
-    // lone 0.9-second swell of filtered noise into an otherwise silent room
-    // at gaps averaging ten seconds and running to a minute. With nothing on
-    // screen to explain it, it did not read as the operator breathing — it
-    // read as a random scraping noise, which is exactly what it was reported
-    // as. Now you only hear it when you are actually winded or hurt, where
-    // the cause is obvious.
-    this._breathT -= dt;
-    if (this._breathT <= 0 && this.alive) {
-      const winded = this.rig.stamina < 0.55 || this.health < 55;
-      this._breathT = winded ? 1.15 : 2.0;
-      if (winded) this.game.audio.breath(true, 1);
-    }
+    // Breathing used to be audible here — a swell of bandpassed noise every
+    // 1.15 seconds while hurt or winded. It is gone. It was reported as a
+    // scraping noise three separate times: as a lone unexplained sound while
+    // standing still, and then as a repeated rasp after every sprint and any
+    // time health dropped below 55. The camera still breathes (see
+    // CameraRig), which carries the same information without the noise.
 
     // --- audio muffling from damage -----------------------------------------
     g.audio.setMuffle(clamp(this.damageFx * 0.75 + (this.alive ? 0 : 0.55), 0, 0.9));
