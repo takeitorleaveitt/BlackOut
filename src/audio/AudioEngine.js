@@ -59,12 +59,15 @@ export class AudioEngine {
       this.bus[name] = g;
     }
 
-    // reverb: dry buses stay direct, wet goes through the convolver
-    this.convolver = ctx.createConvolver();
+    // Reverb: dry buses stay direct, wet goes into a shared send that fans out
+    // to one convolver per space. See setSpace() for why there is a convolver
+    // per space rather than one whose buffer gets swapped.
+    this.reverbSend = ctx.createGain();
     this.reverbGain = ctx.createGain();
     this.reverbGain.gain.value = 0.6;
-    this.convolver.connect(this.reverbGain);
     this.reverbGain.connect(this.master);
+    this.spaces = new Map();
+    this.space = null;
     this.setSpace('outdoor');
 
     // pre-render the common buffers so the first shot never stutters
@@ -76,9 +79,10 @@ export class AudioEngine {
 
   warm() {
     const c = this.ctx;
-    makeImpulse(c, 'outdoor');
-    makeImpulse(c, 'hall');
-    makeImpulse(c, 'room');
+    // Build the convolver for every space the maps actually use, so walking
+    // through a door never has to synthesise a 2-second impulse response
+    // mid-match. They cost nothing until they are connected.
+    for (const k of ['outdoor', 'hall', 'room', 'office', 'garage']) this.spaceNode(k);
     for (const k of ['select', 'magOut', 'magIn', 'boltRelease', 'dryfire']) makeMech(c, k, 0);
     for (const k of ['hover', 'click', 'back', 'open', 'accept']) makeUi(c, k);
     makeFootstep(c, 'concrete', 0);
@@ -106,13 +110,71 @@ export class AudioEngine {
 
   setWorld(world) { this.world = world; }
 
+  /** Lazily build (and cache) the convolver chain for one space. */
+  spaceNode(key) {
+    let node = this.spaces.get(key);
+    if (node) return node;
+    const ctx = this.ctx;
+    const conv = ctx.createConvolver();
+    conv.buffer = makeImpulse(ctx, key);
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    conv.connect(gain);
+    gain.connect(this.reverbGain);
+    node = { conv, gain, connected: false, offTimer: null };
+    this.spaces.set(key, node);
+    return node;
+  }
+
+  /**
+   * Move the listener into a different acoustic space.
+   *
+   * This used to assign a new impulse response onto one live ConvolverNode.
+   * Doing that truncates whatever tail is currently convolving, instantly and
+   * mid-sample — the hall IR is 1.85 seconds long, so crossing from inside a
+   * building to outside chopped nearly two seconds of reverb off at an
+   * arbitrary point. That discontinuity is an audible rasp, and it fired every
+   * single time you walked through a door: one walk across District 9 crosses
+   * three of these. It was reported as a scraping noise every 15-55 seconds,
+   * which is exactly how often you cross a zone boundary in normal play.
+   *
+   * Each space now owns its own convolver and gain, and a transition
+   * crossfades between them, so the outgoing tail rings out naturally instead
+   * of being cut. Idle convolvers are disconnected from the send once their
+   * tail has decayed, so only the space you are in costs any CPU.
+   */
   setSpace(key) {
     if (!this.ctx || key === this.space) return;
-    this.space = key;
     try {
-      this.convolver.buffer = makeImpulse(this.ctx, key);
-      this.reverbGain.gain.setTargetAtTime(spaceLevel(key) * 0.85, this.ctx.currentTime, 0.35);
-    } catch (e) { /* ignore */ }
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const FADE = 0.30;
+      const next = this.spaceNode(key);
+      const prevKey = this.space;
+      const prev = prevKey ? this.spaces.get(prevKey) : null;
+      this.space = key;
+
+      if (!next.connected) { this.reverbSend.connect(next.conv); next.connected = true; }
+      clearTimeout(next.offTimer);
+      next.offTimer = null;
+      next.gain.gain.cancelScheduledValues(now);
+      next.gain.gain.setValueAtTime(next.gain.gain.value, now);
+      next.gain.gain.linearRampToValueAtTime(spaceLevel(key) * 0.85, now + FADE);
+
+      if (prev && prev !== next) {
+        prev.gain.gain.cancelScheduledValues(now);
+        prev.gain.gain.setValueAtTime(prev.gain.gain.value, now);
+        prev.gain.gain.linearRampToValueAtTime(0, now + FADE);
+        // Stop feeding it once the fade is done and its tail has rung out.
+        clearTimeout(prev.offTimer);
+        prev.offTimer = setTimeout(() => {
+          prev.offTimer = null;
+          if (this.space === prevKey || !prev.connected) return;   // we came back
+          try { this.reverbSend.disconnect(prev.conv); } catch (e) { /* already gone */ }
+          prev.connected = false;
+        }, (FADE + 3.0) * 1000);
+      }
+    } catch (e) { /* an unavailable space must never break audio */ }
   }
 
   /** Global muffling 0..1 (hit concussion, death, being in the menu). */
@@ -215,7 +277,7 @@ export class AudioEngine {
       const w = ctx.createGain();
       w.gain.value = wet;
       out.connect(w);
-      w.connect(this.convolver);
+      w.connect(this.reverbSend);
     }
 
     this.voices++;

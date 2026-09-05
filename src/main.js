@@ -1228,6 +1228,7 @@ function fmtClock(sec) {
 const game = new Game();
 window.__game = game;
 window.__W = WEAPON_BY_KEY;   // exposed for automated screenshots
+window.__buildWeaponModel = buildWeaponModel;   // ditto: geometry measurements
 game.boot().catch((e) => {
   console.error(e);
   const status = document.querySelector('#boot .boot-status');

@@ -222,7 +222,12 @@ export function buildAttachment(key) {
       g.add(part(b(r * 2 + t, t, d), M.black, 0, H - r, 0));      // hood bottom
       g.add(part(b(t, r * 2, d), M.black, -r, H, 0));             // left wall
       g.add(part(b(t, r * 2, d), M.black, r, H, 0));              // right wall
-      g.add(part(b(0.034, H - r, 0.030), M.black, 0, (H - r) * 0.5, 0)); // mount
+      // Riser: a base plate that clamps the rail, then the post up to the
+      // hood. Without the plate the optic reads as hovering rather than
+      // bolted on, even when it is sitting at the right height.
+      g.add(part(b(0.042, 0.010, 0.050), M.steelWorn, 0, 0.005, 0));     // rail clamp
+      g.add(part(b(0.046, 0.005, 0.014), M.black, 0, 0.004, 0.020));     // clamp lever
+      g.add(part(b(0.030, H - r - 0.010, 0.028), M.black, 0, 0.010 + (H - r - 0.010) * 0.5, 0)); // post
       g.add(part(b(r * 2, r * 2, 0.0015), M.lens, 0, H, -0.018)); // glass
       g.add(reticle(0.0050, 0xff2a1a, 0, H, 0.004));
       g.userData.opticHeight = H;
@@ -235,7 +240,10 @@ export function buildAttachment(key) {
       g.add(part(b(rx * 2 + t, t, d), M.black, 0, H - ry, 0));
       g.add(part(b(t, ry * 2, d), M.black, -rx, H, 0));
       g.add(part(b(t, ry * 2, d), M.black, rx, H, 0));
-      g.add(part(b(0.042, H - ry, 0.038), M.black, 0, (H - ry) * 0.5, 0));
+      // Same riser as the red dot, sized to the wider housing.
+      g.add(part(b(0.050, 0.010, 0.060), M.steelWorn, 0, 0.005, 0));     // rail clamp
+      g.add(part(b(0.054, 0.005, 0.016), M.black, 0, 0.004, 0.026));     // clamp lever
+      g.add(part(b(0.038, H - ry - 0.010, 0.036), M.black, 0, 0.010 + (H - ry - 0.010) * 0.5, 0)); // post
       g.add(part(b(rx * 2, ry * 2, 0.0015), M.lens, 0, H, -0.024));
       // ringed reticle: centre dot inside a broken circle of segments
       g.add(reticle(0.0045, 0xff2a1a, 0, H, 0.006));
@@ -271,6 +279,44 @@ export function buildAttachment(key) {
     default: break;
   }
   return g;
+}
+
+// How far the optic's base sinks into the receiver it clamps onto. The SCAR
+// and M4 already overlapped by about this much and were the two weapons that
+// looked right, so this reproduces that fit everywhere.
+const RAIL_SINK = 0.004;
+
+const _rtBox = new THREE.Box3();
+/**
+ * Highest point of the receiver in the slice of the weapon an optic sits over,
+ * measured from the built geometry.
+ *
+ * The rail height used to be a hand-written constant — 0.088 for every
+ * non-pistol except the AK and the shotgun. That happens to be right for the
+ * M4 and the SCAR, whose receivers top out at 0.091 and 0.093, and wrong for
+ * everything else: the MP5's receiver tops out at 0.041, so its sight floated
+ * 4.7cm clear of the gun with nothing joining the two. The AK floated 2.5cm
+ * and the MP7 1.5cm. Measuring the body means the sight lands on whatever is
+ * actually under it, for every weapon and for any added later.
+ *
+ * Works on each part's bounding box rather than its vertices: a receiver is
+ * one long box whose only vertices are at its two end caps, so sampling
+ * vertices inside the optic's window finds nothing at all for most weapons.
+ * Parts that sit off the centre line are skipped — a charging handle or a
+ * side rail is not something you mount a sight on.
+ */
+function receiverTop(body, z0, z1, fallback) {
+  body.updateWorldMatrix(true, true);
+  let top = -Infinity;
+  body.traverse((o) => {
+    if (!o.isMesh || !o.geometry) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    _rtBox.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+    if (_rtBox.max.z < z0 || _rtBox.min.z > z1) return;      // not under the optic
+    if (_rtBox.min.x > 0.02 || _rtBox.max.x < -0.02) return;  // off the centre line
+    if (_rtBox.max.y > top) top = _rtBox.max.y;
+  });
+  return Number.isFinite(top) ? top : fallback;
 }
 
 /**
@@ -316,8 +362,9 @@ export function buildWeaponModel(weapon, attachments = []) {
   eject.position.set(0.045, isPistol ? 0.03 : 0.045, -0.02);
   root.add(eject);
 
-  // rail / mount nodes
-  const railY = isPistol ? 0.05 : weapon.key === 'ak74' ? 0.10 : weapon.key === 'm870' ? 0.06 : 0.088;
+  // rail / mount nodes. The optic straddles roughly z -0.10..0.06, so that is
+  // the slice of receiver it has to sit on.
+  const railY = receiverTop(body, -0.10, 0.06, isPistol ? 0.05 : 0.088) - RAIL_SINK;
   const optics = new THREE.Object3D();
   optics.position.set(0, railY, -0.02);
   root.add(optics);
