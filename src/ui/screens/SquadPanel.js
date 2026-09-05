@@ -7,6 +7,7 @@ import { audio } from '../../audio/AudioEngine.js';
 import { S } from '../../core/Settings.js';
 import { account } from '../../core/Account.js';
 import { avatarSvg, avatarForName } from '../Avatar.js';
+import { bus } from '../../core/EventBus.js';
 
 /**
  * @param {object} game the Game instance
@@ -119,15 +120,20 @@ export function createSquadPanel(game, ui) {
   }
 
   let unsub = null;
+  let unsubAccount = null;
   return {
     node,
     refresh,
     attach() {
       unsub = game.onSquadUpdate(() => refresh());
+      // The level and XP bar on this card come off the account, so it has to
+      // redraw when a finished match pays out — otherwise the bar only moves
+      // on the next reload and the whole thing looks like it does not work.
+      unsubAccount = bus.on('account:changed', () => refresh());
       // Connect quietly so invites can reach us while sat in the menu.
       game.connectForSquad();
       refresh();
     },
-    detach() { unsub?.(); unsub = null; }
+    detach() { unsub?.(); unsub = null; unsubAccount?.(); unsubAccount = null; }
   };
 }

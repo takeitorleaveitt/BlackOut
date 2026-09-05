@@ -17,6 +17,7 @@ import { RemotePlayer } from './player/RemotePlayer.js';
 import { PlayerModel } from './player/PlayerModel.js';
 import { HUD } from './game/HUD.js';
 import { FreeCam } from './game/FreeCam.js';
+import { Pings } from './game/Pings.js';
 import { audio } from './audio/AudioEngine.js';
 import { NetClient } from './net/NetClient.js';
 import { LocalNet } from './net/LocalNet.js';
@@ -38,6 +39,9 @@ import { REGIONS, PLAYLISTS } from './shared/modes.js';
 import { account, fmtDuration } from './core/Account.js';
 
 const MENU_MAPS = ['warehouse', 'refinery', 'suburb', 'killhouse'];
+// How far a map ping reaches. Past this there is no surface worth marking on
+// any of these maps, and the server rejects anything beyond 90 m anyway.
+const PING_RANGE = 85;
 
 class Game {
   constructor() {
@@ -82,14 +86,23 @@ class Game {
     this.economyListeners = new Set();
     this.buyOpen = false;
     this.freeCam = null;           // spectator camera while dead
+    this.pings = new Pings(this.engine.scene);   // team map marks
+    this.scopeHidesViewmodel = false;  // scope overlay is covering the gun
+    this.camFov = 0;               // last FOV pushed at the world camera
 
     this.ui = new UI(document.getElementById('ui-root'));
     this.hud = new HUD(document.getElementById('hud-root'), this);
     this.hud.show(false);
 
     // While the scope picture fills the screen the weapon model behind it is
-    // just noise poking into the surround.
-    bus.on('hud:scoped', (on) => { this.viewmodel.visible = !on; });
+    // just noise poking into the surround. Both this and free cam want the
+    // viewmodel gone, so neither writes `visible` directly — they set their
+    // own reason and let refreshViewmodel() decide. Two writers is how
+    // dying mid-scope used to hand the gun back in the middle of free cam.
+    bus.on('hud:scoped', (on) => {
+      this.scopeHidesViewmodel = on;
+      this.refreshViewmodel();
+    });
 
     this.registerScreens();
     this.bindInput();
@@ -137,6 +150,7 @@ class Game {
         this.net?.sendEvent('defuse', { down: true });
         return;
       }
+      if (code === S.binds.ping) { this.dropPing(); return; }
       this.player.handleKey(code, true, this.input);
     });
 
@@ -152,7 +166,13 @@ class Game {
       // Only treat *losing* the lock as a pause. A failed request (no recent
       // user gesture — which is the normal case right after an async match
       // join) must not drop the player into the pause menu.
-      if (this.mode === 'match' && !locked && this.wasLocked && !this.paused) this.pause();
+      // A finished match is not a paused one. Ending the match releases the
+      // pointer lock to put the after-action report up, and that release used
+      // to come straight back here and open the pause menu over the top of
+      // it — so the report you were meant to read (and the return-to-menu
+      // timer running under it) was replaced the instant it appeared.
+      if (this.mode === 'match' && !locked && this.wasLocked && !this.paused
+        && !this.matchOver) this.pause();
       this.wasLocked = locked;
       if (locked) this.hud.setPrompt('');
       else if (this.mode === 'match' && !this.paused) this.hud.setPrompt('CLICK TO ENGAGE');
@@ -513,15 +533,40 @@ class Game {
    * player-only playlists count toward K/D — bot matches and private games
    * would make the number meaningless.
    */
-  recordMatchResult({ won = false } = {}) {
+  recordMatchResult(state) {
+    const st = state || this.matchState;
+    if (!st) return null;
     const pl = this.currentPlaylist;
-    const kills = this.player.kills || 0;
-    const deaths = this.player.deaths || 0;
-    account.addXp(kills * 25 + (won ? 300 : 100));
+    // Kills and deaths come off the authoritative scoreboard row, not off the
+    // local player — LocalPlayer has never carried a `kills` field, so the
+    // old `this.player.kills || 0` was always zero and every match paid the
+    // same flat participation XP. Between that and nothing ever calling this
+    // method, the level bar could not move at all.
+    const me = (st.board || []).find((r) => r.id === this.playerId);
+    const kills = me?.kills || 0;
+    const deaths = me?.deaths || 0;
+    const won = this.didWin(st);
+    const xp = kills * 25 + (won ? 300 : 100);
+    account.addXp(xp);
     if (pl === 'standard' || pl === 'quickmatch') {
       account.recordMatch(pl, { kills, deaths, won });
     }
     account.clearPendingReconnect();
+    return { xp, kills, deaths, won, level: account.level };
+  }
+
+  /** Did the local player's side win the match that just ended? */
+  didWin(state) {
+    const st = state || this.matchState;
+    if (!st) return false;
+    if (st.mode === 'ffa') {
+      // Free-for-all: top of the board takes it.
+      const board = [...(st.board || [])].sort((a, b) => b.kills - a.kills);
+      return !!board.length && board[0].id === this.playerId;
+    }
+    const a = st.scores?.[1] ?? 0, b = st.scores?.[2] ?? 0;
+    if (a === b) return false;
+    return (a > b ? 1 : 2) === this.player.team;
   }
 
   /** True only when this match is local bots, never online against people. */
@@ -600,6 +645,51 @@ class Game {
   }
 
   // -------------------------------------------------------------------------
+  // map pings
+  // -------------------------------------------------------------------------
+  /**
+   * Mark whatever the crosshair is on. The client picks the point because only
+   * the client knows where the camera is actually looking; the server decides
+   * whether the ping is allowed and who is told about it.
+   */
+  dropPing() {
+    // Not while spectating: a free camera can fly through a wall and mark the
+    // inside of the enemy spawn, which is exactly the thing a dead player must
+    // not be able to tell their team.
+    if (this.freeCam || !this.player.alive || this.paused) return;
+    if (!this.world) return;
+    const cam = this.engine.camera;
+    const dir = this.player.rig.getAimDir(this._pingDir || (this._pingDir = new THREE.Vector3()));
+    const hit = this.world.raycast(
+      cam.position.x, cam.position.y, cam.position.z,
+      dir.x, dir.y, dir.z, PING_RANGE
+    );
+    if (!hit) { audio.ui('deny'); return; }
+    // Lift it off the surface along the normal so a mark on a wall stands out
+    // from the wall rather than sitting inside it.
+    const p = [
+      hit.point[0] + hit.normal[0] * 0.04,
+      hit.point[1] + hit.normal[1] * 0.04,
+      hit.point[2] + hit.normal[2] * 0.04
+    ];
+    this.net?.sendEvent('mark', { p });
+    audio.ui('click');
+  }
+
+  /** A ping event from the sim. Only our own side ever sees one. */
+  onPing(ev) {
+    const mine = ev.p === this.playerId;
+    // In a team mode the check is the team; in free-for-all there is no team
+    // to share with, so a ping is a note to yourself.
+    const sameSide = this.matchState?.mode === 'ffa'
+      ? mine
+      : (ev.t && ev.t === this.player.team);
+    if (!sameSide) return;
+    this.pings.set(ev.p, ev.x, ev.y, ev.z);
+    if (!mine) audio.ui('hover');
+  }
+
+  // -------------------------------------------------------------------------
   // spectating
   // -------------------------------------------------------------------------
   /**
@@ -619,11 +709,25 @@ class Game {
     else if (!shouldSpectate && this.freeCam) this.stopFreeCam();
   }
 
+  /**
+   * Single owner of whether the first-person weapon is drawn. Free cam and
+   * the scope overlay each have their own reason to hide it; whoever gets
+   * there last must not undo the other one.
+   */
+  refreshViewmodel() {
+    this.viewmodel.visible = !this.freeCam && !this.scopeHidesViewmodel;
+  }
+
   startFreeCam() {
     if (this.freeCam) return;
     const cam = this.engine.camera;
     this.freeCam = new FreeCam(cam.position, this.player.rig.yaw, this.player.rig.pitch);
-    this.viewmodel.visible = false;      // no floating gun while spectating
+    // Spectating is not holding a gun: put the weapon away rather than
+    // flying a rifle around the map, and take its HUD block with it.
+    this.player.holsterAll?.();
+    this.scopeHidesViewmodel = false;
+    this.refreshViewmodel();
+    this.hud.setSpectating(true);
     this.hud.setPrompt('SPECTATING · WASD FLY · SPACE/CTRL UP DOWN · SHIFT FAST');
     // The controls are worth saying once. Leaving them across the middle of
     // the screen for the rest of the round is just something to look past.
@@ -638,7 +742,9 @@ class Game {
     clearTimeout(this._freeCamHint);
     this._freeCamHint = null;
     this.freeCam = null;
-    this.viewmodel.visible = true;
+    this.player.unholsterAll?.();
+    this.refreshViewmodel();
+    this.hud.setSpectating(false);
     this.hud.setPrompt('');
   }
 
@@ -988,8 +1094,11 @@ class Game {
     bus.emit('match:enter', info);
   }
 
+  /** True once the match has ended and the report is up. */
+  get matchOver() { return this.matchState?.phase === 'matchEnd'; }
+
   pause() {
-    if (this.mode !== 'match' || this.paused) return;
+    if (this.mode !== 'match' || this.paused || this.matchOver) return;
     this.paused = true;
     this.input.exitLock();
     this.ui.showRoot();
@@ -1041,6 +1150,18 @@ class Game {
     this.toMenu();
   }
 
+  /**
+   * Leave a finished match cleanly. The after-action report and its timer both
+   * come through here, so an online room is actually left rather than being
+   * abandoned with a live socket in it.
+   */
+  endToMenu() {
+    this.currentPlaylist = null;
+    this.net?.leave?.();
+    if (this.net && this.net !== this.onlineNet) this.net.disconnect?.();
+    this.toMenu();
+  }
+
   toMenu() {
     this.mode = 'menu';
     this.paused = false;
@@ -1053,6 +1174,7 @@ class Game {
     for (const r of this.remotes.values()) r.dispose();
     this.remotes.clear();
     this.effects.clear();
+    this.pings.clear();
     this.loadMenuMap(MENU_MAPS[(Math.random() * MENU_MAPS.length) | 0]);
     this.menuCamActive = true;
     this.ui.showRoot();
@@ -1143,7 +1265,10 @@ class Game {
       this._endShown = true;
       this.input.exitLock();
       this.ui.showRoot();
-      this.ui.show('end', { state }, { noStack: true, resetStack: true });
+      // Bank the XP and the lifetime record before the report goes up, so the
+      // report can show what the match was worth.
+      const result = this.recordMatchResult(state);
+      this.ui.show('end', { state, result }, { noStack: true, resetStack: true });
       this.hud.show(false);
     }
     if (state.phase !== 'matchEnd') this._endShown = false;
@@ -1193,6 +1318,9 @@ class Game {
         case EV.ROUND_START:
           bus.emit('hud:center', 'ROUND ' + ev.round, 'GET READY', 3);
           this.hud.setObjective('');
+          // Last round's callouts are not this round's. A mark stays put for
+          // as long as it is useful, and it stops being useful here.
+          this.pings.clear();
           break;
         case EV.ROUND_END: this.onRoundEnd(ev); break;
         case EV.PLANTED:
@@ -1210,6 +1338,7 @@ class Game {
             audio.impact('metal', ev.pos, 1.6);
           }
           break;
+        case EV.PING: this.onPing(ev); break;
         case EV.MATCH_END: break;
         default: break;
       }
@@ -1349,8 +1478,30 @@ class Game {
     return out;
   }
 
+  /**
+   * Push the aim zoom at the world camera.
+   *
+   * `Weapon.adsFovScale()` has always existed and nothing ever called it, so
+   * aiming narrowed the spread and did nothing to the picture — which is why
+   * the telescopic scope "didn't zoom". The viewmodel keeps its own camera at
+   * a fixed 70 degrees so the gun itself does not balloon as the world pulls
+   * in; only what you are looking at moves.
+   */
+  updateCameraFov() {
+    const cam = this.engine.camera;
+    const base = S.fov || 84;
+    const w = (this.mode === 'match' && !this.freeCam && !this.player.stowed)
+      ? this.player.weapon : null;
+    const want = base * (w ? w.adsFovScale() : 1);
+    if (Math.abs(want - this.camFov) < 0.005) return;
+    this.camFov = want;
+    cam.fov = want;
+    cam.updateProjectionMatrix();
+  }
+
   // -------------------------------------------------------------------------
   update(dt, time) {
+    this.updateCameraFov();
     if (this.mode === 'menu') {
       if (this.menuCamActive !== false) this.updateMenuCamera(dt);
       this.worldRenderer.update(dt, time, this.engine.camera.position);
@@ -1392,6 +1543,7 @@ class Game {
 
     this.worldRenderer.update(dt, time, this.engine.camera.position);
     this.effects.update(dt, this.engine.camera, this.world);
+    this.pings.update(dt, this.engine.camera);
     this.engine.updateSun(this.engine.camera.position);
     audio.updateListener(this.engine.camera, dt);
 

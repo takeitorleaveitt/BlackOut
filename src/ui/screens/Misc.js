@@ -125,26 +125,63 @@ export function createPause(game) {
 // ---------------------------------------------------------------------------
 // END OF MATCH
 // ---------------------------------------------------------------------------
+// How long the after-action report stays up before the match hands you back
+// to the menu. Long enough to read your own row, short enough that a finished
+// match does not leave you parked in it.
+const END_RETURN_SECONDS = 12;
+
 export function createEndMatch(game) {
-  let ui = null, titleNode, subNode, tableNode;
+  let ui = null, titleNode, subNode, tableNode, xpNode, returnNode;
+  let timer = null, leaveAt = 0;
+
+  function stopTimer() {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
 
   return {
     build(node, _ui) {
       ui = _ui;
       titleNode = el('h1.title', 'Match complete');
       subNode = el('p.sub', '');
+      xpNode = el('div.end-xp');
       tableNode = el('div');
+      returnNode = el('span.end-return', '');
       node.appendChild(header('AFTER ACTION REPORT'));
       node.appendChild(el('div.body', el('div.pane', { style: { flex: '1' } },
-        titleNode, subNode, tableNode)));
+        titleNode, subNode, xpNode, tableNode)));
       node.appendChild(footer(
-        [button('MAIN MENU', () => game.toMenu())],
-        [button('PLAY AGAIN', () => game.quickMatch(), { cls: 'primary' })]));
+        [button('MAIN MENU', () => { stopTimer(); game.endToMenu(); }), returnNode],
+        [button('PLAY AGAIN', () => { stopTimer(); game.quickMatch(); }, { cls: 'primary' })]));
     },
 
     enter(params = {}) {
       const st = params.state || game.matchState;
       if (!st) return;
+      // The match is over: show the report, then hand the player back to the
+      // menu on their own rather than leaving them sitting in a finished
+      // match with a dead HUD behind the screen.
+      stopTimer();
+      leaveAt = Date.now() + END_RETURN_SECONDS * 1000;
+      const tick = () => {
+        const left = Math.ceil((leaveAt - Date.now()) / 1000);
+        if (left <= 0) { stopTimer(); game.endToMenu(); return; }
+        returnNode.textContent = `RETURNING TO MENU IN ${left}s`;
+      };
+      tick();
+      timer = setInterval(tick, 250);
+
+      // XP and level, from the result banked when the match ended.
+      const r = params.result;
+      clear(xpNode);
+      if (r) {
+        xpNode.appendChild(el('span.k', r.won ? 'VICTORY' : 'DEFEAT'));
+        xpNode.appendChild(el('b', `+${r.xp} XP`));
+        xpNode.appendChild(el('span.lvl', `LEVEL ${account.level}`));
+        xpNode.appendChild(el('span.bar', el('i', {
+          style: { width: `${Math.min(100, (account.xp / account.xpToNext) * 100).toFixed(1)}%` }
+        })));
+        xpNode.appendChild(el('span.k', `${account.xp} / ${account.xpToNext}`));
+      }
       const teams = st.mode !== 'ffa';
       const a = st.scores?.[1] ?? 0, b = st.scores?.[2] ?? 0;
       titleNode.textContent = teams
@@ -167,7 +204,9 @@ export function createEndMatch(game) {
           el('th', 'Operator'), el('th', 'Team'), el('th', 'K'), el('th', 'D'), el('th', 'K/D'),
           el('th', 'Damage'), el('th', 'Acc'), el('th', 'HS'), el('th', 'Score'))),
         el('tbody', ...rows)));
-    }
+    },
+
+    exit() { stopTimer(); }
   };
 }
 

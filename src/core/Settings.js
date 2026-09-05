@@ -39,7 +39,7 @@ export const DEFAULT_BINDS = {
   jump: 'Space', crouch: 'KeyC', sprint: 'ShiftLeft', walk: 'AltLeft',
   reload: 'KeyR', use: 'KeyF', leanLeft: 'KeyQ', leanRight: 'KeyE',
   primary: 'Digit1', secondary: 'Digit2', melee: 'Digit3', inspect: 'KeyI',
-  scoreboard: 'Tab', flashlight: 'KeyT', chat: 'KeyY', ping: 'KeyG'
+  scoreboard: 'Tab', flashlight: 'KeyT', chat: 'KeyY', ping: 'KeyZ'
 };
 
 const DEFAULTS = {
@@ -136,6 +136,13 @@ class SettingsStore {
     let migrated = false;
     for (const k of SettingsStore.REMOVED_KEYS) {
       if (k in this.data) { delete this.data[k]; migrated = true; }
+    }
+    // The ping key used to be bound to G by a default that nothing read. Z is
+    // where the genre puts it, and a saved binds object would otherwise pin a
+    // returning player to a key that never did anything.
+    if (this.data.binds && this.data.binds.ping === 'KeyG') {
+      this.data.binds.ping = 'KeyZ';
+      migrated = true;
     }
     if (!this.data.name) this.data.name = randomCallsign();
     if (this.syncLoadout()) migrated = true;

@@ -61,7 +61,10 @@ export const EV = {
   ROUND_END: 18,
   MATCH_END: 19,
   BOMB_TICK: 20,
-  MELEE: 21
+  MELEE: 21,
+  // A map ping. `t` is the pinging player's team, and the client only draws
+  // pings from its own side — the whole point is that it is squad comms.
+  PING: 22       // {p:playerId, t:team, x, y, z}
 };
 
 // --- state flag bits -------------------------------------------------------

@@ -145,17 +145,23 @@ export class Weapon {
     const d = this.def;
     // A scope resolves to zero spread outright once the aim has settled: a
     // sniper you have lined up should put the round exactly where the reticle
-    // is, and the cost is paid in handling and hip-fire instead.
-    if (d.flags?.scoped && this.adsT >= 0.999) return 0;
-    let base = lerp(d.spreadHip, d.spreadAds, this.adsT);
-    let mult = 1;
-    if (!ctx.grounded) mult *= d.spreadJump / Math.max(0.01, d.spreadHip) * 0.5 + 1;
-    else if (ctx.sprinting) mult *= 1 + d.spreadMove / Math.max(0.5, d.spreadHip);
-    else if (ctx.speed > 0.6) mult *= 1 + (d.spreadMove / Math.max(0.5, d.spreadHip)) * clamp(ctx.speed / 4, 0, 1) * 0.55;
-    if (ctx.crouching) mult *= 0.78;
-    const targetSpread = clamp(base * mult, 0.02, d.spreadMax);
-    // grows instantly with each shot, recovers smoothly
-    this.spread = Math.max(targetSpread, smoothDamp(this.spread, targetSpread, d.spreadRecover, dt));
+    // is, and the cost is paid in handling and hip-fire instead. This is a
+    // value, not an exit: an earlier version of this returned from update()
+    // here, which meant a fully scoped weapon never reached the trigger block
+    // below and so could never fire at all.
+    if (d.flags?.scoped && this.adsT >= 0.999) {
+      this.spread = 0;
+    } else {
+      let base = lerp(d.spreadHip, d.spreadAds, this.adsT);
+      let mult = 1;
+      if (!ctx.grounded) mult *= d.spreadJump / Math.max(0.01, d.spreadHip) * 0.5 + 1;
+      else if (ctx.sprinting) mult *= 1 + d.spreadMove / Math.max(0.5, d.spreadHip);
+      else if (ctx.speed > 0.6) mult *= 1 + (d.spreadMove / Math.max(0.5, d.spreadHip)) * clamp(ctx.speed / 4, 0, 1) * 0.55;
+      if (ctx.crouching) mult *= 0.78;
+      const targetSpread = clamp(base * mult, 0.02, d.spreadMax);
+      // grows instantly with each shot, recovers smoothly
+      this.spread = Math.max(targetSpread, smoothDamp(this.spread, targetSpread, d.spreadRecover, dt));
+    }
 
     // --- recoil recovery ---------------------------------------------------
     const rec = d.recoil.recovery;

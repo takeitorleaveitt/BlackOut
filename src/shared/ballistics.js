@@ -106,7 +106,14 @@ export function simulateBullet(opts) {
   const {
     world, origin, dir, weapon, shooterId = -1, shooterTeam = 0,
     targetsAt = null, friendlyFire = false, maxTime = MAX_TIME,
-    penetrationDepth = 0, recordPath = true, rng = null
+    penetrationDepth = 0, recordPath = true, rng = null,
+    // Hard stop on how far the shot reaches, in metres. Guns leave this
+    // alone; a melee swing sets it to the blade's reach so the trace ends at
+    // arm's length instead of flying on as a 260 m/s projectile and
+    // "connecting" with someone across the room for zero damage — which is
+    // what a knife hit past its falloff used to be: blood, a hitmarker, and
+    // no health taken off at all.
+    maxRange = Infinity
   } = opts;
   const jitter = rng || Math.random;
 
@@ -127,6 +134,7 @@ export function simulateBullet(opts) {
 
   let guard = 0;
   while (t < maxTime && energy > 0.06 && guard++ < 4000) {
+    if (travelled >= maxRange) break;
     const dt = STEP;
     const nx = px + vx * dt;
     const ny = py + vy * dt - 0.5 * drop * dt * dt;
@@ -135,9 +143,11 @@ export function simulateBullet(opts) {
     let segLen = Math.hypot(sx, sy, sz);
     if (segLen < 1e-6) break;
     const ix = sx / segLen, iy = sy / segLen, iz = sz / segLen;
+    // Never look for a hit past the reach, even part-way through a segment.
+    const reachLeft = maxRange - travelled;
 
     // --- players --------------------------------------------------------
-    let bestPlayer = null, bestT = segLen;
+    let bestPlayer = null, bestT = Math.min(segLen, reachLeft);
     if (targetsAt) {
       const targets = targetsAt(t);
       for (let i = 0; i < targets.length; i++) {
@@ -169,7 +179,7 @@ export function simulateBullet(opts) {
     }
 
     // --- world ----------------------------------------------------------
-    const wh = world.raycast(px, py, pz, ix, iy, iz, segLen);
+    const wh = world.raycast(px, py, pz, ix, iy, iz, Math.min(segLen, reachLeft));
 
     if (bestPlayer && (!wh || bestPlayer.t <= wh.t)) {
       const p = bestPlayer.player;

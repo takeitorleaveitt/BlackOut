@@ -15,7 +15,10 @@ export const ATTACHMENTS = {
   scope: {
     key: 'scope', name: 'Telescopic Scope', slot: 'optic',
     desc: 'Long-range glass with a mil-dot reticle. Deep magnification, slow to settle, and useless up close.',
-    mods: { adsTime: 1.20, spreadAds: 0.0, adsFov: 0.17, mobility: 0.97 },
+    // 0.20 of the rifle's own ADS FOV, which on the M40 lands the scoped
+    // view at almost exactly 10 degrees — the same picture a CS AWP gives you
+    // at its second zoom step.
+    mods: { adsTime: 1.20, spreadAds: 0.0, adsFov: 0.20, mobility: 0.97 },
     flags: { scoped: true }
   },
   suppressor: {

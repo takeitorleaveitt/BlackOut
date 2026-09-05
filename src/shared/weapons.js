@@ -271,7 +271,15 @@ export const WEAPONS = [
     // legs at x0.72, still leaves the second swing lethal), while a hit taken
     // from behind is multiplied by backstab into an instant kill. The melee
     // resolution in MatchSim.handleShot does the angle test.
-    damage: 55, damageMin: 0, falloffStart: 1.15, falloffEnd: 1.30,
+    // `reach` is a hard stop, not a falloff: past it the swing simply misses.
+    // Without one the blade traced like a 260 m/s round for a second and a
+    // half, so a swing at open air "hit" anyone standing in that direction
+    // anywhere on the map — for zero damage, since the falloff had long since
+    // run out. Blood, a hitmarker, and no health taken off is precisely what
+    // "the knife doesn't do damage" looks like. The falloff now sits outside
+    // the reach, so every cut that lands lands for full.
+    reach: 1.6,
+    damage: 55, damageMin: 0, falloffStart: 1.65, falloffEnd: 1.80,
     backstab: 4.0,
     // Two attacks, like CS: a quick alternating slash on the trigger, and a
     // slower stab on the aim button that hits far harder for the wind-up.

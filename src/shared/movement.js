@@ -299,11 +299,31 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
     // partially standing on instead of stuttering off the edge.
     const sup = s.vy <= 0.001 ? world.supportY(s.x, s.y, s.z, PLAYER_RADIUS, wasGrounded ? STEP_HEIGHT * 0.8 : 0.04) : { y: -Infinity };
     if (sup.y > -Infinity) {
+      const fall = -s.vy;
       s.y = sup.y;
       s.vy = 0;
       s.grounded = true;
       s.groundSurface = sup.surface || s.groundSurface;
-      if (!wasGrounded) { s.landImpact = 0; s.landed = false; }
+      if (!wasGrounded) {
+        // This branch used to zero the landing outright, and on flat ground it
+        // is the branch every landing actually takes — the swept-body test
+        // above almost never reports the floor first. So the landing dip, the
+        // landing thud and the viewmodel's compression have never once fired
+        // in ordinary play: you jumped, you came down, and the camera did not
+        // acknowledge it. That is the "hitting the ground feels wrong".
+        //
+        // The zero was there for a real reason though: this cylinder also
+        // catches you stepping up onto a kerb or being snapped back onto a
+        // stair, and neither of those is a landing. The difference is speed —
+        // a step-up arrives at a standstill, a fall arrives fast.
+        if (fall > 1.5) {
+          s.landImpact = clamp(fall / 12, 0, 1.4);
+          s.landed = true;
+        } else {
+          s.landImpact = 0;
+          s.landed = false;
+        }
+      }
     } else {
       s.grounded = false;
       s.airTime += dt;

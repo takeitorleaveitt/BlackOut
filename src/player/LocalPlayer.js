@@ -29,6 +29,10 @@ export class LocalPlayer {
     this.weapons = [];
     this.slot = 0;
     this.pendingSlot = -1;
+    // Render interpolation: the state the last fixed tick started from, and a
+    // scratch state blended between it and the live one for the camera.
+    this.tickPrev = null;
+    this.renderState = null;
 
     this.seq = 1;
     this.pending = [];         // unacknowledged commands for replay
@@ -92,6 +96,12 @@ export class LocalPlayer {
     if (!this.weapons.length) this.setLoadout(S.loadout);
     this.state = createMoveState(pos[0], pos[1], pos[2]);
     this.state.yaw = yaw;
+    // Nothing to interpolate out of across a spawn — the previous tick was on
+    // the other side of the map, and blending toward it would fly the camera
+    // there over one frame.
+    this.tickPrev = null;
+    this.renderState = cloneMoveState(this.state);
+    this.acc = 0;
     this.rig.reset(pos[0], pos[1], pos[2], yaw);
     this.health = MAX_HEALTH;
     this.alive = true;
@@ -154,6 +164,35 @@ export class LocalPlayer {
     this.game.audio.mech('select', null, 0.7);
   }
 
+  /**
+   * Put everything away — used by free cam, where you are a floating camera
+   * rather than a soldier and should not be carrying a rifle around the map.
+   * The weapons themselves are untouched; only the held state is cleared, so
+   * whatever you were carrying is still there when the round hands you back.
+   */
+  holsterAll() {
+    this.stowed = true;
+    this.pendingSlot = -1;   // -1, not null: `null >= 0` is true
+    this.adsHeld = this.fireHeld = false;
+    this.adsToggle = false;
+    for (const w of this.weapons) {
+      if (!w) continue;
+      w.setTrigger(false);
+      w.wantAds = false;
+      w.adsT = 0;
+    }
+  }
+
+  /** Take the current weapon back out after spectating. */
+  unholsterAll() {
+    if (!this.stowed) return;
+    this.stowed = false;
+    if (!this.weapon) return;
+    this.game.viewmodel.equip(this.weapon);
+    this.weapon.draw();
+    bus.emit('hud:weapon', this.weapon);
+  }
+
   nextWeapon(dir) {
     // Skip over an empty slot rather than stalling the scroll on it.
     const n = this.weapons.length;
@@ -170,7 +209,8 @@ export class LocalPlayer {
     // --- look ---------------------------------------------------------------
     const m = input.takeMouse();
     if (input.locked && this.canAct) {
-      this.rig.look(m.dx, m.dy, this.weapon ? this.weapon.adsT : 0);
+      this.rig.look(m.dx, m.dy, this.weapon ? this.weapon.adsT : 0,
+        this.weapon ? this.weapon.adsFovScale() : 1);
       if (m.wheel) this.nextWeapon(m.wheel);
     }
 
@@ -186,6 +226,15 @@ export class LocalPlayer {
     // --- fixed-step movement prediction --------------------------------------
     this.acc += dt;
     let steps = 0;
+    // A landing is a single event, and the rig has to be told about it once.
+    // `state.landed` is a per-tick output that survives until the next tick
+    // overwrites it, so on any frame that runs no tick at all — better than
+    // half of them above 60 fps — the old code handed the rig the same
+    // landing again and it added a second (and sometimes third) dip impulse.
+    // That is why hitting the ground at a high frame rate punched the camera
+    // through the floor and read as a lurch.
+    let landed = false;
+    let landImpact = 0;
     while (this.acc >= TICK && steps < 5) {
       this.acc -= TICK;
       steps++;
@@ -216,12 +265,49 @@ export class LocalPlayer {
       // the state as it was going in, so a replay reproduces the command
       // instead of stacking on top of what the live pass already did.
       const before = cloneMoveState(this.state);
+      // The state going into the LAST tick of this frame is also the state the
+      // render interpolation blends out of.
+      this.tickPrev = before;
       stepMovement(this.state, cmd, g.world, mob, this.alive && !this.frozen);
+      if (this.state.landed) {
+        landed = true;
+        landImpact = Math.max(landImpact, this.state.landImpact);
+      }
       this.pending.push({ cmd, before });
       if (this.pending.length > 200) this.pending.shift();
       g.net?.sendInput(cmd);
       this.onMoved(TICK);
     }
+    // A frame long enough to blow through the step cap (a GC pause, a tab
+    // coming back) leaves the surplus in the accumulator, and the frames after
+    // it then run the cap every time to catch up — the player fast-forwards
+    // across the room. Drop the surplus instead: standing still through a
+    // hitch is what the server is going to say happened anyway.
+    if (this.acc > TICK) this.acc = TICK;
+
+    // --- render state ---------------------------------------------------
+    // The simulation runs at a fixed 60 Hz; the display does not. Drawing the
+    // raw tick state means a frame that happens to run no tick draws the
+    // player at exactly the same place as the frame before, and the next one
+    // moves two steps — a stutter that is there at ANY frame rate that is not
+    // a clean multiple of 60, and worst at the high ones. Rendering
+    // `acc / TICK` of the way from the previous tick to the current one puts
+    // the camera where the player actually is at display time.
+    const rs = this.renderState || (this.renderState = cloneMoveState(this.state));
+    cloneMoveState(this.state, rs);
+    const p = this.tickPrev;
+    if (p) {
+      const a = clamp(this.acc / TICK, 0, 1);
+      rs.x = lerp(p.x, this.state.x, a);
+      rs.y = lerp(p.y, this.state.y, a);
+      rs.z = lerp(p.z, this.state.z, a);
+      // Eye height and the lean offset come off these two, so interpolating
+      // them is what stops crouching and leaning from moving in 60 Hz stairs.
+      rs.crouchT = lerp(p.crouchT, this.state.crouchT, a);
+      rs.leanT = lerp(p.leanT, this.state.leanT, a);
+    }
+    rs.landed = landed;
+    rs.landImpact = landed ? landImpact : 0;
 
     // --- weapon --------------------------------------------------------------
     const w = this.weapon;
@@ -243,8 +329,9 @@ export class LocalPlayer {
     this.spawnProtect = Math.max(0, this.spawnProtect - dt);
     this.hurtTimer = Math.max(0, this.hurtTimer - dt);
     this.damageFx = Math.max(0, this.damageFx - dt * 0.75);
-    this.rig.update(dt, this.state, {
-      eyeHeight: eyeHeight(this.state),
+    // The camera reads the interpolated render state, not the raw tick state.
+    this.rig.update(dt, this.renderState, {
+      eyeHeight: eyeHeight(this.renderState),
       ads: w ? w.adsT > 0.5 : false,
       health: this.health,
       recoilRecovery: w ? w.def.recoil.recovery : 8
@@ -506,7 +593,10 @@ export class LocalPlayer {
         shooterTeam: g.friendlyFire ? 0 : this.team,
         targetsAt: () => targets,
         friendlyFire: g.friendlyFire,
-        rng
+        rng,
+        // A swing stops at arm's length here too, or the local prediction
+        // would draw sparks off a wall a hundred metres down the corridor.
+        maxRange: def.melee ? (def.reach || 1.6) : Infinity
       });
       this.spawnBulletFx(res, d, def, mz);
     }
@@ -600,6 +690,11 @@ export class LocalPlayer {
       cloneMoveState(this.state, p.before);
       stepMovement(this.state, p.cmd, this.game.world, mob, this.alive);
     }
+    // The replay above rewrites every `before` snapshot in the pending queue,
+    // and tickPrev is a reference into that queue. Drop it: this frame renders
+    // at the corrected position, which the decaying camera offset below is
+    // already covering, and interpolation picks up again on the next tick.
+    this.tickPrev = null;
     if (err > 2.5) {
       // a teleport (spawn / round reset): show it instantly, no smoothing
       this.rig.smoothPos.set(this.state.x, this.state.y + eyeHeight(this.state), this.state.z);

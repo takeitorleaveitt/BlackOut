@@ -13,6 +13,21 @@ import * as THREE from 'three';
 import { S } from '../core/Settings.js';
 import { clamp, lerp, smoothDamp } from '../shared/constants.js';
 
+// The sight the ADS-sensitivity slider is calibrated against: a bit under
+// two-thirds of the base FOV, which is where every non-telescopic optic in
+// the game lands. A sight at this zoom gets a scale of exactly 1, so the
+// slider still means what it says.
+const REF_FOV_SCALE = 0.65;
+
+/** tan(half-FOV) ratio at `fovScale`, relative to the reference sight. */
+function zoomSensScale(fovScale) {
+  const f = clamp(fovScale || 1, 0.02, 1);
+  if (f >= REF_FOV_SCALE) return 1;
+  const half = ((S.fov || 84) * Math.PI) / 360;
+  const ratio = Math.tan(half * f) / Math.tan(half * REF_FOV_SCALE);
+  return clamp(Math.pow(ratio, 0.6), 0.12, 1);
+}
+
 export class CameraRig {
   constructor(camera) {
     this.camera = camera;
@@ -78,12 +93,22 @@ export class CameraRig {
 
   /**
    * Raw mouse delta -> target angles.
+   *
    * `adsT` is the aim-down-sights blend (0 hip .. 1 aimed) and scales
-   * sensitivity toward the player's ADS setting.
+   * sensitivity toward the player's ADS setting. `fovScale` is how far the
+   * sight actually pulls the view in (1 = no zoom). Without it a 10x scope
+   * would sweep the same arc per centimetre of mousepad as iron sights, which
+   * at that magnification means the reticle crosses a whole player in a
+   * twitch. The correction is the ratio of the half-angle tangents — true
+   * 1:1 tracking — softened by a 0.6 power so ordinary optics keep the feel
+   * the ADS slider gives them and only the big scopes slow right down. It is
+   * normalised against a reference sight so an unscoped weapon still lands on
+   * exactly S.adsSensitivity.
    */
-  look(dx, dy, adsT = 0) {
+  look(dx, dy, adsT = 0, fovScale = 1) {
     const sens = (S.sensitivity ?? 0.85) * 0.0022;
-    const mult = sens * lerp(1, S.adsSensitivity ?? 0.72, clamp(adsT, 0, 1));
+    const zoom = zoomSensScale(fovScale);
+    const mult = sens * lerp(1, (S.adsSensitivity ?? 0.72) * zoom, clamp(adsT, 0, 1));
     this.targetYaw -= dx * mult;
     this.targetPitch -= dy * mult * (S.invertY ? -1 : 1);
     const lim = Math.PI / 2 - 0.015;
@@ -203,7 +228,13 @@ export class CameraRig {
     // depth of dip out of the stiffer spring: 2.7cm down and back in 0.43s,
     // against 2.8cm over 0.70s with two bounces before.
     if (st.landed && st.landImpact > 0.02) {
-      this.landVel -= st.landImpact * 2.3;
+      // 1.1, down from 2.3. The old figure was tuned against a landing signal
+      // that never actually arrived (see the support-cylinder branch in
+      // shared/movement.js), so it had never been felt: a plain jump lands at
+      // landImpact 0.55, which at 2.3 drove the camera 7.6 cm into the floor.
+      // 1.1 puts an ordinary jump at about 3.5 cm and the longest survivable
+      // fall at 9 cm, which is a knee bend rather than a stumble.
+      this.landVel -= st.landImpact * 1.1;
       this.shake += st.landImpact * 0.30 * shakeScale;
     }
     this.landVel += -this.landDip * 225 * dt;

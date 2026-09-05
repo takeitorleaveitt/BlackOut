@@ -127,8 +127,19 @@ export class HUD {
     bus.on('hud:objective', (text) => this.setObjective(text));
   }
 
+  /**
+   * Spectating is not carrying a weapon: drop the ammo block, the vitals and
+   * the crosshair rather than showing a dead player's kit over a free camera.
+   */
+  setSpectating(on) {
+    this.spectating = !!on;
+    this.br.style.display = on ? 'none' : '';
+    this.bl.style.display = on ? 'none' : '';
+    this.crosshair.style.display = on ? 'none' : '';
+  }
+
   setWeapon(w) {
-    if (!w) return;
+    if (!w || this.spectating) return;
     const d = w.def;
     // A blade has no magazine and no reserve, so it gets no ammo counter —
     // showing "1 / 1" over a knife was the last thing making it read as a gun

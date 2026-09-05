@@ -17,6 +17,7 @@ import {
   DEFAULT_SECONDARY, loadoutCost, clampMoney
 } from '../economy.js';
 import { BotBrain, botName } from './bot.js';
+import { getNavGrid } from './navgrid.js';
 import { EV, SF } from '../protocol.js';
 import {
   MAX_HEALTH, RESPAWN_DELAY_MS, HEAL_DELAY_MS, HEAL_RATE, TEAM, BTN,
@@ -32,6 +33,10 @@ export class MatchSim {
     this.mapKey = opts.map || 'warehouse';
     this.map = getMap(this.mapKey);
     this.world = new World(this.map.brushes, { key: this.mapKey });
+    // Bots path over this. Built here, at construction, so the cost lands
+    // behind the loading screen instead of as a hitch on the first bot that
+    // needs a route. Cached per map key, so it is paid once per process.
+    this.nav = getNavGrid(this.world, this.mapKey);
     this.modeKey = opts.mode || 'tdm';
     this.mode = MODES[this.modeKey] || MODES.tdm;
 
@@ -374,18 +379,26 @@ export class MatchSim {
     // the front the same slash takes two.
     if (w.def.melee) {
       let best = null;
-      for (const off of [-0.16, 0, 0.16]) {
-        const ca = Math.cos(off), sa = Math.sin(off);
+      // Five rays in a cross: three across the swing and two above and below
+      // it, so a cut at someone crouched or mid-jump connects the way the
+      // animation says it should. Only the nearest victim of the whole sweep
+      // is cut, so a wider arc never turns one swing into several hits.
+      const reach = w.def.reach || 1.6;
+      const arc = [[-0.16, 0], [0, 0], [0.16, 0], [0, 0.13], [0, -0.13]];
+      for (const [yaw, pitch] of arc) {
+        const ca = Math.cos(yaw), sa = Math.sin(yaw);
         const d = [
           shot.dir[0] * ca - shot.dir[2] * sa,
-          shot.dir[1],
+          shot.dir[1] + pitch,
           shot.dir[0] * sa + shot.dir[2] * ca
         ];
+        const dl = Math.hypot(d[0], d[1], d[2]) || 1;
+        d[0] /= dl; d[1] /= dl; d[2] /= dl;
         const res = simulateBullet({
           world: this.world, origin, dir: d, weapon: w.def,
           shooterId: p.id, shooterTeam: this.options.friendlyFire ? 0 : p.team,
           targetsAt, friendlyFire: this.options.friendlyFire,
-          recordPath: false, rng
+          recordPath: false, rng, maxRange: reach
         });
         for (const h of res.hits) {
           if (!best || h.distance < best.distance) best = { ...h, dir: d };
@@ -663,7 +676,11 @@ export class MatchSim {
     const enemies = this.visibleEnemies(p);
     const objective = this.bomb && this.bomb.planted ? this.bomb.pos : null;
     const out = p.brain.think(dt, p.state, this.world, enemies, this.map, {
-      ammo: w ? w.ammo : 0, objective, phase: this.phase,
+      ammo: w ? w.ammo : 0, magSize: w ? w.def.magSize : 0, objective, phase: this.phase,
+      nav: this.nav,
+      // Whether pulling the trigger this tick actually produces a round. The
+      // brain counts its bursts in bullets, so it has to know.
+      canShoot: this.time - p.lastFire >= fireInterval(w.def),
       enemyHints: enemies.map((e) => [e.x, e.y, e.z])
     });
     const cmd = {
@@ -889,6 +906,30 @@ export class MatchSim {
       this.bomb.defusing = null;
       this.bomb.defuseProgress = 0;
     }
+  }
+
+  /**
+   * Drop a map ping at a world point.
+   *
+   * The client picks the point (it raycasts what the crosshair is actually
+   * looking at), but the server owns whether the ping is allowed and who
+   * hears about it: a dead player cannot ping, and the point has to be
+   * somewhere the pinger could plausibly see — 90 m is well past any sightline
+   * on these maps and still rejects a client claiming a point across the world.
+   */
+  handlePing(id, point) {
+    const p = this.players.get(id);
+    if (!p || !p.alive) return;
+    if (this.phase === PHASE.ROUND_END || this.phase === PHASE.MATCH_END) return;
+    if (!point || !Number.isFinite(point[0]) || !Number.isFinite(point[1]) || !Number.isFinite(point[2])) return;
+    // Two a second is plenty for marking a room; anything faster is a stuck
+    // key or someone spamming the squad's screen.
+    if (this.time - (p.lastPing || -99) < 0.5) return;
+    const d = Math.hypot(point[0] - p.state.x, point[1] - p.state.y, point[2] - p.state.z);
+    if (d > 90) return;
+    p.lastPing = this.time;
+    const [x, y, z] = round3(point);
+    this.emit(EV.PING, { p: p.id, t: p.team, x, y, z });
   }
 
   siteAt(x, y, z) {

@@ -409,6 +409,11 @@ function handle(client, msg) {
     case 'defuse':
       client.room?.sim.handleDefuse(client.id, !!msg.down);
       break;
+    // Map ping. Named 'mark' rather than 'ping' because 'ping' is already the
+    // RTT probe on this socket.
+    case 'mark':
+      client.room?.sim.handlePing(client.id, sanitizeVec(msg.p));
+      break;
     case 'economy': {
       if (!client.room) break;
       const e = client.room.sim.economyFor(client.id);
