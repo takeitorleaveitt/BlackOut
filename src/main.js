@@ -602,16 +602,41 @@ class Game {
   // -------------------------------------------------------------------------
   // spectating
   // -------------------------------------------------------------------------
+  /**
+   * Keep the spectator camera in step with whether we are actually alive.
+   *
+   * This used to be driven off the dead/alive edge inside onSnapshot, which
+   * missed the respawn at the start of a round — the SPAWN event sets alive
+   * directly, so by the time the next snapshot arrived the edge had already
+   * passed and the camera was never handed back. Checking the live state
+   * every frame has no edge to miss.
+   */
+  syncSpectator() {
+    if (this.mode !== 'match') { this.stopFreeCam(); return; }
+    const roundsMode = !!this.matchState?.roundsToWin && this.matchState?.mode !== 'ffa';
+    const shouldSpectate = !this.player.alive && roundsMode;
+    if (shouldSpectate && !this.freeCam) this.startFreeCam();
+    else if (!shouldSpectate && this.freeCam) this.stopFreeCam();
+  }
+
   startFreeCam() {
     if (this.freeCam) return;
     const cam = this.engine.camera;
     this.freeCam = new FreeCam(cam.position, this.player.rig.yaw, this.player.rig.pitch);
     this.viewmodel.visible = false;      // no floating gun while spectating
     this.hud.setPrompt('SPECTATING · WASD FLY · SPACE/CTRL UP DOWN · SHIFT FAST');
+    // The controls are worth saying once. Leaving them across the middle of
+    // the screen for the rest of the round is just something to look past.
+    clearTimeout(this._freeCamHint);
+    this._freeCamHint = setTimeout(() => {
+      if (this.freeCam) this.hud.setPrompt('');
+    }, 5000);
   }
 
   stopFreeCam() {
     if (!this.freeCam) return;
+    clearTimeout(this._freeCamHint);
+    this._freeCamHint = null;
     this.freeCam = null;
     this.viewmodel.visible = true;
     this.hud.setPrompt('');
@@ -638,13 +663,31 @@ class Game {
    * player's weapons — the menu loadout does not apply.
    */
   applyEconomy(ev) {
-    const changed = JSON.stringify(ev.loadout) !== JSON.stringify(this.economy?.loadout);
-    this.economy = { ...(this.economy || {}), money: ev.money, loadout: ev.loadout };
-    if (changed && this.mode === 'match') {
-      this.player.setLoadout(ev.loadout);
-      bus.emit('hud:weapon', this.player.weapon);
+    if (ev.money !== undefined) this.economy = { ...(this.economy || {}), money: ev.money };
+    if (ev.loadout) {
+      this.economy = { ...(this.economy || {}), loadout: ev.loadout };
+      // Compare against what the player is ACTUALLY holding, not against a
+      // cached copy of the loadout. The cache can already have been updated
+      // by a different message on the same frame, and then this test says
+      // "no change" while the guns in your hands say otherwise.
+      if (this.mode === 'match' && this.player.weapons.length && !this.loadoutMatches(ev.loadout)) {
+        this.player.setLoadout(ev.loadout);
+        bus.emit('hud:weapon', this.player.weapon);
+      }
     }
+    if (ev.canBuy !== undefined) this.economy = { ...(this.economy || {}), canBuy: ev.canBuy };
     this.notifyEconomy();
+  }
+
+  /** True when the local player is already carrying exactly this loadout. */
+  loadoutMatches(l) {
+    const w = this.player.weapons;
+    const key = (i) => (w[i] ? w[i].base.key : null);
+    const atts = (i) => (w[i] ? [...w[i].attachments].sort().join(',') : '');
+    return key(0) === (l.primary ?? null)
+      && key(1) === (l.secondary ?? null)
+      && atts(0) === [...(l.primaryAttachments || [])].sort().join(',')
+      && atts(1) === [...(l.secondaryAttachments || [])].sort().join(',');
   }
 
   /** Seconds of buy time left, 0 once the round goes live. */
@@ -824,9 +867,15 @@ class Game {
     });
     net.on('economy', (msg) => this.applyEconomy(msg));
     net.on('buyResult', (msg) => {
-      if (msg.economy) { this.economy = msg.economy; this.notifyEconomy(); }
+      // Route this through applyEconomy rather than assigning this.economy
+      // directly. Assigning it here was the bug that stopped purchases from
+      // arriving: buyResult is answered synchronously, so it overwrote the
+      // cached loadout BEFORE the sim's ECONOMY event was delivered, and the
+      // event's "has the loadout changed?" test then compared the new kit
+      // against itself, found no difference, and never handed the weapon to
+      // the player. The sim had your MP7; you were still holding the pistol.
+      if (msg.economy) this.applyEconomy({ ...msg.economy, p: this.playerId });
       if (!msg.ok && msg.reason === 'too_poor') this.ui.toast('Not enough money', 'warn');
-      if (msg.ok) bus.emit('hud:weapon', this.player.weapon);
     });
     net.on('squad', (msg) => {
       this.squad = { ...msg, local: false };
@@ -1036,14 +1085,8 @@ class Game {
     const wasAlive = this.player.alive;
     const dead = !!(snap.self.flags & SF.DEAD);
     this.player.alive = !dead;
-    if (dead && wasAlive) {
-      this.player.onDeath();
-      // No respawn until the round ends, so hand the player a camera to fly
-      // rather than a corpse to stare at.
-      if (!this.matchState || this.matchState.mode !== 'ffa') this.startFreeCam();
-    }
+    if (dead && wasAlive) this.player.onDeath();
     if (!dead && !wasAlive) {
-      this.stopFreeCam();
       this.player.alive = true;
       this.player.health = snap.self.health;
       this.player.damageFx = 0;
@@ -1090,8 +1133,9 @@ class Game {
       if (state.phase === 'freeze' && prevPhase !== 'freeze' && this.mode === 'match') {
         setTimeout(() => this.openBuyMenu(), 60);
       }
-      if (state.phase !== 'freeze' && this.buyOpen) this.closeBuyMenu();
     }
+    // Buy time is over the moment the phase changes, economy match or not.
+    if (this.buyOpen && state?.phase !== 'freeze') this.closeBuyMenu();
     if (!state) return;
     this.matchState = state;
     this.roomPlayerList = (state.board || []).map((r) => ({ id: r.id, name: r.name, team: r.team, bot: r.bot }));
@@ -1322,6 +1366,7 @@ class Game {
 
     // --- match ------------------------------------------------------------
     this.net?.update(dt);
+    this.syncSpectator();
     if (this.freeCam && !this.paused) {
       // Dead and flying: the spectator camera owns the mouse and the camera,
       // and the player simulation is left alone entirely.

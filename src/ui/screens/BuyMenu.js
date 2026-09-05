@@ -5,7 +5,7 @@
 // category number, then the item number. The server owns the wallet — every
 // tile here just asks, and redraws from whatever answer comes back.
 
-import { el, clear, header } from '../UI.js';
+import { el, clear } from '../UI.js';
 import { audio } from '../../audio/AudioEngine.js';
 import { WEAPON_BY_KEY } from '../../shared/weapons.js';
 import { ATTACHMENTS } from '../../shared/attachments.js';
@@ -68,6 +68,7 @@ export function createBuyMenu(game) {
         },
           el('span.n', String(ii + 1)),
           el('span.nm', it.name),
+          el('span.icon'),
           el('span.pr', owned ? 'OWNED' : it.price === 0 ? 'FREE' : '$' + it.price)));
       });
       colsNode.appendChild(col);
@@ -76,16 +77,15 @@ export function createBuyMenu(game) {
     // what you are walking out with
     clear(kitNode);
     const l = e?.loadout || {};
-    const line = (label, key, atts) => {
+    const chip = (key, atts) => {
       const d = WEAPON_BY_KEY[key];
-      return el('div.kit-row',
-        el('span.k', label),
-        el('span.v', d ? d.name : '—'),
-        el('span.a', (atts || []).map((a) => ATTACHMENTS[a]?.name || a).join(' · ')));
+      if (!d) return null;
+      const a = (atts || []).map((x) => ATTACHMENTS[x]?.name || x).join(' · ');
+      return el('span.kit-chip', d.name, a ? el('i', a) : null);
     };
-    kitNode.appendChild(line('PRIMARY', l.primary, l.primaryAttachments));
-    kitNode.appendChild(line('SECONDARY', l.secondary, l.secondaryAttachments));
-    kitNode.appendChild(line('MELEE', 'knife', []));
+    const chips = [chip(l.primary, l.primaryAttachments), chip(l.secondary, l.secondaryAttachments), chip('knife', [])]
+      .filter(Boolean);
+    for (const c of chips) kitNode.appendChild(c);
   }
 
   function onKey(ev) {
@@ -103,24 +103,28 @@ export function createBuyMenu(game) {
     build(node, _ui) {
       ui = _ui;
       moneyNode = el('div.buy-money', '$0');
-      timerNode = el('div.buy-timer', 'BUY TIME 0:00');
+      timerNode = el('span.buy-timer', '0:00');
       colsNode = el('div.buy-cols');
       kitNode = el('div.buy-kit');
 
-      node.appendChild(header('BUY', timerNode));
+      // Laid out like the reference: one floating panel with a buy-time bar
+      // across the top, the numbered columns inside it, the operator standing
+      // to the right of it, wallet bottom-left and hints along the bottom.
       node.appendChild(el('div.body.buy-body',
-        el('div.buy-left',
-          colsNode,
-          el('div.buy-foot',
-            el('div.buy-hint', '1-4 CATEGORY · 1-5 ITEM · ESC CLOSE'),
-            moneyNode)),
-        // The operator stands to the right, idling, the way a buy screen does.
-        el('div.buy-right',
+        el('div.buy-stage',
+          el('div.buy-panel',
+            el('div.buy-panel-head', 'Buy Time Remaining ', timerNode),
+            colsNode),
           el('div.buy-op', el('div.buy-op-inner',
             el('i.op-head'), el('i.op-visor'), el('i.op-torso'), el('i.op-vest'),
             el('i.op-arm.l'), el('i.op-arm.r'),
-            el('i.op-leg.l'), el('i.op-leg.r'))),
-          el('h3.sec', 'Your kit'),
+            el('i.op-leg.l'), el('i.op-leg.r')))),
+        el('div.buy-bar',
+          moneyNode,
+          el('div.buy-hint',
+            el('b', '1-4'), ' CATEGORY   ',
+            el('b', '1-5'), ' BUY   ',
+            el('b', 'ESC'), ' BACK'),
           kitNode)));
     },
 
@@ -130,7 +134,7 @@ export function createBuyMenu(game) {
       this.unsub = game.onEconomy(() => render());
       this.timer = setInterval(() => {
         const left = game.buyTimeLeft();
-        timerNode.textContent = `BUY TIME ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+        timerNode.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
         if (left <= 0) game.closeBuyMenu();
       }, 250);
       window.addEventListener('keydown', onKey);
