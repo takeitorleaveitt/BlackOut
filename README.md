@@ -30,28 +30,36 @@ lobby, and match.
   the operator's chest, not a floating eye: positional/rotational lag behind
   aim, walk/sprint bob, landing dips, recoil impulses, and hit reactions all
   compose in `src/player/CameraRig.js`. Post-processing
-  (`src/render/passes/BodycamShader.js`) adds fisheye distortion, chromatic
-  aberration, film grain, scanlines/compression artifacts, bloom, motion
-  blur, exposure and vignette — every one toggleable in Settings → Bodycam
-  for low-end hardware.
-- **Seven weapons**, each with a unique procedural 3D model, recoil pattern,
+  (`src/render/passes/BodycamShader.js`) adds scanlines, compression
+  artifacts, bloom, exposure and vignette — every one toggleable in
+  Settings → Bodycam for low-end hardware.
+- **Nine weapons**, each with a unique procedural 3D model, recoil pattern,
   fire rate, reload choreography, sound profile and handling feel:
-  M4A1, AK-74, MP5, MP7, M870 (pump shotgun with pellet spread), Glock 17,
-  SCAR-H. Defined in `src/shared/weapons.js`; attachments (optics,
-  suppressor, compensator, grip, light, laser) resolve into real stat deltas
-  in `src/shared/attachments.js`.
+  M4A1, AK-74, MP5, MP7, SCAR-H, M870 (pump shotgun with pellet spread),
+  Glock 17, Desert Eagle, and a combat knife with its own slash, backstab
+  and inspect. Defined in `src/shared/weapons.js`; attachments (red dot,
+  holographic, suppressor, compensator, grip, light, laser) resolve into
+  real stat deltas in `src/shared/attachments.js`, and each gun remembers
+  its own fitting when you switch away and back.
 - **Real ballistics** — bullets travel with velocity and drop, penetrate
   thin materials at a cost, and resolve per-body-zone damage (head/torso/
   arms/legs) against a lag-compensated hit history on the server
   (`src/shared/ballistics.js`, `src/shared/sim/MatchSim.js`).
-- **Six maps + a compact shoothouse**: District 9 (warehouse), Willow Lane
-  (suburb), Refinery, Blackwood (night forest compound), Sublevel 3
-  (parking garage), Meridian (destroyed office), and Killhouse (Gunfight).
-  All built from one small level-authoring DSL (`src/shared/maps/kit.js`)
-  so the exact same brush/prop data drives both the renderer and the
-  server's collision world — no separate art pass, no desync risk.
-- **Five game modes**: Team Deathmatch, Free For All, Elimination, Search &
-  Destroy (plant/defuse), Gunfight (2v2, randomized kit, compact maps).
+- **Four maps**: District 9 (warehouse), Willow Lane (suburb), Refinery,
+  and Killhouse (a compact shoothouse). All built from one small
+  level-authoring DSL (`src/shared/maps/kit.js`) so the exact same
+  brush/prop data drives both the renderer and the server's collision
+  world — no separate art pass, no desync risk.
+- **Four game modes**: Team Deathmatch, Free For All, Elimination, and
+  Search & Destroy (plant/defuse), served through three playlists — Quick
+  Match and Standard are real players only and hold in matchmaking until
+  eight have arrived, while Free For All will fill with bots.
+- **Account, profile and squads** — a local level/XP record with per-playlist
+  K/D (`src/core/Account.js`), a daily-rotating operator portrait
+  (`src/ui/Avatar.js`), and a four-slot squad that travels with you into
+  matchmaking and private rooms. Squads are server-owned: only the leader
+  deploys, and everyone else is pulled into the same room behind them.
+  Abandoning a Standard match carries an escalating leave penalty.
 - **Authoritative multiplayer** over WebSocket (`server/`): server-side
   movement simulation, lag-compensated shot validation, quick match, a live
   server browser, and private rooms with shareable 6-character codes. Bots
@@ -76,8 +84,8 @@ src/
   audio/         WebAudio synthesis + spatial engine
   net/           WebSocket client (+ an offline LocalNet with the same API
                  for Training mode)
-  ui/            screen manager, main menu, server browser, loadout,
-                 settings, lobby
+  ui/            screen manager, main menu, operator card + squad panel,
+                 server browser, loadout, settings, lobby, matchmaking
   game/          HUD
 server/          authoritative Node server: rooms, matchmaking, WebSocket
                  protocol handling
@@ -85,7 +93,11 @@ server/          authoritative Node server: rooms, matchmaking, WebSocket
 
 ## Notes
 
-- Settings, loadout, and friends list persist to `localStorage`.
+- Settings, loadout (including per-weapon attachments), account record and
+  friends list persist to `localStorage`.
+- Everything the first match needs — map data, surface textures, weapon and
+  operator models, shader programs, and every menu screen's DOM — is built
+  on the loading screen rather than the first time it is used.
 - Training mode runs the identical `MatchSim` the server uses, so bot
   behavior and hit detection are consistent whether you're offline or in a
   live match.

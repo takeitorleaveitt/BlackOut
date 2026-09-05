@@ -115,11 +115,13 @@ function findQuickMatch(modeKey, opts = {}) {
   // Standard). Those must not be matched into a room that is padded with
   // bots, and any room opened for them starts empty so it fills with humans.
   const wantBots = opts.bots !== false;
+  // A squad needs one seat per member, not just one for the leader.
+  const seats = Math.max(1, opts.seats | 0 || 1);
   let best = null, bestScore = -1;
   for (const r of rooms.values()) {
     if (r.private || r.closed) continue;
     if (modeKey && r.modeKey !== modeKey) continue;
-    if (r.humanCount >= r.maxPlayers) continue;
+    if (r.humanCount + seats > r.maxPlayers) continue;
     if (!wantBots && r.botCount > 0) continue;
     // prefer rooms that already have people, but are not full
     const score = r.humanCount * 10 - (r.humanCount >= r.maxPlayers - 1 ? 50 : 0) + Math.random() * 3;
@@ -177,9 +179,11 @@ wss.on('connection', (ws, req) => {
     ping: 60,
     lastPing: Date.now(),
     alive: true,
+    squad: null,
     ip: req.socket.remoteAddress
   };
   clients.add(client);
+  createSquad(client);
 
   send(client, { t: 'welcome', id: client.id, region: REGION, tickRate: TICK_RATE, snapshotRate: SNAPSHOT_RATE });
 
@@ -203,6 +207,7 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     if (client.room) client.room.removeClient(client);
+    leaveSquad(client);
     clients.delete(client);
   });
   ws.on('error', () => { /* handled by close */ });
@@ -242,6 +247,8 @@ function handle(client, msg) {
       // Echo the name back: it may have been altered to keep it unique, and
       // the client needs to know what it is actually called.
       send(client, { t: 'hello', id: client.id, region: REGION, name: client.name });
+      if (!client.squad) createSquad(client);
+      broadcastSquad(client.squad);
       break;
     }
     case 'ping':
@@ -259,11 +266,15 @@ function handle(client, msg) {
       send(client, { t: 'roomList', rooms: listRooms(), region: REGION });
       break;
     case 'quickMatch': {
+      if (!requireLeader(client)) break;
       const room = findQuickMatch(msg.mode, {
         bots: msg.bots, roundsToWin: msg.roundsToWin, playlist: msg.playlist,
-        minPlayers: msg.minPlayers
+        minPlayers: msg.minPlayers,
+        // Leave room for the rest of the squad rather than dropping the
+        // leader into a lobby that only has one seat left.
+        seats: 1 + squadFollowers(client).length
       });
-      joinRoom(client, room);
+      joinRoomWithSquad(client, room);
       break;
     }
     case 'join': {
@@ -272,10 +283,12 @@ function handle(client, msg) {
       else if (msg.roomId) room = rooms.get(msg.roomId);
       if (!room || room.closed) { send(client, { t: 'error', code: 'no_room', message: 'That match no longer exists.' }); break; }
       if (room.humanCount >= room.maxPlayers) { send(client, { t: 'error', code: 'full', message: 'That match is full.' }); break; }
-      joinRoom(client, room);
+      if (!requireLeader(client)) break;
+      joinRoomWithSquad(client, room);
       break;
     }
     case 'roomCreate': {
+      if (!requireLeader(client)) break;
       const s = msg.settings || {};
       const mode = MODES[s.mode] ? s.mode : 'tdm';
       const maps = mapsForMode(mode);
@@ -296,7 +309,8 @@ function handle(client, msg) {
       });
       rooms.set(room.id, room);
       codes.set(code, room);
-      joinRoom(client, room);
+      // A private match automatically pulls your squad in with you.
+      joinRoomWithSquad(client, room);
       break;
     }
     case 'roomSettings':
@@ -309,6 +323,67 @@ function handle(client, msg) {
       if (client.room) client.room.removeClient(client);
       send(client, { t: 'left' });
       break;
+    // --- squads -----------------------------------------------------------
+    case 'squadInfo':
+      if (!client.squad) createSquad(client);
+      send(client, squadState(client.squad));
+      break;
+    case 'squadInvite': {
+      const want = String(msg.name || '').toUpperCase().trim();
+      const target = [...clients].find((c) => c !== client && c.name === want);
+      if (!target) {
+        send(client, { t: 'error', code: 'no_player', message: `${want || 'That operator'} is not online.` });
+        break;
+      }
+      if (!client.squad) createSquad(client);
+      if (client.squad.members.length >= SQUAD_MAX) {
+        send(client, { t: 'error', code: 'squad_full', message: 'Your squad is already full.' });
+        break;
+      }
+      send(target, {
+        t: 'squadInvite', from: client.name, fromId: client.id, code: client.squad.code
+      });
+      send(client, { t: 'squadInviteSent', name: target.name });
+      break;
+    }
+    case 'squadJoin': {
+      const squad = squadCodes.get(String(msg.code || '').toUpperCase());
+      if (!squad) {
+        send(client, { t: 'error', code: 'no_squad', message: 'That squad no longer exists.' });
+        break;
+      }
+      if (squad === client.squad) break;
+      if (squad.members.length >= SQUAD_MAX) {
+        send(client, { t: 'error', code: 'squad_full', message: 'That squad is full.' });
+        break;
+      }
+      const old = client.squad;
+      leaveSquad(client);
+      squad.members.push(client);
+      client.squad = squad;
+      broadcastSquad(squad);
+      if (old && old !== squad) broadcastSquad(old);
+      break;
+    }
+    case 'squadLeave': {
+      const old = client.squad;
+      leaveSquad(client);
+      const fresh = createSquad(client);
+      broadcastSquad(fresh);
+      if (old) broadcastSquad(old);
+      break;
+    }
+    case 'squadKick': {
+      const squad = client.squad;
+      if (!squad || squad.leaderId !== client.id) break;
+      const target = squad.members.find((c) => c.id === (msg.id | 0));
+      if (!target || target === client) break;
+      leaveSquad(target);
+      const fresh = createSquad(target);
+      broadcastSquad(fresh);
+      broadcastSquad(squad);
+      break;
+    }
     case 'shot': {
       if (!client.room) break;
       const rewind = clamp(client.ping / 2 + INTERP_DELAY_MS, 0, LAG_COMP_MAX_MS);
@@ -360,6 +435,107 @@ function handle(client, msg) {
     }
     default:
       break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SQUADS
+//
+// Every connected client belongs to a squad. On connect that squad is just
+// them, and they are its leader. Invites bring other people in up to a cap of
+// four, and from then on the leader is the only one who can put the squad
+// into a match: matchmaking, private rooms and the server browser all pull
+// the whole squad into the same room together.
+// ---------------------------------------------------------------------------
+const SQUAD_MAX = 4;
+const squads = new Map();          // squadId -> squad
+let squadSeq = 1;
+
+function makeSquadCode() {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < 5; i++) out += A[(Math.random() * A.length) | 0];
+  return squadCodes.has(out) ? makeSquadCode() : out;
+}
+const squadCodes = new Map();      // code -> squad
+
+function createSquad(client) {
+  const code = makeSquadCode();
+  const squad = { id: squadSeq++, code, leaderId: client.id, members: [client] };
+  squads.set(squad.id, squad);
+  squadCodes.set(code, squad);
+  client.squad = squad;
+  return squad;
+}
+
+function squadState(squad) {
+  return {
+    t: 'squad',
+    id: squad.id,
+    code: squad.code,
+    leaderId: squad.leaderId,
+    max: SQUAD_MAX,
+    members: squad.members.map((c) => ({ id: c.id, name: c.name, leader: c.id === squad.leaderId }))
+  };
+}
+
+function broadcastSquad(squad) {
+  if (!squad) return;
+  const msg = squadState(squad);
+  for (const c of squad.members) send(c, msg);
+}
+
+function destroySquadIfEmpty(squad) {
+  if (squad.members.length) return;
+  squads.delete(squad.id);
+  squadCodes.delete(squad.code);
+}
+
+/** Pull a client out of their squad, promoting a new leader if needed. */
+function leaveSquad(client, { silent = false } = {}) {
+  const squad = client.squad;
+  if (!squad) return;
+  squad.members = squad.members.filter((c) => c !== client);
+  client.squad = null;
+  if (squad.leaderId === client.id && squad.members.length) {
+    squad.leaderId = squad.members[0].id;
+  }
+  destroySquadIfEmpty(squad);
+  if (!silent) broadcastSquad(squad);
+}
+
+/** Everyone in the squad except the leader — the people who get dragged along. */
+function squadFollowers(client) {
+  const squad = client.squad;
+  if (!squad || squad.members.length < 2) return [];
+  return squad.members.filter((c) => c !== client);
+}
+
+/**
+ * Only the leader starts matches. Returns true when the caller may proceed;
+ * otherwise it has already told them why not.
+ */
+function requireLeader(client) {
+  const squad = client.squad;
+  if (!squad || squad.members.length < 2) return true;   // solo: you are the leader
+  if (squad.leaderId === client.id) return true;
+  send(client, {
+    t: 'error', code: 'not_leader',
+    message: 'Only the squad leader can start a match.'
+  });
+  return false;
+}
+
+/** Put the leader in a room, then follow the rest of the squad in after them. */
+function joinRoomWithSquad(client, room) {
+  joinRoom(client, room);
+  if (client.room !== room) return;    // the join failed; do not drag anyone in
+  for (const mate of squadFollowers(client)) {
+    if (room.humanCount >= room.maxPlayers) {
+      send(mate, { t: 'error', code: 'full', message: 'The squad did not fit in that match.' });
+      continue;
+    }
+    joinRoom(mate, room);
   }
 }
 

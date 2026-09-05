@@ -197,6 +197,13 @@ export class NetClient {
   requestRespawn() { this.send({ t: 'respawn' }); }
   setTeam(team) { this.send({ t: 'team', team }); }
 
+  // --- squads --------------------------------------------------------------
+  squadInfo() { this.send({ t: 'squadInfo' }); }
+  squadInvite(name) { this.send({ t: 'squadInvite', name }); }
+  squadJoin(code) { this.send({ t: 'squadJoin', code }); }
+  squadLeave() { this.send({ t: 'squadLeave' }); }
+  squadKick(id) { this.send({ t: 'squadKick', id }); }
+
   /** Queue an input command; flushed on the next send tick. */
   sendInput(cmd) {
     this.outbox.push(cmd);

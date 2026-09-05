@@ -7,6 +7,7 @@
 // still owns everything that affects other players.
 
 import { bus } from './EventBus.js';
+import { avatarForDay } from '../ui/Avatar.js';
 
 const KEY = 'bp.account.v1';
 
@@ -28,6 +29,9 @@ function emptyStats() {
 function defaults() {
   return {
     createdAt: Date.now(),
+    // Stable per-account number. Seeds the daily operator portrait so two
+    // players on the same day do not necessarily get the same one.
+    seed: (Math.random() * 0xffffffff) >>> 0,
     xp: 0,
     level: 1,
     stats: { quickmatch: emptyStats(), standard: emptyStats() },
@@ -67,6 +71,16 @@ class Account {
   get xp() { return this.data.xp; }
   get xpToNext() { return xpForLevel(this.data.level); }
   get createdAt() { return this.data.createdAt; }
+  get seed() {
+    if (!Number.isFinite(this.data.seed)) {
+      this.data.seed = (Math.random() * 0xffffffff) >>> 0;
+      this.save();
+    }
+    return this.data.seed;
+  }
+
+  /** The operator portrait for today. Rotates at local midnight. */
+  get avatar() { return avatarForDay(this.seed); }
 
   addXp(amount) {
     if (!(amount > 0)) return;

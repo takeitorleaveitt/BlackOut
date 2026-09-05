@@ -95,6 +95,10 @@ export class Room {
       scoreLimit: this.options.scoreLimit,
       roundTime: this.options.roundTimeSec,
       phase: this.sim.phase,
+      // Non-zero means the room is a queued playlist lobby: it holds in
+      // warmup until this many humans have arrived. Clients use it to stay on
+      // the matchmaking screen instead of loading straight into an empty map.
+      minPlayers: this.minPlayers,
       host: this.hostId
     };
   }

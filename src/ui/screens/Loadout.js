@@ -38,9 +38,9 @@ export function createLoadout(game) {
       listNode.appendChild(el('div.wpn-row' + (on ? '.sel' : ''), {
         onclick: () => {
           audio.ui('click');
-          if (slot === 'primary') { S.loadout.primary = w.key; S.loadout.primaryAttachments = []; }
-          else { S.loadout.secondary = w.key; S.loadout.secondaryAttachments = []; }
-          settings.save();
+          // equipWeapon restores whatever was last fitted to this gun, so
+          // swapping away and back keeps your optic, muzzle and grip.
+          settings.equipWeapon(slot, w.key);
           game.onLoadoutChanged();
           renderAll();
         },
@@ -96,8 +96,7 @@ export function createLoadout(game) {
             audio.ui(on ? 'back' : 'accept');
             const next = list.filter((k) => ATTACHMENTS[k]?.slot !== a.slot);
             if (!on) next.push(a.key);
-            S.loadout[attKey()] = next;
-            settings.save();
+            settings.setAttachments(slot, base.key, next);
             game.onLoadoutChanged();
             renderAll();
           },

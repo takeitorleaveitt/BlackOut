@@ -39,7 +39,8 @@ export function createMoveState(x = 0, y = 0, z = 0) {
     prevCrouchHeld: false,
     // --- jump ---
     clock: 0,            // fallback clock for callers that don't stamp cmd.t
-    jumpReadyAt: 0       // absolute time the next jump is allowed
+    jumpReadyAt: 0,      // absolute time the next jump is allowed
+    jumpSeq: -1          // command seq that produced the current jump
   };
 }
 
@@ -203,13 +204,24 @@ export function stepMovement(s, cmd, world, mobility = 1, canAct = true) {
   // several times faster than real time — which is why there was effectively
   // no cooldown at all. `cmd.t` is a property of the command, so replaying it
   // produces the same answer every time.
-  if (canAct && (b & BTN.JUMP) && s.grounded && now >= s.jumpReadyAt &&
+  //
+  // Replaying a command must also REPRODUCE its jump, not suppress it. The
+  // deadline alone did suppress it: the live pass set jumpReadyAt, so when
+  // reconciliation replayed that same command the gate rejected it, the
+  // predicted hop was thrown away, and the jump only reappeared once the
+  // server's own snapshot arrived — a small hop followed by the real one.
+  // Remembering which command did the jumping lets the replay redo exactly
+  // that command while still refusing every later one.
+  const sameCmdJumped = cmd.seq !== undefined && s.jumpSeq === cmd.seq;
+  if (canAct && (b & BTN.JUMP) && s.grounded &&
+      (now >= s.jumpReadyAt || sameCmdJumped) &&
       (s.crouchT < 0.4 || s.sliding)) {
     if (s.sliding) { s.sliding = false; s.slideReadyAt = now + SLIDE_COOLDOWN; }
     s.vy = JUMP_VELOCITY;
     s.grounded = false;
     s.jumped = true;
     s.jumpReadyAt = now + JUMP_COOLDOWN;
+    if (cmd.seq !== undefined) s.jumpSeq = cmd.seq;
   } else s.jumped = false;
 
   // --- integrate + collide ------------------------------------------------

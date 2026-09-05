@@ -83,11 +83,18 @@ const DEFAULTS = {
   toggleSprint: false,
   binds: { ...DEFAULT_BINDS },
   // loadout (persisted so it survives reloads)
+  //
+  // `attachments` is the real memory: a map of weapon key -> fitted
+  // attachments, so every gun keeps its own optic/muzzle/grip choices when
+  // you switch away and come back. The two *Attachments arrays are mirrors of
+  // whatever is currently equipped in each slot, kept because the netcode,
+  // the sim and the server loadout validator all read them by that name.
   loadout: {
     primary: 'm4a1',
     secondary: 'glock17',
     primaryAttachments: ['reddot'],
-    secondaryAttachments: []
+    secondaryAttachments: [],
+    attachments: { m4a1: ['reddot'] }
   },
   // network
   serverUrl: '',
@@ -130,7 +137,65 @@ class SettingsStore {
       if (k in this.data) { delete this.data[k]; migrated = true; }
     }
     if (!this.data.name) this.data.name = randomCallsign();
+    if (this.syncLoadout()) migrated = true;
     if (migrated) this.save();
+  }
+
+  /**
+   * Reconcile the per-weapon attachment map with the equipped slots.
+   *
+   * Saves from before the map existed only have primaryAttachments /
+   * secondaryAttachments, so those seed the map for whatever is equipped;
+   * after that the map is the source of truth and the slot arrays are just
+   * mirrors of it. Returns true if anything had to be written back.
+   */
+  syncLoadout() {
+    const l = this.data.loadout;
+    if (!l) return false;
+    if (!l.attachments || typeof l.attachments !== 'object') l.attachments = {};
+    let changed = false;
+    for (const [slot, mirror] of [['primary', 'primaryAttachments'], ['secondary', 'secondaryAttachments']]) {
+      const key = l[slot];
+      if (!key) continue;
+      const fitted = Array.isArray(l[mirror]) ? l[mirror] : [];
+      if (!Array.isArray(l.attachments[key])) {
+        l.attachments[key] = [...fitted];   // first run after the upgrade
+        changed = true;
+      } else if (!sameList(l.attachments[key], fitted)) {
+        l[mirror] = [...l.attachments[key]];
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /** Attachments remembered for one weapon (a copy — callers may mutate it). */
+  attachmentsFor(weaponKey) {
+    const map = this.data.loadout?.attachments || {};
+    return Array.isArray(map[weaponKey]) ? [...map[weaponKey]] : [];
+  }
+
+  /**
+   * Equip a weapon into a slot, restoring whatever was last fitted to it.
+   * This is what makes attachments survive a weapon switch.
+   */
+  equipWeapon(slot, weaponKey) {
+    const l = this.data.loadout;
+    const mirror = slot === 'primary' ? 'primaryAttachments' : 'secondaryAttachments';
+    l[slot] = weaponKey;
+    l[mirror] = this.attachmentsFor(weaponKey);
+    this.save();
+    bus.emit('settings:changed', 'loadout', l);
+  }
+
+  /** Fit a set of attachments to a weapon and remember them for next time. */
+  setAttachments(slot, weaponKey, list) {
+    const l = this.data.loadout;
+    const mirror = slot === 'primary' ? 'primaryAttachments' : 'secondaryAttachments';
+    (l.attachments ||= {})[weaponKey] = [...list];
+    if (l[slot] === weaponKey) l[mirror] = [...list];
+    this.save();
+    bus.emit('settings:changed', 'loadout', l);
   }
 
   save() {
@@ -170,10 +235,16 @@ class SettingsStore {
   }
 
   reset() {
-    this.data = { ...DEFAULTS, name: this.data.name };
+    this.data = { ...DEFAULTS, name: this.data.name, loadout: { ...DEFAULTS.loadout, attachments: { ...DEFAULTS.loadout.attachments } } };
     this.save();
     bus.emit('settings:changed', '*', this.data);
   }
+}
+
+function sameList(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  const x = [...a].sort(); const y = [...b].sort();
+  return x.every((v, i) => v === y[i]);
 }
 
 const ADJ = ['GHOST', 'IRON', 'NIGHT', 'BLACK', 'SILENT', 'RAZOR', 'GREY', 'HOLLOW', 'COLD', 'WOLF', 'STORM', 'ASH'];

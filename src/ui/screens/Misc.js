@@ -5,6 +5,7 @@ import { audio } from '../../audio/AudioEngine.js';
 import { S, settings } from '../../core/Settings.js';
 import { account, fmtDuration } from '../../core/Account.js';
 import { PLAYLISTS } from '../../shared/modes.js';
+import { avatarSvg } from '../Avatar.js';
 
 // ---------------------------------------------------------------------------
 // FRIENDS — local roster plus invite codes
@@ -26,12 +27,15 @@ export function createFriends(game) {
     clear(listNode);
     if (!friends.length) {
       listNode.appendChild(el('p.sub', { style: { textTransform: 'none', letterSpacing: '.06em' } },
-        'No one on your roster yet. Add a callsign, then send them your room code from a private match.'));
+        'No one on your roster yet. Add a callsign, then invite them into your squad from here.'));
     }
     for (const f of friends) {
       listNode.appendChild(el('div.pl-row',
         el('span.nm', f.name),
         el('span.st', f.code ? 'CODE ' + f.code : 'OFFLINE'),
+        // Pulls them straight into your four-slot squad, which then travels
+        // with you into Quick Match, Standard and private rooms.
+        button('INVITE', () => game.squadInvite(f.name), { cls: 'sm primary' }),
         button('JOIN', () => {
           if (!f.code) { ui.toast('No room code saved for ' + f.name, 'warn'); return; }
           game.joinCode(f.code);
@@ -163,8 +167,11 @@ export function createQueue(game) {
   let timer = null, started = 0, playlist = null;
 
   function refresh() {
-    const need = PLAYLISTS[playlist]?.minPlayers ?? 8;
-    const have = game.roomPlayerList?.filter((p) => !p.bot).length ?? 0;
+    // The server's own lobbyStatus is authoritative when we have it; the
+    // room list is the fallback for the moment before the first one lands.
+    const st = game.lobbyStatus;
+    const need = st?.need || PLAYLISTS[playlist]?.minPlayers || 8;
+    const have = st?.have ?? (game.roomPlayerList?.filter((p) => !p.bot).length ?? 0);
     if (countNode) countNode.textContent = `${have} / ${need}`;
     if (statusNode) {
       statusNode.textContent = have >= need
@@ -253,10 +260,17 @@ export function createProfile(game) {
 
       const ban = account.banRemainingMs();
 
+      const av = account.avatar;
+
       node.appendChild(header('PROFILE'));
       node.appendChild(el('div.body', el('div.pane', { style: { flex: '1' } },
-        el('h1.title', S.name || 'OPERATOR'),
-        el('p.sub', `ACCOUNT CREATED ${created.toLocaleDateString()} · ${ageDays} DAY${ageDays === 1 ? '' : 'S'} OLD`),
+        el('div.profile-head',
+          el('div.profile-pic', { html: avatarSvg(av, 104) }),
+          el('div',
+            el('h1.title', { style: { margin: '0 0 8px' } }, S.name || 'OPERATOR'),
+            el('p.sub', { style: { margin: '0 0 6px' } },
+              `ACCOUNT CREATED ${created.toLocaleDateString()} · ${ageDays} DAY${ageDays === 1 ? '' : 'S'} OLD`),
+            el('p.sub', { style: { margin: 0 } }, `TODAY'S KIT · ${av.name}`))),
 
         el('div.grid.c3', { style: { marginBottom: '18px' } },
           statBlock('LEVEL', String(account.level), `${account.xp} / ${account.xpToNext} XP`),

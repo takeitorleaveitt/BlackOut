@@ -19,7 +19,7 @@ import { HUD } from './game/HUD.js';
 import { audio } from './audio/AudioEngine.js';
 import { NetClient } from './net/NetClient.js';
 import { LocalNet } from './net/LocalNet.js';
-import { UI } from './ui/UI.js';
+import { UI, el } from './ui/UI.js';
 import { createMainMenu } from './ui/screens/MainMenu.js';
 import { createPlayMenu, createServerBrowser, createPrivateMatch, createLobby, createTraining } from './ui/screens/Play.js';
 import { createLoadout } from './ui/screens/Loadout.js';
@@ -30,7 +30,8 @@ import { WEAPON_BY_ID, WEAPON_BY_KEY } from './shared/weapons.js';
 import { resolveWeapon } from './shared/attachments.js';
 import { buildWeaponModel, buildWorldWeapon } from './weapons/WeaponModels.js';
 import { EV, SF } from './shared/protocol.js';
-import { INTERP_DELAY_MS, TEAM, clamp, lerp } from './shared/constants.js';
+import { INTERP_DELAY_MS, SURFACE, TEAM, clamp, lerp } from './shared/constants.js';
+import { surfaceMaterial, propMaterial, propGlassMaterial } from './render/Materials.js';
 import { REGIONS, PLAYLISTS } from './shared/modes.js';
 import { account, fmtDuration } from './core/Account.js';
 
@@ -58,6 +59,11 @@ class Game {
     this.serverList = [];
     this.serverListeners = new Set();
     this.roomListeners = new Set();
+    this.squadListeners = new Set();
+    // Solo until the server says otherwise. The panel is drawn from this even
+    // before a connection exists, so it always has something to show.
+    this.squad = { id: 0, code: '', leaderId: -1, max: 4, members: [], local: true };
+    this.pendingInvite = null;
     this.playerId = -1;
     this.friendlyFire = false;
     this.paused = false;
@@ -193,16 +199,28 @@ class Game {
     await step(40, 'SURVEYING SECTORS…', () => {
       for (const key of MAP_KEYS) getMap(key);
     });
-    await step(56, 'FABRICATING WEAPONS…', () => {
+    // Surface textures are generated procedurally and cached globally, so
+    // building every one now means the first match on a map with a surface
+    // the menu map lacks doesn't stop to synthesise it mid-load.
+    await step(50, 'PRINTING SURFACES…', () => {
+      this.preloadMaterials();
+    });
+    await step(62, 'FABRICATING WEAPONS…', () => {
       this.preloadWeaponModels();
     });
-    await step(70, 'BRIEFING OPERATORS…', () => {
+    await step(74, 'BRIEFING OPERATORS…', () => {
       this.preloadPlayerModels();
     });
-    await step(86, 'COMPILING SHADERS…', () => {
+    // Every menu screen's DOM is built once here rather than on the first
+    // time it is opened — the interface is large enough that building a
+    // screen mid-session was a visible hitch on the first navigation.
+    await step(84, 'DRAWING INTERFACE…', () => {
+      this.preloadScreens();
+    });
+    await step(92, 'COMPILING SHADERS…', () => {
       this.engine.renderer.compile(this.engine.scene, this.engine.camera);
     });
-    await step(96, 'READY');
+    await step(97, 'READY');
 
     this.engine.start();
     this.ui.show('main', {}, { silent: true, resetStack: true });
@@ -232,6 +250,34 @@ class Game {
     this.engine.renderer.compile(this.engine.scene, this.engine.camera);
     tmp.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
     this.engine.scene.remove(tmp);
+  }
+
+  /**
+   * Force every surface material — and therefore every procedural texture —
+   * into the shared cache while the loading bar is still up.
+   */
+  preloadMaterials() {
+    for (const surface of Object.values(SURFACE)) surfaceMaterial(surface);
+    propMaterial();
+    propGlassMaterial();
+  }
+
+  /**
+   * Build the DOM for every menu screen up front. UI.show() lazily builds a
+   * screen the first time it is opened, which meant the first visit to the
+   * loadout or settings screen paid for hundreds of nodes at once.
+   */
+  preloadScreens() {
+    for (const [name, screen] of this.ui.screens) {
+      if (screen.node) continue;
+      screen.node = el('div.screen', { id: 'screen-' + name });
+      try { screen.build?.(screen.node, this.ui); } catch (e) {
+        // A screen that cannot pre-build is not fatal: drop the half-built
+        // node and let UI.show() build it again on demand.
+        console.warn('[preload] screen', name, e);
+        screen.node = null;
+      }
+    }
   }
 
   /**
@@ -322,19 +368,32 @@ class Game {
   }
 
   async ensureOnline() {
-    if (this.onlineNet && this.onlineNet.connected) return this.onlineNet;
-    const net = new NetClient();
-    this.attachNetHandlers(net);
-    const url = S.serverUrl || NetClient.defaultUrl();
     try {
-      await net.connect(url);
+      return await this.ensureOnlineQuiet();
     } catch (e) {
       this.ui.toast('Could not reach the game server. Training mode still works offline.', 'err');
       throw e;
     }
-    net.hello(S.name, this.loadout());
-    this.onlineNet = net;
-    return net;
+  }
+
+  /** ensureOnline() without the failure toast, for background connections. */
+  async ensureOnlineQuiet() {
+    if (this.onlineNet && this.onlineNet.connected) return this.onlineNet;
+    if (this._connecting) return this._connecting;
+    const net = new NetClient();
+    this.attachNetHandlers(net);
+    const url = S.serverUrl || NetClient.defaultUrl();
+    this._connecting = (async () => {
+      try {
+        await net.connect(url);
+        net.hello(S.name, this.loadout());
+        this.onlineNet = net;
+        return net;
+      } finally {
+        this._connecting = null;
+      }
+    })();
+    return this._connecting;
   }
 
   async quickMatch(mode) {
@@ -354,6 +413,12 @@ class Game {
   async playPlaylist(key) {
     const pl = PLAYLISTS[key];
     if (!pl) return;
+
+    // In a squad, only the leader deploys. Everyone else gets pulled in.
+    if (!this.isSquadLeader) {
+      this.ui.toast('Only the squad leader can start a match', 'warn');
+      return;
+    }
 
     // A leave penalty locks every playlist; private matches stay open.
     const ban = account.banRemainingMs();
@@ -421,6 +486,7 @@ class Game {
   /** Back out of matchmaking without any penalty — nothing has started yet. */
   cancelQueue() {
     this.currentPlaylist = null;
+    this.lobbyStatus = null;
     this.onlineNet?.leave?.();
   }
 
@@ -465,14 +531,21 @@ class Game {
   }
 
   async joinRoom(id) {
+    if (!this.isSquadLeader) { this.ui.toast('Only the squad leader can start a match', 'warn'); return; }
     try { (await this.ensureOnline()).joinRoom(id); } catch (e) { /* ignore */ }
   }
 
   async joinCode(code) {
+    if (!this.isSquadLeader) { this.ui.toast('Only the squad leader can start a match', 'warn'); return; }
     try { (await this.ensureOnline()).joinCode(code); } catch (e) { /* ignore */ }
   }
 
   async createRoom(settingsObj) {
+    if (!this.isSquadLeader) {
+      this.ui.toast('Only the squad leader can start a match', 'warn');
+      return;
+    }
+    // Whoever is in your squad is dropped into the private room with you.
     try { (await this.ensureOnline()).createRoom(settingsObj); } catch (e) { /* ignore */ }
   }
 
@@ -506,6 +579,77 @@ class Game {
   onServerList(fn) {
     this.serverListeners.add(fn);
     return () => this.serverListeners.delete(fn);
+  }
+
+  // -------------------------------------------------------------------------
+  // squad
+  // -------------------------------------------------------------------------
+  onSquadUpdate(fn) {
+    this.squadListeners.add(fn);
+    return () => this.squadListeners.delete(fn);
+  }
+
+  notifySquad() { for (const fn of this.squadListeners) fn(this.squad); }
+
+  /** The squad as the UI wants it: always four slots, you always present. */
+  squadSlots() {
+    const members = this.squad?.members?.length
+      ? this.squad.members
+      : [{ id: this.onlineNet?.id ?? -1, name: S.name, leader: true }];
+    const slots = [];
+    for (let i = 0; i < (this.squad?.max || 4); i++) slots.push(members[i] || null);
+    return slots;
+  }
+
+  /** True when you are the one allowed to start a match. */
+  get isSquadLeader() {
+    const sq = this.squad;
+    if (!sq || sq.members.length < 2) return true;
+    return sq.leaderId === (this.onlineNet?.id ?? -1);
+  }
+
+  /**
+   * Connect quietly so squad invites can arrive while you sit in the menu.
+   * Unlike ensureOnline() this never toasts — an offline player just keeps a
+   * solo squad panel rather than being told off for having no server.
+   */
+  async connectForSquad() {
+    if (this.onlineNet?.connected) { this.onlineNet.squadInfo(); return this.onlineNet; }
+    // Back off after a failure. Without this, every trip back to the main
+    // menu fired another doomed WebSocket at a server that isn't there.
+    if (this._squadConnectFailedAt && Date.now() - this._squadConnectFailedAt < 30000) return null;
+    try {
+      const net = await this.ensureOnlineQuiet();
+      net.squadInfo();
+      this._squadConnectFailedAt = 0;
+      return net;
+    } catch (e) {
+      this._squadConnectFailedAt = Date.now();
+      return null;
+    }
+  }
+
+  async squadInvite(name) {
+    const net = await this.connectForSquad();
+    if (!net) { this.ui.toast('Not connected — invites need the game server', 'warn'); return; }
+    net.squadInvite(String(name || '').toUpperCase());
+  }
+
+  async squadJoin(code) {
+    const net = await this.connectForSquad();
+    if (!net) { this.ui.toast('Not connected — invites need the game server', 'warn'); return; }
+    net.squadJoin(String(code || '').toUpperCase());
+    this.pendingInvite = null;
+  }
+
+  squadLeave() {
+    if (!this.onlineNet?.connected) return;
+    this.onlineNet.squadLeave();
+  }
+
+  squadKick(id) {
+    if (!this.onlineNet?.connected) return;
+    this.onlineNet.squadKick(id);
   }
 
   onRoomUpdate(fn) {
@@ -545,7 +689,12 @@ class Game {
     net.on('match', (msg) => this.onMatchState(msg.state));
     net.on('matchStart', (msg) => {
       this.roomInfo = msg;
-      if (msg.map && msg.map !== this.currentMap) this.enterMatch(msg);
+      this.lobbyStatus = null;
+      // Load in whenever we are not already standing in this match. Comparing
+      // the map alone was not enough: queueing from the menu into a room on
+      // the same map as the last match skipped the load and left you sitting
+      // on the matchmaking screen forever.
+      if (msg.map && (this.mode !== 'match' || msg.map !== this.currentMap)) this.enterMatch(msg);
       this.onMatchState(msg.state);
     });
     net.on('roomInfo', (msg) => { this.roomInfo = msg; this.notifyRoom(); });
@@ -574,10 +723,23 @@ class Game {
       this.lobbyStatus = msg;
       this.notifyRoom();
     });
+    net.on('squad', (msg) => {
+      this.squad = { ...msg, local: false };
+      for (const fn of this.squadListeners) fn(this.squad);
+    });
+    net.on('squadInvite', (msg) => {
+      this.pendingInvite = { from: msg.from, code: msg.code, at: Date.now() };
+      this.ui.toast(`${msg.from} invited you to their squad — open FRIENDS to accept`);
+      for (const fn of this.squadListeners) fn(this.squad);
+    });
+    net.on('squadInviteSent', (msg) => this.ui.toast(`Invite sent to ${msg.name}`));
     net.on('error', (msg) => this.ui.toast(msg.message || 'Server error', 'err'));
     net.on('chat', (msg) => this.ui.toast(`${msg.from}: ${msg.text}`));
     net.on('left', () => { this.roomInfo = null; });
     bus.on('net:close', () => {
+      this.squad = { id: 0, code: '', leaderId: -1, max: 4, members: [], local: true };
+      this.pendingInvite = null;
+      this.notifySquad();
       if (this.mode === 'match' && this.net === this.onlineNet) {
         this.ui.toast('Connection lost', 'err');
         this.toMenu();
@@ -595,6 +757,16 @@ class Game {
     this.notifyRoom();
     if (msg.private && msg.phase === 'warmup' && !msg.offline) {
       this.ui.show('lobby', {}, { noStack: true });
+      return;
+    }
+    // A queued playlist room holds in warmup until it has eight humans. Sit
+    // on the matchmaking screen rather than loading into a near-empty map —
+    // 'matchStart' brings everyone in together once the lobby fills.
+    if (msg.minPlayers > 0 && msg.phase === 'warmup' && !msg.offline) {
+      this.currentPlaylist = this.currentPlaylist || 'quickmatch';
+      this.lobbyStatus = { have: msg.players || 1, need: msg.minPlayers, ready: false };
+      this.ui.showRoot();
+      this.ui.show('queue', { playlist: this.currentPlaylist }, { noStack: true });
       return;
     }
     this.enterMatch(msg);
