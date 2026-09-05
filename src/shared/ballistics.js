@@ -77,12 +77,22 @@ function rayBoxLocal(ox, oy, oz, dx, dy, dz, hx, hy, hz, cy) {
  * back edge of a body passed straight through it.
  */
 export function hitZones(height) {
-  return [
-    { zone: 'head', hx: 0.125, hy: (HITBOX.head.yMax - HITBOX.head.yMin) * height * 0.5, hz: 0.135, cy: (HITBOX.head.yMin + HITBOX.head.yMax) * 0.5 * height, mult: HITBOX.head.mult },
-    { zone: 'torso', hx: 0.225, hy: (HITBOX.torso.yMax - HITBOX.torso.yMin) * height * 0.5, hz: 0.205, cy: (HITBOX.torso.yMin + HITBOX.torso.yMax) * 0.5 * height, mult: HITBOX.torso.mult },
-    { zone: 'arms', hx: 0.40, hy: (HITBOX.arms.yMax - HITBOX.arms.yMin) * height * 0.46, hz: 0.20, cy: (HITBOX.arms.yMin + HITBOX.arms.yMax) * 0.5 * height, mult: HITBOX.arms.mult },
-    { zone: 'legs', hx: 0.225, hy: (HITBOX.legs.yMax - HITBOX.legs.yMin) * height * 0.5, hz: 0.185, cy: (HITBOX.legs.yMin + HITBOX.legs.yMax) * 0.5 * height, mult: HITBOX.legs.mult }
-  ];
+  // hx/hz come from the HITBOX table rather than being written out here, so
+  // there is exactly one place hit volumes are defined. The arms box is
+  // shallower in Y than the others (0.46 rather than 0.5 of its span) because
+  // arms hang below the shoulder line the torso box starts at.
+  const box = (zone, yScale = 0.5) => {
+    const h = HITBOX[zone];
+    return {
+      zone,
+      hx: h.hx,
+      hz: h.hz,
+      hy: (h.yMax - h.yMin) * height * yScale,
+      cy: (h.yMin + h.yMax) * 0.5 * height,
+      mult: h.mult
+    };
+  };
+  return [box('head'), box('torso'), box('arms', 0.46), box('legs')];
 }
 
 /**

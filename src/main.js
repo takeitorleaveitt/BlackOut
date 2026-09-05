@@ -80,6 +80,10 @@ class Game {
     this.hud = new HUD(document.getElementById('hud-root'), this);
     this.hud.show(false);
 
+    // While the scope picture fills the screen the weapon model behind it is
+    // just noise poking into the surround.
+    bus.on('hud:scoped', (on) => { this.viewmodel.visible = !on; });
+
     this.registerScreens();
     this.bindInput();
 
@@ -1197,6 +1201,10 @@ class Game {
     this.hud.update(dt, {
       spread: w ? w.spread : 2,
       ads: w ? w.adsT : 0,
+      // Only a telescopic scope takes over the whole screen; every other
+      // sight is looked through on the weapon model itself.
+      scoped: !!w?.def?.flags?.scoped,
+      moving: this.player.state.speed > 0.4,
       health: this.player.health,
       yaw: this.player.rig.yaw,
       lean: this.player.state.leanT,
@@ -1229,6 +1237,7 @@ const game = new Game();
 window.__game = game;
 window.__W = WEAPON_BY_KEY;   // exposed for automated screenshots
 window.__buildWeaponModel = buildWeaponModel;   // ditto: geometry measurements
+window.__settings = settings;                  // ditto: loadout assertions
 game.boot().catch((e) => {
   console.error(e);
   const status = document.querySelector('#boot .boot-status');

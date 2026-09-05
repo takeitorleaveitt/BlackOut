@@ -293,6 +293,46 @@ export const WEAPONS = [
     model: { barrel: 0.02, receiver: 0.05, stock: 'none', handguard: 'none', mag: 'none', tint: 0x555a5e, accent: 0x8a8f94 },
     attachments: []
   }
+,
+  {
+    key: 'm40',
+    name: 'M40',
+    fullName: 'M40 Bolt-Action Rifle',
+    caliber: '7.62x51mm',
+    class: 'Sniper',
+    slot: SLOT.PRIMARY,
+    desc: 'Wood-stocked bolt gun. Four rounds, one shot, and a long walk back if you miss.',
+    // One chest hit ends it. That is the whole weapon: a four-round magazine
+    // and a slow bolt cycle are what pay for it, not a damage number that
+    // leaves the target on 2 health.
+    damage: 105, damageMin: 68, falloffStart: 90, falloffEnd: 170,
+    headMult: undefined,
+    rpm: 48, auto: false, burst: 0,
+    // Worked by hand between shots. Reuses the shotgun's cycling state, so
+    // the bolt animation and the enforced pause come for free.
+    pumpTime: 0.85,
+    muzzleVelocity: 880, dropScale: 0.55,
+    magSize: 4, reserve: 30,
+    reloadTactical: 2.55, reloadEmpty: 3.10, drawTime: 0.72, holsterTime: 0.42,
+    adsTime: 0.44, adsFov: 0.60,
+    // Hopeless from the hip and surgical through the glass — the sniper's
+    // whole risk/reward is in that gap.
+    spreadHip: 3.60, spreadAds: 0.012, spreadMove: 2.20, spreadJump: 4.50,
+    spreadPerShot: 0.9, spreadMax: 4.8, spreadRecover: 2.6,
+    recoil: {
+      vert: 0.048, horiz: 0.011, recovery: 3.4, viewKick: 1.5, camShake: 1.35,
+      firstShotMult: 1.0, kickBack: 0.055,
+      pattern: pattern('0,0 0.1,0')
+    },
+    weight: 1.5, mobility: 0.86, adsMobility: 0.60,
+    sway: { amp: 1.35, freq: 0.72, inertia: 1.5 },
+    penetration: 0.85, pellets: 1, pelletSpread: 0,
+    audio: { punch: 148, body: 300, crack: 2100, tail: 1.35, level: 1.25, tone: 0.42 },
+    model: { barrel: 0.62, receiver: 0.26, stock: 'wood', handguard: 'wood', mag: 'box', tint: 0x86593a, accent: 0x474b4f },
+    // The scope lives in the optic slot, so fitting it swaps out nothing else.
+    // Deagle and the shotgun have no optics at all; this one ships with one.
+    attachments: ['scope', 'suppressor', 'grip', 'laser']
+  }
 ];
 
 export const WEAPON_BY_KEY = Object.fromEntries(WEAPONS.map((w) => [w.key, w]));

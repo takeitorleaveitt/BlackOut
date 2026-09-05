@@ -193,14 +193,23 @@ export class CameraRig {
     const breathAmp = (0.0016 + hurt * 0.0062 + (1 - this.stamina) * 0.0035) * (ctx.ads ? 1.5 : 1);
 
     // --- landing dip -------------------------------------------------------
+    // A stiff, nearly critically-damped spring: knees absorbing a landing,
+    // not a diving board. The old constants (k=90, damping 9) gave a damping
+    // ratio of 0.47 and a 0.66s period, so every landing wallowed through two
+    // visible bounces over about three quarters of a second — which is what
+    // made hitting the ground feel laggy. k=225 with damping 27 is a ratio of
+    // 0.90 and a 0.42s period: one clean compression, a hint of rebound, done
+    // in about a fifth of the time. The impulse is scaled up to keep the same
+    // depth of dip out of the stiffer spring: 2.7cm down and back in 0.43s,
+    // against 2.8cm over 0.70s with two bounces before.
     if (st.landed && st.landImpact > 0.02) {
-      this.landVel -= st.landImpact * 0.9;
-      this.shake += st.landImpact * 0.35 * shakeScale;
+      this.landVel -= st.landImpact * 2.3;
+      this.shake += st.landImpact * 0.30 * shakeScale;
     }
-    this.landVel += -this.landDip * 90 * dt;
-    this.landVel *= Math.exp(-9 * dt);
+    this.landVel += -this.landDip * 225 * dt;
+    this.landVel *= Math.exp(-27 * dt);
     this.landDip += this.landVel * dt;
-    this.landDip = clamp(this.landDip, -0.22, 0.06);
+    this.landDip = clamp(this.landDip, -0.16, 0.04);
 
     // --- shake -------------------------------------------------------------
     this.shake = Math.max(0, this.shake - dt * 3.4);

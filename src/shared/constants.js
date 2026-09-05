@@ -87,11 +87,24 @@ export const HEAL_CAP = 100;
 // is 0.42 wide and, once the chest plate and backpack are counted, ~0.43 deep;
 // the helmet is 0.23 x 0.25. The depths in particular used to be well under
 // the geometry a player can actually see and shoot at.
+/**
+ * Hit zones, as fractions of the player's current height (yMin/yMax) plus the
+ * half-width and half-depth of each box in metres.
+ *
+ * hx/hz used to be hardcoded in hitZones() while this table carried an unused
+ * `radius`, so editing the table changed nothing about where bullets actually
+ * landed. They live here now, and hitZones() reads them, so this is the one
+ * place hit volumes are defined.
+ *
+ * Widened about 10% over the previous values: enough that a shot which looked
+ * like it connected usually does, without turning anyone into a barn door.
+ * The multipliers are untouched, so what a hit is worth has not changed.
+ */
 export const HITBOX = {
-  head:  { yMin: 0.850, yMax: 1.00, radius: 0.135, mult: 3.35 },
-  torso: { yMin: 0.540, yMax: 0.860, radius: 0.30, mult: 1.00 },
-  arms:  { yMin: 0.540, yMax: 0.860, radius: 0.44, mult: 0.78 },
-  legs:  { yMin: 0.00,  yMax: 0.540, radius: 0.28, mult: 0.72 }
+  head:  { yMin: 0.840, yMax: 1.010, hx: 0.138, hz: 0.148, mult: 3.35 },
+  torso: { yMin: 0.530, yMax: 0.870, hx: 0.248, hz: 0.226, mult: 1.00 },
+  arms:  { yMin: 0.530, yMax: 0.870, hx: 0.440, hz: 0.220, mult: 0.78 },
+  legs:  { yMin: 0.000, yMax: 0.530, hx: 0.248, hz: 0.204, mult: 0.72 }
 };
 
 // button bitmask packed into the input command

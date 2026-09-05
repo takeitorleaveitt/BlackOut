@@ -33,14 +33,16 @@ lobby, and match.
   (`src/render/passes/BodycamShader.js`) adds scanlines, compression
   artifacts, bloom, exposure and vignette — every one toggleable in
   Settings → Bodycam for low-end hardware.
-- **Nine weapons**, each with a unique procedural 3D model, recoil pattern,
+- **Ten weapons**, each with a unique procedural 3D model, recoil pattern,
   fire rate, reload choreography, sound profile and handling feel:
-  M4A1, AK-74, MP5, MP7, SCAR-H, M870 (pump shotgun with pellet spread),
-  Glock 17, Desert Eagle, and a combat knife with its own slash, backstab
-  and inspect. Defined in `src/shared/weapons.js`; attachments (red dot,
-  holographic, suppressor, compensator, grip, light, laser) resolve into
-  real stat deltas in `src/shared/attachments.js`, and each gun remembers
-  its own fitting when you switch away and back.
+  M4A1, AK-74, MP5, MP7, SCAR-H, M40 (bolt-action sniper, four rounds and a
+  telescopic scope), M870 (pump shotgun with pellet spread), Glock 17,
+  Desert Eagle, and a combat knife with its own slash, backstab and inspect.
+  Defined in `src/shared/weapons.js`; attachments (red dot, holographic,
+  telescopic scope, suppressor, compensator, grip, light, laser) resolve
+  into real stat deltas in `src/shared/attachments.js`, and each gun
+  remembers its own fitting when you switch away and back — the M40 ships
+  scoped, and taking the scope off keeps it off.
 - **Real ballistics** — bullets travel with velocity and drop, penetrate
   thin materials at a cost, and resolve per-body-zone damage (head/torso/
   arms/legs) against a lag-compensated hit history on the server

@@ -87,6 +87,18 @@ export class HUD {
     this.scoreboard = el('div#scoreboard', { hidden: true });
 
     r.appendChild(this.bodycam);
+    // Scope picture. Only the M40's telescopic scope raises this; every other
+    // sight is looked through on the weapon model itself. The surround is one
+    // huge box-shadow rather than an image, so it fills any aspect ratio.
+    this.scope = el('div.scope', { style: { display: 'none' } },
+      el('div.scope-shade'),
+      el('div.scope-ring',
+        el('div.scope-glass'),
+        el('div.scope-cross-v'),
+        el('div.scope-cross-h'),
+        el('div.scope-mil'),
+        el('div.scope-numbers', '2  4  6  8  10')));
+    r.appendChild(this.scope);
     r.appendChild(this.crosshair);
     r.appendChild(this.hitmark);
     r.appendChild(this.br);
@@ -118,13 +130,23 @@ export class HUD {
   setWeapon(w) {
     if (!w) return;
     const d = w.def;
-    this.ammo.firstChild.nodeValue = String(w.ammo);
-    this.ammo.querySelector('small').textContent = ` / ${w.reserve}`;
-    this.ammo.classList.toggle('low', w.ammo <= d.magSize * 0.25 && w.ammo > 0);
-    this.ammo.classList.toggle('empty', w.ammo === 0);
+    // A blade has no magazine and no reserve, so it gets no ammo counter —
+    // showing "1 / 1" over a knife was the last thing making it read as a gun
+    // you happen to be holding backwards.
+    if (d.melee) {
+      this.ammo.firstChild.nodeValue = '—';
+      this.ammo.querySelector('small').textContent = '';
+      this.ammo.classList.remove('low', 'empty');
+    } else {
+      this.ammo.firstChild.nodeValue = String(w.ammo);
+      this.ammo.querySelector('small').textContent = ` / ${w.reserve}`;
+      this.ammo.classList.toggle('low', w.ammo <= d.magSize * 0.25 && w.ammo > 0);
+      this.ammo.classList.toggle('empty', w.ammo === 0);
+    }
     this.wname.textContent = d.name;
     const att = (d.attached || []).map((a) => a.toUpperCase()).join(' · ');
-    this.wmode.textContent = (d.auto ? 'AUTO' : d.pumpTime ? 'PUMP' : 'SEMI') + (att ? ' · ' + att : '');
+    const action = d.melee ? 'MELEE' : d.auto ? 'AUTO' : d.pumpTime ? 'BOLT' : 'SEMI';
+    this.wmode.textContent = action + (att ? ' · ' + att : '');
   }
 
   setHealth(h) {
@@ -244,6 +266,24 @@ export class HUD {
     c.children[2].style.transform = `translateX(${-g - 7}px)`;
     c.children[3].style.transform = `translateX(${g}px)`;
     c.style.opacity = ctx.ads > 0.6 ? '0' : String(1 - ctx.ads * 0.9);
+
+    // Scoped sights swap the whole view for the scope picture once the aim has
+    // mostly settled. Below that the weapon model is still swinging up, and
+    // cutting to the scope early looks like a teleport rather than a mount.
+    const scoped = !!ctx.scoped && ctx.ads > 0.72;
+    if (scoped !== this._scoped) {
+      this._scoped = scoped;
+      this.scope.style.display = scoped ? 'block' : 'none';
+      bus.emit('hud:scoped', scoped);
+    }
+    if (scoped) {
+      // A touch of drift so the picture is not dead still, scaled by how much
+      // the operator is moving.
+      const t = performance.now() / 1000;
+      const sway = 1 + (ctx.moving ? 2.2 : 0);
+      this.scope.style.transform =
+        `translate(${Math.sin(t * 0.9) * 1.6 * sway}px, ${Math.cos(t * 0.7) * 1.3 * sway}px)`;
+    }
 
     if (this.hitTimer > 0) {
       this.hitTimer -= dt;

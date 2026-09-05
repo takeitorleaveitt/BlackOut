@@ -1,7 +1,7 @@
 // Procedural sound synthesis.
 //
 // Every sound in the game is generated as an AudioBuffer at runtime — gunshots,
-// impacts, footsteps, mechanical action, breathing, ambience.  Nothing is
+// impacts, footsteps, mechanical action, ambience.  Nothing is
 // downloaded, and each weapon's report is built from its own spectral profile
 // so an AK and an MP7 are unmistakable even with your eyes shut.
 

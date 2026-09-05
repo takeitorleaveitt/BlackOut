@@ -115,6 +115,28 @@ const BUILD = {
     g.add(part(b(0.046, 0.06, 0.025), M.polymer, 0, 0.005, 0.20));              // stock plate
     g.name = 'mp7';
   },
+  m40(g) {
+    // Bolt gun on a full wood stock: long barrel, cheek comb behind the
+    // action, and a bolt handle standing off the right of the receiver.
+    g.add(part(b(0.052, 0.070, 0.30), M.steel, 0, 0.010, -0.04));               // receiver
+    g.add(part(b(0.058, 0.055, 0.30), M.wood, 0, -0.035, -0.04));               // stock belly under the action
+    g.add(part(b(0.020, 0.020, 0.62), M.steelWorn, 0, 0.026, -0.48));           // barrel
+    g.add(part(b(0.056, 0.050, 0.30), M.wood, 0, -0.010, -0.30));               // forend
+    g.add(part(b(0.030, 0.030, 0.05), M.black, 0, 0.026, -0.80));               // muzzle crown
+    g.add(part(b(0.044, 0.045, 0.06), M.steel, 0, -0.052, -0.02));              // magazine housing
+    g.add(part(b(0.046, 0.110, 0.055), M.wood, 0, -0.098, 0.045, 0.16));        // pistol grip / wrist
+    g.add(part(b(0.052, 0.075, 0.26), M.wood, 0, -0.012, 0.22, -0.05));         // butt stock
+    g.add(part(b(0.054, 0.030, 0.13), M.wood, 0, 0.038, 0.16, -0.05));          // cheek comb
+    g.add(part(b(0.056, 0.030, 0.03), M.black, 0, -0.030, 0.345));              // recoil pad
+    g.add(part(b(0.026, 0.048, 0.02), M.steel, 0, -0.048, -0.02));              // trigger guard
+    // bolt handle, standing proud of the right side
+    g.add(part(b(0.052, 0.016, 0.016), M.steelWorn, 0.040, 0.030, 0.055));
+    g.add(part(b(0.020, 0.020, 0.020), M.steelWorn, 0.066, 0.030, 0.055));      // bolt knob
+    // scope rings sit on the receiver whether or not a scope is fitted
+    g.add(part(b(0.030, 0.022, 0.016), M.black, 0, 0.052, -0.14));
+    g.add(part(b(0.030, 0.022, 0.016), M.black, 0, 0.052, 0.02));
+    g.name = 'm40';
+  },
   m870(g) {
     g.add(part(b(0.058, 0.09, 0.24), M.steelWorn, 0, 0, -0.02));
     g.add(part(b(0.030, 0.030, 0.50), M.steelWorn, 0, 0.036, -0.40));           // barrel block
@@ -172,7 +194,8 @@ const MAGS = {
   m870: () => { const m = new THREE.Mesh(b(0.001, 0.001, 0.001), M.black); m.visible = false; return m; },
   glock17: () => { const m = new THREE.Mesh(b(0.022, 0.10, 0.035), M.black); m.position.set(0, -0.10, 0.03); return m; },
   deagle: () => { const m = new THREE.Mesh(b(0.028, 0.12, 0.045), M.black); m.position.set(0, -0.115, 0.03); return m; },
-  scarh: () => { const m = new THREE.Mesh(b(0.034, 0.15, 0.06), M.polymerTan); m.position.set(0, -0.11, -0.03); return m; }
+  scarh: () => { const m = new THREE.Mesh(b(0.034, 0.15, 0.06), M.polymerTan); m.position.set(0, -0.11, -0.03); return m; },
+  m40: () => { const m = new THREE.Mesh(b(0.036, 0.075, 0.05), M.steel); m.position.set(0, -0.088, -0.02); return m; }
 };
 
 // The reciprocating part: a charging handle for rifles, the whole slide for
@@ -199,7 +222,8 @@ const BOLTS = {
     g.add(part(b(0.026, 0.014, 0.012), M.black, 0, 0.055, 0.05));
     return g;
   },
-  scarh: () => part(b(0.022, 0.022, 0.055), M.steelWorn, 0.038, 0.055, 0.03)
+  scarh: () => part(b(0.022, 0.022, 0.055), M.steelWorn, 0.038, 0.055, 0.03),
+  m40: () => part(b(0.026, 0.026, 0.09), M.steelWorn, 0.0, 0.030, 0.06)
 };
 
 /** Attachment meshes, parented to the rail / muzzle / side nodes. */
@@ -255,6 +279,29 @@ export function buildAttachment(key) {
       break;
     }
       break;
+    // A telescopic scope, not a red dot: a long tube on two rings with an
+    // objective bell at the front. The reticle here is only what you see with
+    // the weapon unscoped or mid-transition — once the aim settles, the HUD
+    // takes over with the full-screen scope picture.
+    case 'scope': {
+      const H = 0.055;                 // optical axis above the rail
+      const r = 0.021, len = 0.30;
+      g.add(part(b(r * 2, r * 2, len), M.black, 0, H, -0.05));            // main tube
+      g.add(part(b(0.052, 0.052, 0.062), M.black, 0, H, -0.205));         // objective bell
+      g.add(part(b(0.046, 0.046, 0.050), M.black, 0, H, 0.078));          // ocular bell
+      g.add(part(b(0.050, 0.050, 0.030), M.steelWorn, 0, H, -0.02));      // elevation turret housing
+      g.add(part(b(0.020, 0.030, 0.020), M.steelWorn, 0, H + 0.032, -0.02)); // elevation turret
+      g.add(part(b(0.030, 0.020, 0.020), M.steelWorn, 0.032, H, -0.02));  // windage turret
+      g.add(part(b(0.026, H - 0.010, 0.022), M.black, 0, (H - 0.010) * 0.5 + 0.005, -0.11)); // front ring
+      g.add(part(b(0.026, H - 0.010, 0.022), M.black, 0, (H - 0.010) * 0.5 + 0.005, 0.030)); // rear ring
+      g.add(part(b(0.040, 0.010, 0.048), M.steelWorn, 0, 0.006, -0.04));  // rail clamp
+      g.add(part(b(0.044, 0.044, 0.0015), M.lens, 0, H, -0.232));         // objective glass
+      g.add(part(b(0.038, 0.038, 0.0015), M.lens, 0, H, 0.100));          // ocular glass
+      // simple crosshair for the unscoped/transition view
+      g.add(reticle(0.0030, 0xff2a1a, 0, H, 0.086));
+      g.userData.opticHeight = H;
+      break;
+    }
     case 'suppressor':
       g.add(part(b(0.042, 0.042, 0.17), M.black, 0, 0, -0.06));
       g.add(part(b(0.048, 0.048, 0.012), M.steel, 0, 0, 0.018));

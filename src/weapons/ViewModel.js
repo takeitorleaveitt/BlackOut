@@ -383,10 +383,28 @@ export class ViewModel {
         break;
       }
       case WS.CYCLING: {
-        pumpZ = pulse(k) * 0.085;
-        boltZ = pulse(k) * 0.05;
-        oz = pulse(k) * 0.022;
-        rx = pulse(k) * 0.055;
+        if (w.def.key === 'm40') {
+          // Bolt worked by hand: lift, pull straight back, shove home, turn
+          // down. The rifle rolls to the right as the hand comes off the grip.
+          const up = clamp(k / 0.22, 0, 1);
+          const back = clamp((k - 0.18) / 0.32, 0, 1);
+          const fwd = clamp((k - 0.52) / 0.30, 0, 1);
+          const down = clamp((k - 0.80) / 0.20, 0, 1);
+          boltZ = (ease(back) - ease(fwd)) * 0.105;
+          rz = ease(up) * 0.30 - ease(down) * 0.30;
+          rx = (ease(back) - ease(fwd)) * 0.075;
+          oz = (ease(back) - ease(fwd)) * 0.030;
+          oy = -pulse(k) * 0.015;
+          // the support hand comes off the forend to work the bolt and returns
+          const off = ease(up) - ease(down);
+          lox = off * 0.055; loy = off * -0.035; loz = off * 0.075;
+          lrx = off * 0.35; lry = off * -0.22;
+        } else {
+          pumpZ = pulse(k) * 0.085;
+          boltZ = pulse(k) * 0.05;
+          oz = pulse(k) * 0.022;
+          rx = pulse(k) * 0.055;
+        }
         break;
       }
       case WS.INSPECTING: {
@@ -405,12 +423,33 @@ export class ViewModel {
           rx = Math.sin(a * Math.PI * 3) * 0.18;   // small wrist flick
           boltZ = 0;
         } else {
-          ry = Math.sin(a * Math.PI * 2) * 0.55;
-          rz = Math.sin(a * Math.PI) * 0.42;
-          rx = Math.sin(a * Math.PI * 1.6) * 0.20;
-          ox = Math.sin(a * Math.PI) * -0.05;
-          oz = Math.sin(a * Math.PI) * 0.06;
-          boltZ = a > 0.55 && a < 0.75 ? pulse((a - 0.55) / 0.2) * 0.06 : 0;
+          // Three beats instead of one continuous wobble: tip the gun over to
+          // read the left side of the receiver, roll it back the other way to
+          // check the ejection port and thumb the bolt, then let it settle.
+          // The old version just rotated the whole thing back and forth twice,
+          // which read as the gun swimming rather than being looked at.
+          if (a < 0.38) {
+            const e = ease(a / 0.38);
+            oz = 0.085 * e; oy = 0.020 * e; ox = -0.030 * e;
+            ry = 0.95 * e;                       // turn the left flat into view
+            rz = 0.30 * e;
+            rx = -0.16 * e;
+          } else if (a < 0.74) {
+            const e = ease((a - 0.38) / 0.36);
+            oz = 0.085 - 0.020 * e; oy = 0.020 - 0.045 * e; ox = -0.030 + 0.075 * e;
+            ry = 0.95 - 1.55 * e;                // roll across to the other side
+            rz = 0.30 - 0.82 * e;
+            rx = -0.16 + 0.42 * e;
+            // thumb the bolt back and let it run home, once, mid-roll
+            const bolt = clamp((e - 0.35) / 0.5, 0, 1);
+            boltZ = pulse(bolt) * 0.085;
+            rx += pulse(bolt) * 0.07;
+          } else {
+            const e = ease((a - 0.74) / 0.26);
+            const back = 1 - e;
+            oz = 0.065 * back; oy = -0.025 * back; ox = 0.045 * back;
+            ry = -0.60 * back; rz = -0.52 * back; rx = 0.26 * back;
+          }
         }
         break;
       }
@@ -424,8 +463,38 @@ export class ViewModel {
       }
     }
 
-    // firing bolt cycle
-    if (w.sinceShot < 0.09 && !w.def.pumpTime) {
+    // --- melee slash -------------------------------------------------------
+    // A knife swing is the whole attack, so it gets a real arc rather than the
+    // recoil punch a gun gets. Wind up back and to the right, sweep down and
+    // across to the left, then recover. This overrides the pose outright: the
+    // swing is the animation, not a modifier on top of an idle.
+    const SLASH = 0.34;
+    if (w.def.melee && w.sinceShot < SLASH) {
+      const a = clamp(w.sinceShot / SLASH, 0, 1);
+      const windEnd = 0.22;
+      if (a < windEnd) {
+        const e = ease(a / windEnd);            // cock back and out
+        ox = 0.075 * e; oy = 0.055 * e; oz = 0.070 * e;
+        rz = -0.85 * e; ry = -0.60 * e; rx = -0.45 * e;
+      } else {
+        const e = ease((a - windEnd) / (1 - windEnd));
+        // the cut itself: right-to-left and down, overshooting past centre
+        ox = 0.075 - 0.30 * e;
+        oy = 0.055 - 0.145 * e;
+        oz = 0.070 - 0.155 * e;
+        rz = -0.85 + 2.35 * e;
+        ry = -0.60 + 1.30 * e;
+        rx = -0.45 + 0.95 * e;
+        // ease the follow-through back toward the ready pose over the last third
+        const settle = clamp((e - 0.62) / 0.38, 0, 1);
+        const back = 1 - ease(settle);
+        ox *= back; oy *= back; oz *= back;
+        rz *= back; ry *= back; rx *= back;
+      }
+      magVisible = true;
+      boltZ = 0;
+    } else if (w.sinceShot < 0.09 && !w.def.pumpTime && !w.def.melee) {
+      // firing bolt cycle (guns only — a blade has no action to cycle)
       const a = 1 - w.sinceShot / 0.09;
       boltZ = Math.max(boltZ, a * (w.def.key === 'deagle' ? 0.065 : w.def.key === 'glock17' ? 0.05 : 0.035));
     }

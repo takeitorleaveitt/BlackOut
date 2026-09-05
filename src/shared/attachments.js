@@ -12,6 +12,12 @@ export const ATTACHMENTS = {
     desc: 'Wider window and a ringed reticle. Slower to raise than the dot.',
     mods: { adsTime: 1.12, spreadAds: 0.82, adsFov: 0.80 }
   },
+  scope: {
+    key: 'scope', name: 'Telescopic Scope', slot: 'optic',
+    desc: 'Long-range glass with a mil-dot reticle. Deep magnification, slow to settle, and useless up close.',
+    mods: { adsTime: 1.20, spreadAds: 0.55, adsFov: 0.40, mobility: 0.97 },
+    flags: { scoped: true }
+  },
   suppressor: {
     key: 'suppressor', name: 'Suppressor', slot: 'muzzle',
     desc: 'Cuts report and hides muzzle flash. Costs a little muzzle velocity and damage at range.',
@@ -47,6 +53,18 @@ export const OPTIC_KEYS = ['reddot', 'holo'];
  * Apply an attachment list to a base weapon, returning a resolved copy.
  * Only one attachment per slot is honoured (later entries win).
  */
+/**
+ * What a weapon ships with when you have never touched its attachments.
+ *
+ * Only a starting point: the moment you change a weapon's fitting, that
+ * choice is stored per weapon and this table stops applying to it — taking
+ * the scope off the M40 leaves it off, it does not grow back.
+ */
+export const DEFAULT_ATTACHMENTS = {
+  m4a1: ['reddot'],
+  m40: ['scope']
+};
+
 export function resolveWeapon(base, attachKeys = []) {
   const w = { ...base, recoil: { ...base.recoil }, sway: { ...base.sway }, flags: {} };
   const bySlot = new Map();

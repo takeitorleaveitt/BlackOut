@@ -1,6 +1,6 @@
 // The local operator: input sampling, client-side prediction with server
 // reconciliation, weapon handling, and every piece of feedback that sells a
-// hit — camera kick, muffled hearing, breathing, blood, decals, casings.
+// hit — camera kick, muffled hearing, blood, decals, casings.
 
 import * as THREE from 'three';
 import { CameraRig } from './CameraRig.js';

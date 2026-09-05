@@ -216,6 +216,57 @@ h3.sec:first-child { margin-top: 0; }
 }
 .menu-badge b { color: var(--accent-dim); font-weight: 400; }
 
+/* ---------- telescopic scope ----------
+   Drawn rather than drawn-on: the black surround is a single enormous
+   box-shadow spreading out from the lens, which means it fills any window
+   shape without an image and without a second element to keep in sync. */
+.scope { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+.scope-shade {
+  /* kills the corners of very wide windows that the ring's shadow can't reach */
+  position: absolute; inset: 0; background: #000;
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 0 41vmin, #000 41vmin);
+  mask: radial-gradient(circle at 50% 50%, transparent 0 41vmin, #000 41vmin);
+}
+.scope-ring {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 80vmin; height: 80vmin; border-radius: 50%;
+  border: 2.6vmin solid #0b0d0e;
+  box-shadow:
+    0 0 0 100vmax #000,                      /* the surround */
+    inset 0 0 3vmin rgba(0,0,0,0.95),        /* lens shading */
+    inset 0 0 1px rgba(190,205,215,0.35);    /* faint tube edge */
+}
+.scope-glass {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 42% 34%, rgba(190,215,235,0.10), transparent 46%);
+}
+/* Mil-dot crosshair. A real scope reticle is plain black, which disappears
+   the moment you glass anything dark — and most of this game is dark. Each
+   line is black with a soft pale halo around it, so it reads against a bright
+   sky and against a shadowed wall alike without looking like a HUD element. */
+.scope-cross-v, .scope-cross-h {
+  position: absolute; background: rgba(8,10,12,0.95);
+  box-shadow: 0 0 2px 0.5px rgba(226,238,245,0.55);
+}
+.scope-cross-v { left: 50%; top: 4%; bottom: 4%; width: 1.5px; transform: translateX(-50%); }
+.scope-cross-h { top: 50%; left: 4%; right: 4%; height: 1.5px; transform: translateY(-50%); }
+/* the ranging ladder below centre */
+.scope-mil {
+  position: absolute; left: 50%; top: 50%; width: 13%; height: 26%;
+  transform: translateX(-50%);
+  background:
+    repeating-linear-gradient(to bottom, rgba(8,10,12,0.95) 0 1.5px, transparent 1.5px 12%);
+  filter: drop-shadow(0 0 1.5px rgba(226,238,245,0.6));
+  -webkit-mask: linear-gradient(to right, #000 0 34%, transparent 34% 66%, #000 66%);
+  mask: linear-gradient(to right, #000 0 34%, transparent 34% 66%, #000 66%);
+}
+.scope-numbers {
+  position: absolute; left: 50%; top: 74%; transform: translateX(-50%);
+  font: 9px/1 var(--mono); letter-spacing: 0.42em; color: rgba(8,10,12,0.9);
+  text-shadow: 0 0 2px rgba(226,238,245,0.7);
+  white-space: nowrap;
+}
+
 /* ---------- operator card + squad (main menu, top right) ----------
    Siege-style corner block: portrait and level on top, four-slot party
    underneath. Both sit over the live map, so everything carries its own

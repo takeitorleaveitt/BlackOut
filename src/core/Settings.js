@@ -3,6 +3,7 @@
 // can react live (post-FX rebuild, sensitivity, volumes...).
 
 import { bus } from './EventBus.js';
+import { DEFAULT_ATTACHMENTS } from '../shared/attachments.js';
 
 const KEY = 'bp.settings.v1';
 
@@ -169,10 +170,18 @@ class SettingsStore {
     return changed;
   }
 
-  /** Attachments remembered for one weapon (a copy — callers may mutate it). */
+  /**
+   * Attachments remembered for one weapon (a copy — callers may mutate it).
+   *
+   * A weapon you have never customised falls back to what it ships with, so
+   * the M40 arrives scoped. Once you have set its fitting even to nothing at
+   * all, the stored array wins — an empty array is still an array, so taking
+   * the scope off keeps it off across sessions.
+   */
   attachmentsFor(weaponKey) {
     const map = this.data.loadout?.attachments || {};
-    return Array.isArray(map[weaponKey]) ? [...map[weaponKey]] : [];
+    if (Array.isArray(map[weaponKey])) return [...map[weaponKey]];
+    return [...(DEFAULT_ATTACHMENTS[weaponKey] || [])];
   }
 
   /**
