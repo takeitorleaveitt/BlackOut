@@ -56,6 +56,12 @@ lobby, and match.
   Search & Destroy (plant/defuse), served through three playlists — Quick
   Match and Standard are real players only and hold in matchmaking until
   eight have arrived, while Free For All will fill with bots.
+- **Team Deathmatch runs an economy** (`src/shared/economy.js`): 2:30 rounds,
+  one life each, $1000 to start, $500 a kill, and a buy menu during the
+  freeze. Survive a round and you keep what you are carrying; die and you are
+  back to the free pistol and the blade. First to 3 rounds in Quick Match,
+  first to 6 in Standard. Dead players fly the map on a free camera until the
+  next round. The server owns every wallet — the buy menu only asks.
 - **Account, profile and squads** — a local level/XP record with per-playlist
   K/D (`src/core/Account.js`), a daily-rotating operator portrait
   (`src/ui/Avatar.js`), and a four-slot squad that travels with you into

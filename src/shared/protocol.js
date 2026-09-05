@@ -57,6 +57,7 @@ export const EV = {
   DEFUSE_START: 15,
   DEFUSED: 16,
   ROUND_START: 17,
+  ECONOMY: 30,
   ROUND_END: 18,
   MATCH_END: 19,
   BOMB_TICK: 20,

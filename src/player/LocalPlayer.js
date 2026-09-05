@@ -68,14 +68,19 @@ export class LocalPlayer {
 
   // -------------------------------------------------------------------------
   setLoadout(loadout) {
-    const primary = WEAPON_BY_KEY[loadout.primary] || WEAPON_BY_KEY.m4a1;
+    // `primary: null` is a real state in the economy modes — you have not
+    // bought a rifle yet, so slot 1 is genuinely empty and you are carrying a
+    // pistol and a knife. Everywhere else a missing primary just means
+    // "use the default".
+    const noPrimary = loadout.primary === null;
+    const primary = WEAPON_BY_KEY[loadout.primary] || (noPrimary ? null : WEAPON_BY_KEY.m4a1);
     const secondary = WEAPON_BY_KEY[loadout.secondary] || WEAPON_BY_KEY.glock17;
     this.weapons = [
-      new Weapon(primary, loadout.primaryAttachments || []),
+      primary ? new Weapon(primary, loadout.primaryAttachments || []) : null,
       new Weapon(secondary, loadout.secondaryAttachments || []),
       new Weapon(WEAPON_BY_KEY.knife, [])
     ];
-    this.slot = 0;
+    this.slot = primary ? 0 : 1;
     this.game.viewmodel.equip(this.weapon);
     this.weapon.draw();
     bus.emit('hud:weapon', this.weapon);
@@ -94,8 +99,10 @@ export class LocalPlayer {
     this.hurtTimer = 0;
     this.spawnProtect = opts.protect ?? 1.6;
     this.pending.length = 0;
-    for (const w of this.weapons) { w.refill(); w.setState(WS.IDLE); }
-    this.slot = 0;
+    for (const w of this.weapons) { if (!w) continue; w.refill(); w.setState(WS.IDLE); }
+    // Spawn holding something you actually have: with no primary bought,
+    // slot 0 is empty and there is nothing there to draw.
+    this.slot = this.weapons[0] ? 0 : 1;
     this.game.viewmodel.equip(this.weapon);
     this.weapon.draw();
     bus.emit('hud:health', this.health);
@@ -140,6 +147,7 @@ export class LocalPlayer {
 
   switchTo(slot) {
     if (slot === this.slot || slot >= this.weapons.length) return;
+    if (!this.weapons[slot]) return;          // empty primary slot: nothing to draw
     if (this.weapon.state === WS.HOLSTERING) return;
     this.pendingSlot = slot;
     this.weapon.holster();
@@ -147,7 +155,12 @@ export class LocalPlayer {
   }
 
   nextWeapon(dir) {
-    this.switchTo((this.slot + (dir > 0 ? 1 : this.weapons.length - 1)) % this.weapons.length);
+    // Skip over an empty slot rather than stalling the scroll on it.
+    const n = this.weapons.length;
+    for (let i = 1; i <= n; i++) {
+      const s = (this.slot + (dir > 0 ? i : n - i)) % n;
+      if (this.weapons[s]) { this.switchTo(s); return; }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -504,7 +517,9 @@ export class LocalPlayer {
       origin,
       dir: [aim.x, aim.y, aim.z],
       weapon: def.id,
-      slot: this.slot
+      slot: this.slot,
+      // the blade's heavy stab, so the server can apply its multiplier
+      heavy: !!shot.heavy
     });
     bus.emit('hud:weapon', w);
     this._lastShotTime = performance.now();

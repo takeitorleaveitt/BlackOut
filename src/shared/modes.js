@@ -2,10 +2,15 @@
 // for the browser, lobby and end-of-match screens.
 
 export const MODES = {
+  // Team Deathmatch is the economy mode: rounds, one life each, and a wallet
+  // you spend between them. `economy` is what turns the buy menu on and takes
+  // the loadout screen away — every other mode still uses the loadout you set
+  // in the menu and respawns you when you die.
   tdm: {
     key: 'tdm', name: 'Team Deathmatch', short: 'TDM',
-    desc: 'Two squads, shared ticket pool. First team to the score limit takes it.',
-    teams: true, respawn: true, rounds: false,
+    desc: 'One life a round and a wallet between them. Buy, hold what you kept, wipe the other squad.',
+    teams: true, respawn: false, rounds: true, economy: true,
+    roundsToWin: 3, roundTimeSec: 150, freezeSec: 15,
     scoreLimit: 75, timeLimitSec: 600, maxPlayers: 12, minPlayers: 2,
     friendlyFireDefault: false
   },
@@ -50,8 +55,8 @@ export const PLAYLISTS = {
   },
   standard: {
     key: 'standard', name: 'STANDARD',
-    desc: 'Against real players only. Team Deathmatch, first to 4.',
-    modes: ['tdm'], roundsToWin: 4, bots: false, minPlayers: 8
+    desc: 'Against real players only. Team Deathmatch, first to 6.',
+    modes: ['tdm'], roundsToWin: 6, bots: false, minPlayers: 8
   },
   freeforall: {
     key: 'freeforall', name: 'FREE FOR ALL',

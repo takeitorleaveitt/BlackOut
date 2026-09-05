@@ -30,6 +30,10 @@ export class Weapon {
     this.stateDur = this.def.drawTime;
     this.cooldown = 0;
     this.adsT = 0;
+    // melee: which of the two cuts is next, and whether the last one was the
+    // heavy stab rather than a slash
+    this.slashIndex = 0;
+    this.heavyAttack = false;
     this.wantAds = false;
     this.shotIndex = 0;
     this.sinceShot = 99;
@@ -85,6 +89,8 @@ export class Weapon {
     // A knife has no sights to aim down, so it never enters ADS at all —
     // right-click on a blade should do nothing rather than zooming it like
     // a gun.
+    // Holding the aim button on a blade arms the stab; it never raises a
+    // sight, so the ADS blend itself stays pinned at zero.
     const blockAds = this.def.melee || ctx.sprinting || this.state === WS.DRAWING ||
       this.state === WS.HOLSTERING || this.state === WS.INSPECTING;
     const target = this.wantAds && !blockAds && !this.isReloading ? 1 : 0;
@@ -137,6 +143,10 @@ export class Weapon {
 
     // --- spread ------------------------------------------------------------
     const d = this.def;
+    // A scope resolves to zero spread outright once the aim has settled: a
+    // sniper you have lined up should put the round exactly where the reticle
+    // is, and the cost is paid in handling and hip-fire instead.
+    if (d.flags?.scoped && this.adsT >= 0.999) return 0;
     let base = lerp(d.spreadHip, d.spreadAds, this.adsT);
     let mult = 1;
     if (!ctx.grounded) mult *= d.spreadJump / Math.max(0.01, d.spreadHip) * 0.5 + 1;
@@ -192,7 +202,14 @@ export class Weapon {
     }
     const d = this.def;
     if (!d.melee) this.ammo--;
-    this.cooldown = fireInterval(d);
+    // A blade alternates its two cuts, and the aim button throws a slower,
+    // harder stab instead — the same two attacks Counter-Strike gives a knife.
+    if (d.melee) {
+      this.heavyAttack = !!this.wantAds;
+      this.slashIndex = this.heavyAttack ? 2 : (this.slashIndex === 1 ? 0 : 1);
+      this.cooldown = this.heavyAttack ? d.stabInterval : fireInterval(d);
+      this.slashAt = this.stateT;
+    } else this.cooldown = fireInterval(d);
     this.sinceShot = 0;
     this.heat = Math.min(1, this.heat + 0.08);
 
@@ -212,6 +229,8 @@ export class Weapon {
       weapon: d,
       pellets: d.pellets || 1,
       empty: this.ammo === 0,
+      melee: !!d.melee,
+      heavy: !!(d.melee && this.heavyAttack),
       // fraction of the kick that permanently moves the aim point
       aimKick: { x: this.kick.x * 0.34, y: step.v * 0.42 }
     };

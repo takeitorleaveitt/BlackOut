@@ -102,11 +102,23 @@ export function createPause(game) {
           el('p.sub', 'The match continues without you — get back in'),
           el('div.flex.gap8', { style: { flexDirection: 'column', width: '320px' } },
             button('RESUME', () => game.resume(), { cls: 'primary' }),
-            button('LOADOUT', () => ui.show('loadout')),
+            this.loadoutBtn = button('LOADOUT', () => {
+              // In an economy match the buy menu owns your kit, so the
+              // loadout screen would be lying to you.
+              if (game.economyMode) { ui.toast('Use the buy menu — B during buy time', 'warn'); return; }
+              ui.show('loadout');
+            }),
             button('SETTINGS', () => ui.show('settings')),
             button('LEAVE MATCH', () => game.leaveMatch(), { cls: 'danger' })))));
     },
-    enter() { game.onPauseEnter?.(); }
+    enter() {
+      game.onPauseEnter?.();
+      if (this.loadoutBtn) {
+        const off = game.economyMode;
+        this.loadoutBtn.disabled = off;
+        this.loadoutBtn.title = off ? 'Disabled in Team Deathmatch — buy between rounds instead' : '';
+      }
+    }
   };
 }
 

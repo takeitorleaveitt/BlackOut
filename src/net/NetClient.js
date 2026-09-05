@@ -195,6 +195,8 @@ export class NetClient {
   sendShot(shot) { this.send({ t: 'shot', ...shot }); }
   sendEvent(kind, data = {}) { this.send({ t: kind, ...data }); }
   requestRespawn() { this.send({ t: 'respawn' }); }
+  buy(what) { this.send({ t: 'buy', ...what }); }
+  requestEconomy() { this.send({ t: 'economy' }); }
   setTeam(team) { this.send({ t: 'team', team }); }
 
   // --- squads --------------------------------------------------------------

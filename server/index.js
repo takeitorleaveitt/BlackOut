@@ -392,7 +392,8 @@ function handle(client, msg) {
         spread: +msg.spread || 0,
         origin: sanitizeVec(msg.origin),
         dir: normalizeVec(sanitizeVec(msg.dir)),
-        slot: msg.slot | 0
+        slot: msg.slot | 0,
+        heavy: !!msg.heavy
       }, rewind);
       break;
     }
@@ -408,6 +409,25 @@ function handle(client, msg) {
     case 'defuse':
       client.room?.sim.handleDefuse(client.id, !!msg.down);
       break;
+    case 'economy': {
+      if (!client.room) break;
+      const e = client.room.sim.economyFor(client.id);
+      if (e) send(client, { t: 'economy', ...e, p: client.id });
+      break;
+    }
+    case 'buy': {
+      if (!client.room || !client.entity) break;
+      const res = client.room.sim.buy(client.entity, {
+        weapon: typeof msg.weapon === 'string' ? msg.weapon : null,
+        attachment: typeof msg.attachment === 'string' ? msg.attachment : null,
+        slot: msg.slot === 'secondary' ? 'secondary' : 'primary'
+      });
+      send(client, {
+        t: 'buyResult', ok: !!res.ok, reason: res.reason || null,
+        economy: client.room.sim.economyFor(client.id)
+      });
+      break;
+    }
     case 'respawn': {
       const p = client.room?.sim.players.get(client.id);
       if (p && !p.alive && client.room.sim.mode.respawn) {
@@ -550,7 +570,8 @@ function joinRoom(client, room) {
     ...room.info(),
     you: client.id,
     team: client.team,
-    state: room.sim.matchState()
+    state: room.sim.matchState(),
+    economy: room.sim.economyFor(client.id)
   });
 }
 

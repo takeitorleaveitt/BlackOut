@@ -9,9 +9,13 @@ import { World } from '../physics.js';
 import { getMap } from '../maps/index.js';
 import { createMoveState, stepMovement, playerHeight, eyeHeight } from '../movement.js';
 import { simulateBullet, applySpread } from '../ballistics.js';
-import { WEAPON_BY_KEY, WEAPON_BY_ID, fireInterval, PRIMARIES, SECONDARIES } from '../weapons.js';
-import { resolveWeapon } from '../attachments.js';
+import { WEAPON_BY_KEY, WEAPON_BY_ID, fireInterval, PRIMARIES, SECONDARIES, SLOT } from '../weapons.js';
+import { resolveWeapon, ATTACHMENTS } from '../attachments.js';
 import { MODES } from '../modes.js';
+import {
+  START_MONEY, KILL_REWARD, ROUND_WIN_REWARD, ROUND_LOSS_REWARD,
+  DEFAULT_SECONDARY, loadoutCost, clampMoney
+} from '../economy.js';
 import { BotBrain, botName } from './bot.js';
 import { EV, SF } from '../protocol.js';
 import {
@@ -106,12 +110,24 @@ export class MatchSim {
       damageDealt: 0, shotsFired: 0, hits: 0, headshots: 0,
       ping: 0, packetLoss: 0,
       connected: true,
+      // --- economy (TDM only) ---
+      money: START_MONEY,
+      // What this player owns going into the next round. Set from what they
+      // were carrying when the round ended, or wiped back to a pistol if they
+      // did not survive it.
+      nextLoadout: null,
+      boughtThisRound: [],
       firing: false, reloading: false, reloadEnd: 0,
       planting: false, plantProgress: 0,
       lastShotAt: 0,
       joinedAt: this.time
     };
-    this.setLoadout(p, info.loadout);
+    // Everyone starts an economy match on the same footing: the free pistol
+    // and the blade, whatever loadout they walked in with. Bringing your menu
+    // kit into a buy round would make the first buy pointless.
+    this.setLoadout(p, this.economy
+      ? { primary: null, secondary: DEFAULT_SECONDARY, primaryAttachments: [], secondaryAttachments: [] }
+      : info.loadout, true);
     this.players.set(id, p);
     if (this.phase === PHASE.LIVE || this.phase === PHASE.WARMUP || this.mode.respawn) {
       this.respawn(p, true);
@@ -132,7 +148,73 @@ export class MatchSim {
     return a <= b ? TEAM.ALPHA : TEAM.BRAVO;
   }
 
-  setLoadout(p, loadout) {
+  /** True when this match runs the buy economy. */
+  get economy() { return !!this.mode.economy; }
+
+  /**
+   * Try to buy a weapon or attachment. The server owns the wallet, so this is
+   * the only place a purchase can happen — the buy menu just draws what this
+   * would allow.
+   */
+  buy(p, { weapon, attachment, slot }) {
+    if (!this.economy || !p) return { ok: false, reason: 'no_economy' };
+    if (this.phase !== PHASE.FREEZE) return { ok: false, reason: 'not_buy_time' };
+
+    if (attachment) {
+      const which = slot === 'secondary' ? 'secondaryAttachments' : 'primaryAttachments';
+      const base = WEAPON_BY_KEY[slot === 'secondary' ? p.loadout.secondary : p.loadout.primary];
+      if (!base || !(base.attachments || []).includes(attachment)) {
+        return { ok: false, reason: 'not_compatible' };
+      }
+      const list = p.loadout[which] || [];
+      if (list.includes(attachment)) return { ok: false, reason: 'already_fitted' };
+      const cost = loadoutCost(null, [attachment]);
+      if (p.money < cost) return { ok: false, reason: 'too_poor' };
+      // one attachment per slot on the gun, same as the loadout screen
+      const a = ATTACHMENTS[attachment];
+      const next = list.filter((k) => ATTACHMENTS[k]?.slot !== a?.slot);
+      next.push(attachment);
+      p.money = clampMoney(p.money - cost);
+      p.boughtThisRound.push(attachment);
+      this.setLoadout(p, { ...p.loadout, [which]: next }, true);
+      return { ok: true, money: p.money };
+    }
+
+    const def = WEAPON_BY_KEY[weapon];
+    if (!def || def.melee) return { ok: false, reason: 'not_for_sale' };
+    const targetSlot = def.slot === SLOT.SECONDARY ? 'secondary' : 'primary';
+    const cost = loadoutCost(weapon, []);
+    if (p.money < cost) return { ok: false, reason: 'too_poor' };
+    p.money = clampMoney(p.money - cost);
+    p.boughtThisRound.push(weapon);
+    // A new gun arrives bare; attachments are bought separately.
+    this.setLoadout(p, {
+      ...p.loadout,
+      [targetSlot]: weapon,
+      [targetSlot === 'secondary' ? 'secondaryAttachments' : 'primaryAttachments']: []
+    }, true);
+    return { ok: true, money: p.money };
+  }
+
+  /** Award money and remember it, clamped to the cap. */
+  award(p, amount) {
+    if (!this.economy || !p) return;
+    p.money = clampMoney(p.money + amount);
+  }
+
+  /**
+   * Set a player's kit.
+   *
+   * `trusted` marks a call that came from the match itself — a purchase, or
+   * the carry-over at the start of a round. Untrusted calls are what a client
+   * sends when it changes its menu loadout, and in an economy match those are
+   * ignored outright: the shop is the only way to get a gun, and honouring
+   * them would let anyone hand themselves a rifle for nothing.
+   */
+  setLoadout(p, loadout, trusted = false) {
+    if (this.economy && !trusted && p.loadout) return;
+    // note: the ECONOMY event at the bottom of this method tells the owning
+    // client what it is now carrying
     let primaryKey = loadout?.primary;
     let secondaryKey = loadout?.secondary;
     let pAtt = loadout?.primaryAttachments || [];
@@ -144,19 +226,37 @@ export class MatchSim {
       pAtt = this.rng() > 0.5 ? ['reddot'] : [];
       sAtt = [];
     }
-    const primary = WEAPON_BY_KEY[primaryKey] || WEAPON_BY_KEY.m4a1;
+    // In the economy modes an empty primary slot is a real state: you start a
+    // match, and every round you die, carrying nothing but a pistol and a
+    // blade until you buy something. Everywhere else a missing primary just
+    // means "use the default", so only the economy honours the empty slot.
+    // In an economy match you arrive with nothing but the pistol and the
+    // blade — a missing primary means exactly that, rather than "give them
+    // the default rifle".
+    const primary = this.economy
+      ? (WEAPON_BY_KEY[primaryKey] || null)
+      : (WEAPON_BY_KEY[primaryKey] || WEAPON_BY_KEY.m4a1);
     const secondary = WEAPON_BY_KEY[secondaryKey] || WEAPON_BY_KEY.glock17;
     p.loadout = {
-      primary: primary.key, secondary: secondary.key,
-      primaryAttachments: pAtt, secondaryAttachments: sAtt
+      primary: primary ? primary.key : null, secondary: secondary.key,
+      primaryAttachments: primary ? pAtt : [], secondaryAttachments: sAtt
     };
     const knife = WEAPON_BY_KEY.knife;
     p.weapons = [
-      { def: resolveWeapon(primary, pAtt), ammo: primary.magSize, reserve: primary.reserve },
+      primary ? { def: resolveWeapon(primary, pAtt), ammo: primary.magSize, reserve: primary.reserve } : null,
       { def: resolveWeapon(secondary, sAtt), ammo: secondary.magSize, reserve: secondary.reserve },
       { def: resolveWeapon(knife, []), ammo: knife.magSize, reserve: knife.reserve }
     ];
-    p.slot = 0;
+    // Land on something you are actually holding.
+    p.slot = primary ? 0 : 1;
+    // The client cannot work its own kit out in an economy match — it is set
+    // by purchases and by what survived the last round, both of which happen
+    // here. Tell it.
+    if (this.economy) {
+      this.emit(EV.ECONOMY, {
+        p: p.id, money: p.money, loadout: { ...p.loadout }
+      });
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -195,9 +295,11 @@ export class MatchSim {
     p.reloading = false;
     p.planting = false;
     p.lastDamage = -999;
-    p.slot = 0;
+    // Land on something you are actually holding: with no primary bought,
+    // slot 0 is empty and you would spawn holding nothing at all.
+    p.slot = p.weapons[0] ? 0 : 1;
     if (this.mode.randomLoadout) this.setLoadout(p, p.loadout);
-    for (const w of p.weapons) { w.ammo = w.def.magSize; w.reserve = w.def.reserve; }
+    for (const w of p.weapons) { if (!w) continue; w.ammo = w.def.magSize; w.reserve = w.def.reserve; }
     if (p.brain) { p.brain.target = null; p.brain.enemyId = -1; }
     this.emit(EV.SPAWN, { p: p.id, x: s.p[0], y: s.p[1], z: s.p[2], yaw: s.yaw });
   }
@@ -219,6 +321,7 @@ export class MatchSim {
     if (!p || !p.alive) return;
     if (this.phase === PHASE.FREEZE || this.phase === PHASE.ROUND_END) return;
     const w = p.weapons[clamp(shot.slot ?? p.slot, 0, p.weapons.length - 1)];
+    if (!w) return;
     if (!w) return;
     const now = this.time;
     // Rate limit. The window is deliberately looser than the weapon's true
@@ -292,6 +395,8 @@ export class MatchSim {
         const victim = this.players.get(best.id);
         let dmg = best.damage;
         let zone = best.zone;
+        // The stab trades a much longer wind-up for a much harder hit.
+        if (shot.heavy) dmg *= w.def.stabMult || 1;
         if (victim) {
           // Victim's facing, in the same convention movement uses (forward is
           // -Z at yaw 0). If the attacker sits behind that facing, it's a
@@ -395,10 +500,12 @@ export class MatchSim {
       attacker.streak++;
       attacker.score += 100 + (zone === 'head' ? 50 : 0);
       if (!this.mode.rounds) this.addScore(attacker.team, 1);
+      this.award(attacker, KILL_REWARD);
     } else if (friendly) {
       attacker.score -= 50;
     }
     const w = attacker.weapons[attacker.slot];
+    if (!w) return;
     this.emit(EV.KILL, {
       a: attacker.id, v: victim.id, w: w ? w.def.id : 0, z: zone,
       hs: zone === 'head' ? 1 : 0, tk: friendly ? 1 : 0
@@ -507,6 +614,7 @@ export class MatchSim {
       // reload completion
       if (p.reloading && this.time >= p.reloadEnd) {
         const w = p.weapons[p.slot];
+        if (!w) continue;
         const need = w.def.magSize - w.ammo;
         const take = Math.min(need, w.reserve);
         w.ammo += take;
@@ -551,6 +659,7 @@ export class MatchSim {
 
   tickBot(p, dt, frozen) {
     const w = p.weapons[p.slot];
+    if (!w) return;
     const enemies = this.visibleEnemies(p);
     const objective = this.bomb && this.bomb.planted ? this.bomb.pos : null;
     const out = p.brain.think(dt, p.state, this.world, enemies, this.map, {
@@ -606,6 +715,7 @@ export class MatchSim {
     const p = this.players.get(id);
     if (!p || !p.alive) return;
     const s = clamp(slot | 0, 0, p.weapons.length - 1);
+    if (!p.weapons[s]) return;          // empty primary slot: nothing to draw
     if (s === p.slot) return;
     p.slot = s;
     p.reloading = false;
@@ -629,6 +739,15 @@ export class MatchSim {
     this.round++;
     this.phase = PHASE.FREEZE;
     this.phaseEnd = this.time + this.options.freezeSec;
+    // Survive and you keep what you were carrying; die and you are back to the
+    // free pistol and the knife. endRound() worked out which of those applies
+    // and left it on nextLoadout.
+    if (this.economy) {
+      for (const p of this.players.values()) {
+        p.boughtThisRound = [];
+        if (p.nextLoadout) { this.setLoadout(p, p.nextLoadout, true); p.nextLoadout = null; }
+      }
+    }
     this.bomb = this.modeKey === 'snd'
       ? { planted: false, carrier: null, pos: null, site: null, timer: 0, defusing: null, defuseProgress: 0 }
       : null;
@@ -703,6 +822,21 @@ export class MatchSim {
       this.roundWins[winner]++;
       this.scores[winner] = this.roundWins[winner];
       for (const p of this.players.values()) if (p.team === winner) p.score += 200;
+    }
+    if (this.economy) {
+      for (const p of this.players.values()) {
+        // Losing still pays, or a team that drops the first two rounds can
+        // never buy its way back into the match.
+        this.award(p, p.team === winner ? ROUND_WIN_REWARD : ROUND_LOSS_REWARD);
+        p.nextLoadout = p.alive
+          ? { ...p.loadout }
+          : {
+            primary: null,
+            secondary: DEFAULT_SECONDARY,
+            primaryAttachments: [],
+            secondaryAttachments: []
+          };
+      }
     }
     this.emit(EV.ROUND_END, {
       winner, reason, a: this.roundWins[1], b: this.roundWins[2], round: this.round
@@ -852,9 +986,24 @@ export class MatchSim {
       x: me.state.x, y: me.state.y, z: me.state.z,
       vx: me.state.vx, vy: me.state.vy, vz: me.state.vz,
       flags: this.flagsFor(me), health: Math.max(0, Math.round(me.health)),
-      armour: 0, lean: me.state.leanT, crouchT: me.state.crouchT
+      armour: 0, lean: me.state.leanT, crouchT: me.state.crouchT,
+      // Only present in the economy modes, and only for the owner: nobody
+      // else's wallet is any of your business.
+      money: this.economy ? me.money : undefined
     } : { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, flags: 0, health: 0, armour: 0, lean: 0, crouchT: 0 };
     return { self, players: others, ack: me ? me.lastCmdSeq : 0 };
+  }
+
+  /** Wallet and current kit for one player — what the buy menu needs. */
+  economyFor(id) {
+    const p = this.players.get(id);
+    if (!p || !this.economy) return null;
+    return {
+      money: p.money,
+      loadout: { ...p.loadout },
+      canBuy: this.phase === PHASE.FREEZE,
+      bought: [...p.boughtThisRound]
+    };
   }
 
   scoreboard() {
@@ -891,6 +1040,10 @@ export class MatchSim {
       scoreLimit: this.options.scoreLimit,
       roundsToWin: this.options.roundsToWin,
       friendlyFire: this.options.friendlyFire,
+      // Only the economy modes send this; the buy menu keys off it.
+      economy: this.economy || undefined,
+      buyEndsAt: this.economy && this.phase === PHASE.FREEZE
+        ? Math.max(0, Math.round(this.phaseEnd - this.time)) : undefined,
       bomb: this.bomb ? {
         planted: this.bomb.planted, site: this.bomb.site,
         timer: Math.max(0, Math.round(this.bomb.timer)),

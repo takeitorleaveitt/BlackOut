@@ -60,7 +60,8 @@ export class LocalNet {
   begin() {
     this.emit('joined', {
       ...this.info, you: this.id, team: this.player.team,
-      state: this.sim.matchState()
+      state: this.sim.matchState(),
+      economy: this.sim.economyFor(this.id)
     });
   }
 
@@ -85,6 +86,22 @@ export class LocalNet {
   setLoadout(loadout) {
     const p = this.sim.players.get(this.id);
     if (p) this.sim.setLoadout(p, loadout);
+  }
+  requestEconomy() {
+    const e = this.sim.economyFor(this.id);
+    if (e) this.emit('economy', { ...e, p: this.id });
+  }
+  buy(what) {
+    const p = this.sim.players.get(this.id);
+    if (!p) return;
+    const res = this.sim.buy(p, {
+      weapon: what.weapon || null,
+      attachment: what.attachment || null,
+      slot: what.slot === 'secondary' ? 'secondary' : 'primary'
+    });
+    this.emit('buyResult', {
+      ok: !!res.ok, reason: res.reason || null, economy: this.sim.economyFor(this.id)
+    });
   }
   setTeam(team) {
     const p = this.sim.players.get(this.id);

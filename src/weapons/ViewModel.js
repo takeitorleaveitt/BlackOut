@@ -463,33 +463,56 @@ export class ViewModel {
       }
     }
 
-    // --- melee slash -------------------------------------------------------
-    // A knife swing is the whole attack, so it gets a real arc rather than the
-    // recoil punch a gun gets. Wind up back and to the right, sweep down and
-    // across to the left, then recover. This overrides the pose outright: the
-    // swing is the animation, not a modifier on top of an idle.
-    const SLASH = 0.34;
-    if (w.def.melee && w.sinceShot < SLASH) {
-      const a = clamp(w.sinceShot / SLASH, 0, 1);
-      const windEnd = 0.22;
-      if (a < windEnd) {
-        const e = ease(a / windEnd);            // cock back and out
-        ox = 0.075 * e; oy = 0.055 * e; oz = 0.070 * e;
-        rz = -0.85 * e; ry = -0.60 * e; rx = -0.45 * e;
+    // --- melee attacks -----------------------------------------------------
+    // Three animations, not one: the trigger alternates a right-to-left and a
+    // left-to-right slash so repeated swings never look like a loop, and the
+    // aim button throws a straight stab with a longer wind-up. Each overrides
+    // the pose outright — the attack IS the animation, not a modifier layered
+    // on an idle.
+    const isStab = w.slashIndex === 2;
+    const MELEE_DUR = isStab ? 0.52 : 0.30;
+    if (w.def.melee && w.sinceShot < MELEE_DUR) {
+      const a = clamp(w.sinceShot / MELEE_DUR, 0, 1);
+      if (isStab) {
+        // draw the blade back beside the head, then drive it straight forward
+        const windEnd = 0.42;
+        if (a < windEnd) {
+          const e = ease(a / windEnd);
+          ox = 0.090 * e; oy = 0.070 * e; oz = 0.135 * e;
+          rx = -0.55 * e; ry = -0.42 * e; rz = -0.30 * e;
+        } else {
+          const e = ease((a - windEnd) / (1 - windEnd));
+          ox = 0.090 - 0.105 * e;
+          oy = 0.070 - 0.085 * e;
+          oz = 0.135 - 0.345 * e;         // punch forward, past the rest pose
+          rx = -0.55 + 0.72 * e;
+          ry = -0.42 + 0.50 * e;
+          rz = -0.30 + 0.36 * e;
+          const settle = clamp((e - 0.55) / 0.45, 0, 1);
+          const back = 1 - ease(settle);
+          ox *= back; oy *= back; oz *= back; rx *= back; ry *= back; rz *= back;
+        }
       } else {
-        const e = ease((a - windEnd) / (1 - windEnd));
-        // the cut itself: right-to-left and down, overshooting past centre
-        ox = 0.075 - 0.30 * e;
-        oy = 0.055 - 0.145 * e;
-        oz = 0.070 - 0.155 * e;
-        rz = -0.85 + 2.35 * e;
-        ry = -0.60 + 1.30 * e;
-        rx = -0.45 + 0.95 * e;
-        // ease the follow-through back toward the ready pose over the last third
-        const settle = clamp((e - 0.62) / 0.38, 0, 1);
-        const back = 1 - ease(settle);
-        ox *= back; oy *= back; oz *= back;
-        rz *= back; ry *= back; rx *= back;
+        // Slash. dir flips per swing so the two cuts mirror each other.
+        const dir = w.slashIndex === 0 ? 1 : -1;
+        const windEnd = 0.24;
+        if (a < windEnd) {
+          const e = ease(a / windEnd);
+          ox = 0.080 * dir * e; oy = 0.050 * e; oz = 0.060 * e;
+          rz = -0.90 * dir * e; ry = -0.62 * dir * e; rx = -0.40 * e;
+        } else {
+          const e = ease((a - windEnd) / (1 - windEnd));
+          ox = (0.080 - 0.320 * e) * dir;
+          oy = 0.050 - 0.140 * e;
+          oz = 0.060 - 0.150 * e;
+          rz = (-0.90 + 2.45 * e) * dir;
+          ry = (-0.62 + 1.35 * e) * dir;
+          rx = -0.40 + 0.92 * e;
+          const settle = clamp((e - 0.60) / 0.40, 0, 1);
+          const back = 1 - ease(settle);
+          ox *= back; oy *= back; oz *= back;
+          rz *= back; ry *= back; rx *= back;
+        }
       }
       magVisible = true;
       boltZ = 0;
@@ -522,6 +545,10 @@ export class ViewModel {
       this.leftArmBaseR.y + this.leftArmOffsetRot.y,
       this.leftArmBaseR.z + this.leftArmOffsetRot.z
     );
+    // A knife is held in one hand. There is no handguard for a support hand
+    // to sit on, and parking it in mid-air next to the blade looked exactly
+    // as odd as it sounds.
+    this.leftArm.visible = !w.def.melee;
 
     this.animOffset.set(
       lerp(this.animOffset.x, ox, 1 - Math.exp(-30 * dt)),

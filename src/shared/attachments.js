@@ -15,7 +15,7 @@ export const ATTACHMENTS = {
   scope: {
     key: 'scope', name: 'Telescopic Scope', slot: 'optic',
     desc: 'Long-range glass with a mil-dot reticle. Deep magnification, slow to settle, and useless up close.',
-    mods: { adsTime: 1.20, spreadAds: 0.55, adsFov: 0.40, mobility: 0.97 },
+    mods: { adsTime: 1.20, spreadAds: 0.0, adsFov: 0.17, mobility: 0.97 },
     flags: { scoped: true }
   },
   suppressor: {
@@ -75,19 +75,31 @@ export function resolveWeapon(base, attachKeys = []) {
     bySlot.set(a.slot, a);
   }
   w.attached = [...bySlot.values()].map((a) => a.key);
+  // Every mod is a multiplier applied if the attachment declares one.
+  //
+  // These used to be written as `if (m.spreadAds) ...`, which quietly skipped
+  // a multiplier of 0 — so an attachment that wanted to zero a stat outright
+  // (the scope, taking spread to nothing) had no effect at all. Checking for
+  // undefined rather than truthiness is the difference between "no opinion"
+  // and "exactly zero".
+  const MULTIPLIERS = [
+    ['damageMin', (v) => { w.damageMin *= v; }],
+    ['muzzleVelocity', (v) => { w.muzzleVelocity *= v; }],
+    ['adsTime', (v) => { w.adsTime *= v; }],
+    ['adsFov', (v) => { w.adsFov *= v; }],
+    ['spreadAds', (v) => { w.spreadAds *= v; }],
+    ['spreadHip', (v) => { w.spreadHip *= v; }],
+    ['spreadMove', (v) => { w.spreadMove *= v; }],
+    ['recoilVert', (v) => { w.recoil.vert *= v; }],
+    ['recoilHoriz', (v) => { w.recoil.horiz *= v; }],
+    ['sway', (v) => { w.sway.amp *= v; }],
+    ['mobility', (v) => { w.mobility *= v; }]
+  ];
   for (const a of bySlot.values()) {
     const m = a.mods || {};
-    if (m.damageMin) w.damageMin *= m.damageMin;
-    if (m.muzzleVelocity) w.muzzleVelocity *= m.muzzleVelocity;
-    if (m.adsTime) w.adsTime *= m.adsTime;
-    if (m.adsFov) w.adsFov *= m.adsFov;
-    if (m.spreadAds) w.spreadAds *= m.spreadAds;
-    if (m.spreadHip) w.spreadHip *= m.spreadHip;
-    if (m.spreadMove) w.spreadMove *= m.spreadMove;
-    if (m.recoilVert) w.recoil.vert *= m.recoilVert;
-    if (m.recoilHoriz) w.recoil.horiz *= m.recoilHoriz;
-    if (m.sway) w.sway.amp *= m.sway;
-    if (m.mobility) w.mobility *= m.mobility;
+    for (const [key, apply] of MULTIPLIERS) {
+      if (m[key] !== undefined) apply(m[key]);
+    }
     Object.assign(w.flags, a.flags || {});
   }
   return w;

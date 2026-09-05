@@ -216,6 +216,83 @@ h3.sec:first-child { margin-top: 0; }
 }
 .menu-badge b { color: var(--accent-dim); font-weight: 400; }
 
+/* ---------- buy menu ----------
+   Numbered category columns across the middle, the operator standing to the
+   right, wallet bottom-left. Keyboard-first: the numbers on screen are the
+   keys you press. */
+#screen-buy .body { background: linear-gradient(180deg, rgba(5,7,9,0.90), rgba(5,7,9,0.96)); }
+.buy-body { gap: 0; }
+.buy-left { flex: 1.6; display: flex; flex-direction: column; padding: 26px 30px; min-width: 0; }
+.buy-right {
+  flex: 0.8; border-left: 1px solid var(--line); padding: 26px 30px;
+  display: flex; flex-direction: column;
+}
+.buy-timer { font: 11px/1 var(--mono); letter-spacing: 0.22em; color: var(--accent); }
+
+.buy-cols { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; align-content: start; }
+.buy-col { border: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; }
+.buy-col.open { border-color: var(--line-hot); background: var(--panel-2); }
+.buy-col-head {
+  display: flex; align-items: center; gap: 9px; padding: 10px 12px;
+  font: 10px/1 var(--mono); letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--ink-dim); border-bottom: 1px solid var(--line);
+}
+.buy-col.open .buy-col-head { color: var(--accent); }
+.buy-col-head .n,
+.buy-item .n {
+  flex: 0 0 16px; text-align: center; font: 9px/16px var(--mono);
+  color: var(--ink-faint); background: rgba(255,255,255,0.05);
+}
+.buy-item {
+  display: flex; align-items: center; gap: 9px; padding: 9px 12px; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.14s, color 0.14s;
+}
+.buy-item:hover { background: rgba(200,255,77,0.10); }
+.buy-item .nm { flex: 1; font: 11px/1.2 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
+.buy-item .pr { font: 10px/1 var(--mono); letter-spacing: 0.08em; color: var(--accent-dim); }
+.buy-item.owned { opacity: 0.5; cursor: default; }
+.buy-item.owned:hover { background: transparent; }
+.buy-item.owned .pr { color: var(--ink-faint); }
+/* can't afford it: the price goes red and the row stops inviting a click */
+.buy-item.poor .nm { color: var(--ink-faint); }
+.buy-item.poor .pr { color: var(--danger); }
+.buy-empty { padding: 14px 12px; font: 10px/1.5 var(--mono); color: var(--ink-faint); letter-spacing: 0.1em; }
+
+.buy-foot { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 20px; }
+.buy-hint { font: 9px/1 var(--mono); letter-spacing: 0.18em; color: var(--ink-faint); }
+.buy-money { font: 600 30px/1 var(--sans); letter-spacing: 0.06em; color: var(--accent); }
+.buy-money.broke { color: var(--danger); }
+
+/* The operator, idling. Blocky and flat like the rest of the game, and it
+   breathes and shifts weight so the panel is not a still life. */
+.buy-op { flex: 1; min-height: 200px; display: grid; place-items: center; }
+/* Built from real elements rather than layered backgrounds — a six-layer
+   background shorthand is fragile about sizing and half of it silently
+   failed to place. */
+.buy-op-inner { width: 120px; height: 230px; position: relative; animation: buy-idle 3.4s ease-in-out infinite; }
+.buy-op-inner i { position: absolute; display: block; }
+.op-head  { left: 37px; top: 0;    width: 46px; height: 44px; background: #3b4048; }
+.op-visor { left: 41px; top: 20px; width: 38px; height: 10px; background: #14181c; }
+.op-torso { left: 21px; top: 46px; width: 78px; height: 84px; background: #2b3138; }
+.op-vest  { left: 29px; top: 56px; width: 62px; height: 58px; background: #4a4a35; }
+.op-arm   { top: 50px; width: 19px; height: 74px; background: #343a41; }
+.op-arm.l { left: 3px; }
+.op-arm.r { right: 3px; }
+.op-leg   { top: 132px; width: 27px; height: 92px; background: #3a3f34; }
+.op-leg.l { left: 29px; }
+.op-leg.r { right: 29px; }
+@keyframes buy-idle {
+  0%, 100% { transform: translateY(0) rotate(-0.6deg); }
+  50% { transform: translateY(-4px) rotate(0.6deg); }
+}
+
+.buy-kit { display: flex; flex-direction: column; gap: 6px; }
+.kit-row { display: grid; grid-template-columns: 74px 1fr; gap: 8px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.kit-row .k { font: 9px/1 var(--mono); letter-spacing: 0.18em; color: var(--ink-faint); }
+.kit-row .v { font: 12px/1.2 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+.kit-row .a { grid-column: 2; font: 9px/1.3 var(--mono); letter-spacing: 0.1em; color: var(--accent-dim); }
+
 /* ---------- telescopic scope ----------
    Drawn rather than drawn-on: the black surround is a single enormous
    box-shadow spreading out from the lens, which means it fills any window

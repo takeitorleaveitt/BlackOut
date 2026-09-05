@@ -273,6 +273,9 @@ export const WEAPONS = [
     // resolution in MatchSim.handleShot does the angle test.
     damage: 55, damageMin: 0, falloffStart: 1.15, falloffEnd: 1.30,
     backstab: 4.0,
+    // Two attacks, like CS: a quick alternating slash on the trigger, and a
+    // slower stab on the aim button that hits far harder for the wind-up.
+    stabInterval: 1.05, stabMult: 1.85,
     rpm: 110, auto: false, burst: 0,
     muzzleVelocity: 260, dropScale: 0,
     magSize: 1, reserve: 1,

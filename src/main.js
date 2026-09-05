@@ -16,6 +16,7 @@ import { LocalPlayer } from './player/LocalPlayer.js';
 import { RemotePlayer } from './player/RemotePlayer.js';
 import { PlayerModel } from './player/PlayerModel.js';
 import { HUD } from './game/HUD.js';
+import { FreeCam } from './game/FreeCam.js';
 import { audio } from './audio/AudioEngine.js';
 import { NetClient } from './net/NetClient.js';
 import { LocalNet } from './net/LocalNet.js';
@@ -25,6 +26,7 @@ import { createPlayMenu, createServerBrowser, createPrivateMatch, createLobby, c
 import { createLoadout } from './ui/screens/Loadout.js';
 import { createSettings } from './ui/screens/SettingsScreen.js';
 import { createFriends, createPause, createEndMatch, createQueue, createProfile } from './ui/screens/Misc.js';
+import { createBuyMenu } from './ui/screens/BuyMenu.js';
 import { getMap, MAP_INFO, MAP_KEYS } from './shared/maps/index.js';
 import { WEAPON_BY_ID, WEAPON_BY_KEY } from './shared/weapons.js';
 import { resolveWeapon } from './shared/attachments.js';
@@ -75,6 +77,11 @@ class Game {
     // Cheat codes, entered from the main menu. Offline-only (see applyCheatCode).
     this.cheats = { walls: false, auto: false, aimbot: false };
     this.currentPlaylist = null;   // which playlist this match came from
+    // --- economy (TDM) ---
+    this.economy = null;           // { money, loadout, canBuy } from the server
+    this.economyListeners = new Set();
+    this.buyOpen = false;
+    this.freeCam = null;           // spectator camera while dead
 
     this.ui = new UI(document.getElementById('ui-root'));
     this.hud = new HUD(document.getElementById('hud-root'), this);
@@ -107,6 +114,7 @@ class Game {
     u.register('end', createEndMatch(this));
     u.register('queue', createQueue(this));
     u.register('profile', createProfile(this));
+    u.register('buy', createBuyMenu(this));
   }
 
   bindInput() {
@@ -117,6 +125,11 @@ class Game {
         return;
       }
       if (code === 'Escape') { this.onEscape(); return; }
+      // B is the buy key, the way it is everywhere else.
+      if (code === 'KeyB' && this.mode === 'match' && this.economyMode && !this.buyOpen) {
+        this.openBuyMenu();
+        return;
+      }
       if (this.mode !== 'match' || this.paused) return;
       if (code === S.binds.scoreboard) { this.setScoreboard(true); return; }
       if (code === S.binds.use) {
@@ -170,6 +183,7 @@ class Game {
   }
 
   onEscape() {
+    if (this.buyOpen) { this.closeBuyMenu(); return; }
     if (this.mode === 'match') {
       if (this.paused) this.resume();
       else this.pause();
@@ -586,6 +600,87 @@ class Game {
   }
 
   // -------------------------------------------------------------------------
+  // spectating
+  // -------------------------------------------------------------------------
+  startFreeCam() {
+    if (this.freeCam) return;
+    const cam = this.engine.camera;
+    this.freeCam = new FreeCam(cam.position, this.player.rig.yaw, this.player.rig.pitch);
+    this.viewmodel.visible = false;      // no floating gun while spectating
+    this.hud.setPrompt('SPECTATING · WASD FLY · SPACE/CTRL UP DOWN · SHIFT FAST');
+  }
+
+  stopFreeCam() {
+    if (!this.freeCam) return;
+    this.freeCam = null;
+    this.viewmodel.visible = true;
+    this.hud.setPrompt('');
+  }
+
+  // -------------------------------------------------------------------------
+  // economy (Team Deathmatch)
+  // -------------------------------------------------------------------------
+  /** True when this match runs the buy economy. */
+  get economyMode() { return !!this.matchState?.economy; }
+
+  onEconomy(fn) {
+    this.economyListeners.add(fn);
+    return () => this.economyListeners.delete(fn);
+  }
+
+  notifyEconomy() { for (const fn of this.economyListeners) fn(this.economy); }
+
+  buy(what) { this.net?.buy?.(what); }
+
+  /**
+   * Adopt the kit and wallet the match says we have. In an economy match the
+   * server owns both, so this is the only thing that may change the local
+   * player's weapons — the menu loadout does not apply.
+   */
+  applyEconomy(ev) {
+    const changed = JSON.stringify(ev.loadout) !== JSON.stringify(this.economy?.loadout);
+    this.economy = { ...(this.economy || {}), money: ev.money, loadout: ev.loadout };
+    if (changed && this.mode === 'match') {
+      this.player.setLoadout(ev.loadout);
+      bus.emit('hud:weapon', this.player.weapon);
+    }
+    this.notifyEconomy();
+  }
+
+  /** Seconds of buy time left, 0 once the round goes live. */
+  buyTimeLeft() {
+    const st = this.matchState;
+    if (!st || st.phase !== 'freeze') return 0;
+    return Math.max(0, st.timeLeft | 0);
+  }
+
+  openBuyMenu() {
+    if (!this.economyMode || this.buyOpen) return;
+    if (this.matchState?.phase !== 'freeze') {
+      this.ui.toast('Buy time is over', 'warn');
+      return;
+    }
+    this.buyOpen = true;
+    this.paused = true;
+    this.input.exitLock();
+    this.ui.showRoot();
+    this.ui.show('buy', {}, { noStack: true, resetStack: true });
+  }
+
+  closeBuyMenu() {
+    if (!this.buyOpen) return;
+    this.buyOpen = false;
+    this.paused = false;
+    this.ui.hide();
+    this.input.requestLock();
+  }
+
+  /** Spin the operator model on the buy screen. */
+  setBuyPreview(on) {
+    this.buyPreview = on;
+  }
+
+  // -------------------------------------------------------------------------
   // squad
   // -------------------------------------------------------------------------
   onSquadUpdate(fn) {
@@ -727,6 +822,12 @@ class Game {
       this.lobbyStatus = msg;
       this.notifyRoom();
     });
+    net.on('economy', (msg) => this.applyEconomy(msg));
+    net.on('buyResult', (msg) => {
+      if (msg.economy) { this.economy = msg.economy; this.notifyEconomy(); }
+      if (!msg.ok && msg.reason === 'too_poor') this.ui.toast('Not enough money', 'warn');
+      if (msg.ok) bus.emit('hud:weapon', this.player.weapon);
+    });
     net.on('squad', (msg) => {
       this.squad = { ...msg, local: false };
       for (const fn of this.squadListeners) fn(this.squad);
@@ -753,6 +854,9 @@ class Game {
 
   onJoined(net, msg) {
     this.net = net;
+    // Adopt the wallet and kit before enterMatch() builds the weapons, or the
+    // first round of an economy match starts with the menu loadout instead.
+    if (msg.economy) this.economy = msg.economy;
     this.playerId = msg.you ?? net.id;
     this.player.id = this.playerId;
     this.player.team = msg.team ?? 0;
@@ -795,7 +899,19 @@ class Game {
     this.remotes.clear();
     this.friendlyFire = !!info.friendlyFire;
 
-    this.player.setLoadout(this.loadout());
+    // In an economy match the kit comes from the server (see applyEconomy),
+    // so the menu loadout must not be applied here — it would hand you a free
+    // rifle for the first moment of every round.
+    //
+    // Read it off the incoming info rather than this.matchState: enterMatch()
+    // runs before onMatchState() on a fresh join, so the economy flag is not
+    // on matchState yet and the check would silently fall through to the
+    // menu loadout.
+    const isEconomy = !!(info.state?.economy ?? this.matchState?.economy);
+    if (!isEconomy) this.economy = null;
+    this.player.setLoadout(isEconomy && this.economy?.loadout
+      ? this.economy.loadout
+      : this.loadout());
     // Placeholder spawn until the authoritative SPAWN event lands: pick the
     // right pool for the assigned team so the camera starts facing roughly
     // the way the real spawn will, instead of the map's FFA pool regardless
@@ -908,14 +1024,26 @@ class Game {
   // -------------------------------------------------------------------------
   onSnapshot(snap) {
     if (this.mode !== 'match' || !this.player.weapons.length) return;
+    // The wallet rides along on the owner's own snapshot, so it stays live
+    // between buys without a message of its own.
+    if (snap.self && snap.self.money !== undefined && snap.self.money !== this.economy?.money) {
+      this.economy = { ...(this.economy || {}), money: snap.self.money };
+      this.notifyEconomy();
+    }
     const serverTime = this.net?.offline ? performance.now() : Date.now() + (this.onlineNet?.serverTimeOffset || 0);
     this.player.applyServerState(snap.self, snap.ackSeq);
 
     const wasAlive = this.player.alive;
     const dead = !!(snap.self.flags & SF.DEAD);
     this.player.alive = !dead;
-    if (dead && wasAlive) this.player.onDeath();
+    if (dead && wasAlive) {
+      this.player.onDeath();
+      // No respawn until the round ends, so hand the player a camera to fly
+      // rather than a corpse to stare at.
+      if (!this.matchState || this.matchState.mode !== 'ffa') this.startFreeCam();
+    }
     if (!dead && !wasAlive) {
+      this.stopFreeCam();
       this.player.alive = true;
       this.player.health = snap.self.health;
       this.player.damageFx = 0;
@@ -952,6 +1080,18 @@ class Game {
   }
 
   onMatchState(state) {
+    const prevPhase = this.matchState?.phase;
+    if (state?.economy) {
+      // Rounds hand out new kit; make sure the client has it even if the
+      // per-player event was missed.
+      if (state.phase === 'freeze' && prevPhase !== 'freeze') this.net?.requestEconomy?.();
+      // Freeze time in an economy match means buy time: put the menu up the
+      // moment the round starts rather than making people find a key for it.
+      if (state.phase === 'freeze' && prevPhase !== 'freeze' && this.mode === 'match') {
+        setTimeout(() => this.openBuyMenu(), 60);
+      }
+      if (state.phase !== 'freeze' && this.buyOpen) this.closeBuyMenu();
+    }
     if (!state) return;
     this.matchState = state;
     this.roomPlayerList = (state.board || []).map((r) => ({ id: r.id, name: r.name, team: r.team, bot: r.bot }));
@@ -973,6 +1113,11 @@ class Game {
     for (const ev of list) {
       switch (ev.e) {
         case EV.SHOT: this.onRemoteShot(ev); break;
+        case EV.ECONOMY:
+          // Only our own kit matters here; everyone else's arrives as the
+          // weapon id on their snapshot.
+          if (ev.p === this.playerId) this.applyEconomy(ev);
+          break;
         case EV.IMPACT:
           if (ev.p) {
             this.effects.impact(ev.p, ev.n, ev.m, 1);
@@ -1126,6 +1271,8 @@ class Game {
 
   // -------------------------------------------------------------------------
   onLoadoutChanged() {
+    // The buy menu is the only way to change kit in an economy match.
+    if (this.economyMode) return;
     this.net?.setLoadout?.(this.loadout());
     if (this.mode === 'match') this.player.setLoadout(this.loadout());
   }
@@ -1175,7 +1322,18 @@ class Game {
 
     // --- match ------------------------------------------------------------
     this.net?.update(dt);
-    if (!this.paused) this.player.update(dt, this.input);
+    if (this.freeCam && !this.paused) {
+      // Dead and flying: the spectator camera owns the mouse and the camera,
+      // and the player simulation is left alone entirely.
+      const m = this.input.takeMouse();
+      if (this.input.locked) this.freeCam.look(m.dx, m.dy);
+      this.freeCam.update(dt, this.input);
+      this.freeCam.applyTo(this.engine.camera);
+      this.engine.postCtx.yawRate = 0;
+      this.engine.postCtx.pitchRate = 0;
+    } else if (!this.paused) {
+      this.player.update(dt, this.input);
+    }
 
     const serverTime = this.net?.offline ? performance.now() : Date.now() + (this.onlineNet?.serverTimeOffset || 0);
     const renderTime = serverTime - INTERP_DELAY_MS;
