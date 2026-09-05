@@ -392,9 +392,16 @@ h3.sec:first-child { margin-top: 0; }
   border-top: 1px solid var(--line);
   background: linear-gradient(0deg, rgba(6,8,10,0.94), rgba(6,8,10,0.3));
 }
+.buy-wallet { display: flex; flex-direction: column; gap: 8px; }
 .buy-money {
   font: 300 34px/1 var(--sans); letter-spacing: 0.06em; color: var(--accent);
 }
+/* What last round paid, itemised, under the total. */
+.buy-income { display: flex; gap: 14px; flex-wrap: wrap; }
+.buy-income span {
+  font: 9px/1 var(--mono); letter-spacing: 0.2em; color: var(--ink-faint); text-transform: uppercase;
+}
+.buy-income b { color: var(--accent-dim); font-weight: 400; }
 .buy-money::before {
   content: 'FUNDS'; display: block; margin-bottom: 7px;
   font: 10px/1 var(--mono); letter-spacing: 0.3em; color: var(--ink-faint);

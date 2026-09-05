@@ -13,7 +13,7 @@ import { BUY_CATEGORIES, priceOf, attachmentPrice } from '../../shared/economy.j
 
 export function createBuyMenu(game) {
   let ui = null;
-  let moneyNode, timerNode, colsNode, kitNode;
+  let moneyNode, timerNode, colsNode, kitNode, incomeNode;
   let cat = -1;                       // which category column is expanded
 
   const money = () => game.economy?.money ?? 0;
@@ -46,6 +46,18 @@ export function createBuyMenu(game) {
     const e = game.economy;
     moneyNode.textContent = '$' + money();
     moneyNode.classList.toggle('broke', money() < 450);
+
+    // Where the last round's money came from. A wallet that jumps between
+    // rounds with nothing to explain it reads as a bug even when the sum is
+    // right, and the kills are supposed to be the part you notice.
+    clear(incomeNode);
+    const inc = e?.income;
+    if (inc && (inc.kills || inc.round)) {
+      if (inc.kills) incomeNode.appendChild(el('span', el('b', '+$' + inc.kills), ' KILLS'));
+      if (inc.round) {
+        incomeNode.appendChild(el('span', el('b', '+$' + inc.round), ' ' + (inc.roundLabel || 'ROUND')));
+      }
+    }
 
     clear(colsNode);
     BUY_CATEGORIES.forEach((c, ci) => {
@@ -103,6 +115,7 @@ export function createBuyMenu(game) {
     build(node, _ui) {
       ui = _ui;
       moneyNode = el('div.buy-money', '$0');
+      incomeNode = el('div.buy-income');
       timerNode = el('span.buy-timer', '0:00');
       colsNode = el('div.buy-cols');
       kitNode = el('div.buy-kit');
@@ -120,7 +133,7 @@ export function createBuyMenu(game) {
             el('i.op-arm.l'), el('i.op-arm.r'),
             el('i.op-leg.l'), el('i.op-leg.r')))),
         el('div.buy-bar',
-          moneyNode,
+          el('div.buy-wallet', moneyNode, incomeNode),
           el('div.buy-hint',
             el('b', '1-4'), ' CATEGORY   ',
             el('b', '1-5'), ' BUY   ',

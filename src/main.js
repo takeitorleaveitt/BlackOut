@@ -29,6 +29,8 @@ import { createSettings } from './ui/screens/SettingsScreen.js';
 import { createFriends, createPause, createEndMatch, createQueue, createProfile } from './ui/screens/Misc.js';
 import { createBuyMenu } from './ui/screens/BuyMenu.js';
 import { getMap, MAP_INFO, MAP_KEYS } from './shared/maps/index.js';
+import { World } from './shared/physics.js';
+import { getNavGrid } from './shared/sim/navgrid.js';
 import { WEAPON_BY_ID, WEAPON_BY_KEY } from './shared/weapons.js';
 import { resolveWeapon } from './shared/attachments.js';
 import { buildWeaponModel, buildWorldWeapon } from './weapons/WeaponModels.js';
@@ -42,6 +44,10 @@ const MENU_MAPS = ['warehouse', 'refinery', 'suburb', 'killhouse'];
 // How far a map ping reaches. Past this there is no surface worth marking on
 // any of these maps, and the server rejects anything beyond 90 m anyway.
 const PING_RANGE = 85;
+// Attachments that change the weapon's silhouette, and so its geometry. These
+// are the variants worth building up front; a suppressor or a laser is a small
+// addition to a model that already exists.
+const OPTIC_KEYS = new Set(['reddot', 'holo', 'scope']);
 
 class Game {
   constructor() {
@@ -79,7 +85,6 @@ class Game {
     this.pingCache = new Map();
     this._accumNet = 0;
     // Cheat codes, entered from the main menu. Offline-only (see applyCheatCode).
-    this.cheats = { walls: false, auto: false, aimbot: false };
     this.currentPlaylist = null;   // which playlist this match came from
     // --- economy (TDM) ---
     this.economy = null;           // { money, loadout, canBuy } from the server
@@ -243,12 +248,19 @@ class Game {
     await step(50, 'PRINTING SURFACES…', () => {
       this.preloadMaterials();
     });
-    await step(62, 'FABRICATING WEAPONS…', () => {
+    await step(58, 'FABRICATING WEAPONS…', () => {
       this.preloadWeaponModels();
     });
-    await step(74, 'BRIEFING OPERATORS…', () => {
+    await step(66, 'BRIEFING OPERATORS…', () => {
       this.preloadPlayerModels();
     });
+    // Bot pathfinding grids: the single largest thing left that used to be
+    // paid on entering a match. One map at a time so the bar keeps moving.
+    for (let i = 0; i < MAP_KEYS.length; i++) {
+      await step(66 + Math.round(((i + 1) / MAP_KEYS.length) * 12),
+        `MAPPING ROUTES · ${MAP_KEYS[i].toUpperCase()}…`,
+        () => { getNavGrid(new World(getMap(MAP_KEYS[i]).brushes, { key: MAP_KEYS[i] }), MAP_KEYS[i]); });
+    }
     // Every menu screen's DOM is built once here rather than on the first
     // time it is opened — the interface is large enough that building a
     // screen mid-session was a visible hitch on the first navigation.
@@ -281,8 +293,15 @@ class Game {
     const tmp = new THREE.Group();
     this.engine.scene.add(tmp);
     for (const w of Object.values(WEAPON_BY_KEY)) {
-      const fp = buildWeaponModel(w, w.attachments || []);
-      tmp.add(fp.root);
+      // Bare, and then with each optic fitted. An optic changes the model, so
+      // the first time you equipped a scoped rifle was the first time that
+      // geometry and its material were built — mid-match, in the frame the
+      // gun came up.
+      tmp.add(buildWeaponModel(w, []).root);
+      for (const a of (w.attachments || [])) {
+        if (!OPTIC_KEYS.has(a)) continue;
+        tmp.add(buildWeaponModel(w, [a]).root);
+      }
       tmp.add(buildWorldWeapon(w));
     }
     this.engine.renderer.compile(this.engine.scene, this.engine.camera);
@@ -497,30 +516,6 @@ class Game {
     } catch (e) { /* toast already shown */ }
   }
 
-  /**
-   * Toggle a cheat by code. Returns { ok, message } for the console to show.
-   *
-   * WALLS  — enemies draw through geometry.
-   * AUTO   — pulls the trigger by itself when an enemy is under the crosshair.
-   * AIMBOT — drags aim toward the nearest visible enemy, deliberately sloppy.
-   *
-   * All three only take effect in offline matches against bots. They are
-   * ignored online: two of the three playlists exist specifically to put you
-   * against real people, and an aimbot that worked there would be a cheating
-   * tool rather than a cheat code.
-   */
-  applyCheatCode(code) {
-    const map = { WALLS: 'walls', AUTO: 'auto', AIMBOT: 'aimbot' };
-    const key = map[code];
-    if (!key) return { ok: false, message: code ? 'UNKNOWN CODE' : 'CODE' };
-    this.cheats[key] = !this.cheats[key];
-    if (key === 'walls') this.applyWallhack(this.cheats.walls);
-    return {
-      ok: true,
-      message: `${code} ${this.cheats[key] ? 'ON' : 'OFF'} · OFFLINE ONLY`
-    };
-  }
-
   /** Back out of matchmaking without any penalty — nothing has started yet. */
   cancelQueue() {
     this.currentPlaylist = null;
@@ -569,29 +564,6 @@ class Game {
     return (a > b ? 1 : 2) === this.player.team;
   }
 
-  /** True only when this match is local bots, never online against people. */
-  get cheatsActive() {
-    return this.mode === 'match' && !!this.net?.offline;
-  }
-
-  /** Draw enemy models through walls (or stop doing so). */
-  applyWallhack(on) {
-    for (const r of this.remotes.values()) this.setSeeThrough(r, on);
-  }
-
-  setSeeThrough(remote, on) {
-    remote.model?.root.traverse((o) => {
-      if (!o.isMesh || !o.material) return;
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) {
-        m.depthTest = !on;
-        m.transparent = on ? true : m.transparent;
-        m.opacity = on ? 0.85 : 1;
-        m.needsUpdate = true;
-      }
-      o.renderOrder = on ? 900 : 0;
-    });
-  }
 
   async joinRoom(id) {
     if (!this.isSquadLeader) { this.ui.toast('Only the squad leader can start a match', 'warn'); return; }
@@ -782,6 +754,7 @@ class Game {
       }
     }
     if (ev.canBuy !== undefined) this.economy = { ...(this.economy || {}), canBuy: ev.canBuy };
+    if (ev.income) this.economy = { ...(this.economy || {}), income: ev.income };
     this.notifyEconomy();
   }
 
@@ -1234,7 +1207,6 @@ class Game {
         r = new RemotePlayer(p.id, this.engine.scene, { name: info?.name, team: p.team });
         this.remotes.set(p.id, r);
         // a newly-seen enemy has to pick up the wallhack state too
-        if (this.cheats.walls && this.cheatsActive) this.setSeeThrough(r, true);
       }
       if (r.team !== p.team) r.setInfo({ team: p.team });
       r.push(p, serverTime);
@@ -1568,11 +1540,22 @@ class Game {
     });
     if (w) this.hud.setWeapon(w);
     if (this.matchState) {
-      this.hud.timer.textContent = fmtClock(this.matchState.timeLeft);
+      // Once a second, not once a frame: these are all whole numbers that
+      // hold still for tens of frames at a time, and writing them anyway
+      // invalidates style on four elements every frame for nothing.
+      const clock = fmtClock(this.matchState.timeLeft);
+      if (clock !== this._hudClock) {
+        this._hudClock = clock;
+        this.hud.timer.textContent = clock;
+      }
       const s = this.matchState.scores || {};
-      this.hud.scoreLine.children[0].textContent = String(s[1] ?? 0);
-      this.hud.scoreLine.children[1].textContent = this.matchState.mode === 'ffa' ? 'FFA' : '—';
-      this.hud.scoreLine.children[2].textContent = String(s[2] ?? 0);
+      const score = `${s[1] ?? 0}|${this.matchState.mode}|${s[2] ?? 0}`;
+      if (score !== this._hudScore) {
+        this._hudScore = score;
+        this.hud.scoreLine.children[0].textContent = String(s[1] ?? 0);
+        this.hud.scoreLine.children[1].textContent = this.matchState.mode === 'ffa' ? 'FFA' : '—';
+        this.hud.scoreLine.children[2].textContent = String(s[2] ?? 0);
+      }
       this.hud.modeLabel.textContent = `${this.matchState.modeName} · ${this.matchState.mapName}`;
       if (this.matchState.bomb?.planted) {
         this.hud.setObjective(`CHARGE ARMED · ${this.matchState.bomb.timer}s`);

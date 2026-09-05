@@ -51,6 +51,23 @@ const MAX_EXPANSIONS = 9000;
 // floor" when resolving a world point onto the grid.
 const SAME_FLOOR = 1.2;
 
+/**
+ * Is a player-sized space free at (x, y, z)?
+ *
+ * The clearance test starts a step height ABOVE the surface, not at it. A
+ * player walks over anything shorter than STEP_HEIGHT rather than colliding
+ * with it, and testing from the floor up meant a staircase failed at every
+ * single tread: a 0.53 m tread with a 0.30 m riser puts the next step well
+ * inside a 0.34 m radius cylinder, so every stair on every map came back
+ * "not standable" and every mezzanine, catwalk and upper floor ended up in
+ * its own unreachable island. Which is exactly what the reachability numbers
+ * were saying, and I had been reading it as those spawns being genuinely
+ * cut off.
+ */
+function standable(world, x, y, z, radius) {
+  return world.isClear(x, y + STEP_HEIGHT, z, radius, CLEAR_HEIGHT - STEP_HEIGHT);
+}
+
 const cache = new Map();
 
 /**
@@ -115,7 +132,7 @@ export class NavGrid {
           if (!hit) break;
           const surfaceY = hit.point[1];
           // Stand on it only if a player actually fits there.
-          if (w.isClear(x, surfaceY + 0.04, z, CLEAR_RADIUS, CLEAR_HEIGHT)) {
+          if (standable(w, x, surfaceY, z, CLEAR_RADIUS)) {
             ids.push(this.nodes.length);
             this.nodes.push({ ix, iz, x, y: surfaceY, z, edges: null });
           }
@@ -153,13 +170,17 @@ export class NavGrid {
           // across, or the "link" runs through a wall.
           const midX = (n.x + m.x) / 2, midZ = (n.z + m.z) / 2;
           const hiY = Math.max(n.y, m.y);
-          if (!w.isClear(midX, hiY + 0.06, midZ, LINK_RADIUS, CLEAR_HEIGHT)) continue;
-          if (!w.isClear(m.x, hiY + 0.06, m.z, LINK_RADIUS, CLEAR_HEIGHT)) continue;
+          if (!standable(w, midX, hiY, midZ, LINK_RADIUS)) continue;
+          // Only worth testing the far end when THIS node is the higher of the
+          // two: when m is higher, build() already established there is room
+          // to stand at m.y, and re-testing it is a third of the link pass for
+          // an answer we have.
+          if (n.y > m.y && !standable(w, m.x, hiY, m.z, LINK_RADIUS)) continue;
           // A diagonal must not cut a corner: both orthogonal neighbours have
           // to be open at this height too, or bots shave through door jambs.
           if (diagonal && !(
-            w.isClear(this.cellX(n.ix + dx), hiY + 0.06, this.cellZ(n.iz), LINK_RADIUS, CLEAR_HEIGHT) &&
-            w.isClear(this.cellX(n.ix), hiY + 0.06, this.cellZ(n.iz + dz), LINK_RADIUS, CLEAR_HEIGHT)
+            standable(w, this.cellX(n.ix + dx), hiY, this.cellZ(n.iz), LINK_RADIUS) &&
+            standable(w, this.cellX(n.ix), hiY, this.cellZ(n.iz + dz), LINK_RADIUS)
           )) continue;
           const cost = (diagonal ? 1.4142 : 1) * CELL
             + (dy > 0.05 ? dy * 1.5 : 0)      // stepping up is work
@@ -337,7 +358,7 @@ export class NavGrid {
       const t = s / steps;
       const x = a.x + dx * t, z = a.z + dz * t;
       const y = a.y + (b.y - a.y) * t;
-      if (!w.isClear(x, y + 0.06, z, LINK_RADIUS, CLEAR_HEIGHT)) return false;
+      if (!standable(w, x, y, z, LINK_RADIUS)) return false;
       // ...and there is still floor under it.
       const sup = w.supportY(x, y + 0.2, z, PLAYER_RADIUS, 0.6);
       if (sup.y === -Infinity) return false;

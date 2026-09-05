@@ -217,12 +217,6 @@ export class LocalPlayer {
     this.adsHeld = this.forceAds || (input.locked && (S.toggleAds ? this.adsToggle : input.rawDown('Mouse2')));
     this.fireHeld = input.locked && input.rawDown('Mouse0') && this.alive && this.canAct && !this.frozen;
 
-    // --- cheat codes (offline matches only) ---------------------------------
-    if (g.cheatsActive && this.alive && this.canAct && !this.frozen) {
-      if (g.cheats.aimbot) this.runAimbot(dt);
-      if (g.cheats.auto && this.enemyUnderCrosshair()) this.fireHeld = true;
-    }
-
     // --- fixed-step movement prediction --------------------------------------
     this.acc += dt;
     let steps = 0;
@@ -380,68 +374,6 @@ export class LocalPlayer {
     g.engine.postCtx.yawRate = this.rig.yawRate;
     g.engine.postCtx.pitchRate = this.rig.pitchRate;
     g.engine.postCtx.indoor = !!g.worldRenderer.zoneAt(this.state.x, this.state.y + 1.2, this.state.z);
-  }
-
-  /**
-   * Enemies the local player could plausibly shoot: alive, on another team,
-   * and with clear line of sight from the eye to their chest.
-   */
-  visibleEnemies() {
-    const g = this.game;
-    const out = [];
-    const ex = this.state.x, ey = this.state.y + eyeHeight(this.state), ez = this.state.z;
-    for (const r of g.remotes.values()) {
-      if (r.render.dead) continue;
-      if (this.team && r.team === this.team) continue;
-      const tx = r.render.x, ty = r.render.y + 1.2, tz = r.render.z;
-      const dx = tx - ex, dy = ty - ey, dz = tz - ez;
-      const dist = Math.hypot(dx, dy, dz);
-      if (dist < 0.001 || dist > 90) continue;
-      const hit = g.world?.raycast(ex, ey, ez, dx / dist, dy / dist, dz / dist, dist - 0.35);
-      if (hit) continue;                       // wall in the way
-      out.push({ x: tx, y: ty, z: tz, dist });
-    }
-    return out;
-  }
-
-  /** True when an enemy sits within a small cone of where we are aiming. */
-  enemyUnderCrosshair() {
-    const aim = this.rig.getAimDir(this._dir);
-    const ex = this.state.x, ey = this.state.y + eyeHeight(this.state), ez = this.state.z;
-    for (const e of this.visibleEnemies()) {
-      const dx = (e.x - ex) / e.dist, dy = (e.y - ey) / e.dist, dz = (e.z - ez) / e.dist;
-      // ~2.5 degrees of tolerance, so it triggers on the body rather than
-      // anywhere in the general direction.
-      if (aim.x * dx + aim.y * dy + aim.z * dz > 0.999) return true;
-    }
-    return false;
-  }
-
-  /**
-   * Deliberately mediocre aimbot: it drags aim toward the nearest visible
-   * enemy at a capped angular rate and stops once it is roughly on target,
-   * so it wobbles and overshoots rather than snapping perfectly.
-   */
-  runAimbot(dt) {
-    const targets = this.visibleEnemies();
-    if (!targets.length) return;
-    let best = targets[0];
-    for (const t of targets) if (t.dist < best.dist) best = t;
-
-    const ex = this.state.x, ey = this.state.y + eyeHeight(this.state), ez = this.state.z;
-    const dx = best.x - ex, dy = best.y - ey, dz = best.z - ez;
-    const wantYaw = Math.atan2(-dx, -dz);
-    const wantPitch = Math.atan2(dy, Math.hypot(dx, dz));
-
-    let dYaw = wantYaw - this.rig.targetYaw;
-    while (dYaw > Math.PI) dYaw -= Math.PI * 2;
-    while (dYaw < -Math.PI) dYaw += Math.PI * 2;
-    const dPitch = wantPitch - this.rig.targetPitch;
-
-    // capped turn rate + a dead zone, which is what keeps it "kinda bad"
-    const rate = 4.2 * dt;
-    if (Math.abs(dYaw) > 0.012) this.rig.targetYaw += clamp(dYaw, -rate, rate);
-    if (Math.abs(dPitch) > 0.012) this.rig.targetPitch += clamp(dPitch, -rate, rate);
   }
 
   /** Distance to the wall the muzzle is pointing at (drives the low-ready pose). */

@@ -76,22 +76,42 @@ export class BotBrain {
     const ex = self.x, ey = self.y + eyeHeight(self), ez = self.z;
 
     // --- target selection --------------------------------------------------
-    let best = null, bestD = Infinity;
+    //
+    // We want the NEAREST enemy with line of sight, so the cheap tests go
+    // first and the expensive one runs in distance order until it succeeds.
+    // This used to raycast every enemy in range on every tick of every bot —
+    // seven rays per bot per tick with a full lobby, when the answer is almost
+    // always the first one. Same result, a fraction of the work.
+    const cands = this._cands || (this._cands = []);
+    cands.length = 0;
     for (const e of enemies) {
       if (!e.alive) continue;
       const dx = e.x - ex, dz = e.z - ez;
       const d = Math.hypot(dx, dz);
       if (d > sk.range) continue;
-      // line of sight to the chest
-      const ty = e.y + playerHeight(e) * 0.68;
-      const dy = ty - ey;
-      const len = Math.hypot(dx, dy, dz) || 1;
-      const hit = world.raycast(ex, ey, ez, dx / len, dy / len, dz / len, len - 0.35);
-      if (hit) continue;
       // rough field of view — bots are not omniscient
       const facing = Math.cos(this.yaw) * (-dz / d) + (-Math.sin(this.yaw)) * (dx / d);
       if (facing < 0.05 && d > 6) continue;
-      if (d < bestD) { bestD = d; best = e; }
+      cands.push(e, d);
+    }
+    let best = null, bestD = Infinity;
+    if (cands.length === 2) {
+      // The common case by a distance: one candidate, one ray.
+      if (this.hasLos(world, ex, ey, ez, cands[0])) { best = cands[0]; bestD = cands[1]; }
+    } else if (cands.length) {
+      // Insertion sort over the flat (enemy, distance) pairs — a handful of
+      // entries, and it keeps the array reusable so nothing is allocated here.
+      for (let i = 2; i < cands.length; i += 2) {
+        const e = cands[i], d = cands[i + 1];
+        let j = i - 2;
+        while (j >= 0 && cands[j + 1] > d) { cands[j + 2] = cands[j]; cands[j + 3] = cands[j + 1]; j -= 2; }
+        cands[j + 2] = e; cands[j + 3] = d;
+      }
+      for (let i = 0; i < cands.length; i += 2) {
+        if (!this.hasLos(world, ex, ey, ez, cands[i])) continue;
+        best = cands[i]; bestD = cands[i + 1];
+        break;
+      }
     }
 
     if (best) {
@@ -267,6 +287,13 @@ export class BotBrain {
     return { buttons, yaw: this.yaw, pitch: this.pitch, fire, reload };
   }
 
+  /** Clear line from the bot's eye to an enemy's chest? */
+  hasLos(world, ex, ey, ez, e) {
+    const dx = e.x - ex, dy = (e.y + playerHeight(e) * 0.68) - ey, dz = e.z - ez;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    return !world.raycast(ex, ey, ez, dx / len, dy / len, dz / len, len - 0.35);
+  }
+
   /** Is there something within a stride in that direction, at chest height? */
   blocked(world, self, dir) {
     let dx, dz;
@@ -344,8 +371,8 @@ export class BotBrain {
     if (ctx.enemyHints) {
       for (const h of ctx.enemyHints) {
         pool.push({
-          x: h[0] + (this.rng() - 0.5) * 9,
-          z: h[2] + (this.rng() - 0.5) * 9,
+          x: h.x + (this.rng() - 0.5) * 9,
+          z: h.z + (this.rng() - 0.5) * 9,
           w: 9
         });
       }

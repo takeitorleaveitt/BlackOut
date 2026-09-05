@@ -13,9 +13,18 @@ export const START_MONEY = 1000;
 export const MAX_MONEY = 16000;
 export const KILL_REWARD = 500;
 
-// Losing a round still pays, or a team that goes down early never recovers.
-export const ROUND_WIN_REWARD = 3000;
-export const ROUND_LOSS_REWARD = 1400;
+// Losing a round still pays, or a team that goes down early never recovers and
+// the rest of the match is over before it is played.
+//
+// These used to be 3000 and 1400, borrowed straight from Counter-Strike. They
+// are far too large for this game's prices: two kills is 1000, so the round
+// bonus alone was three times what a good round of shooting paid, and a wallet
+// went from 1000 to five thousand between round one and round two whatever you
+// did in it. That is why the money looked like it arrived from nowhere. The
+// bonus is now a floor that keeps a losing team armed, not the main income —
+// the kills are the main income, which is what makes a round worth playing.
+export const ROUND_WIN_REWARD = 800;
+export const ROUND_LOSS_REWARD = 500;
 
 // What you keep when you die: the free pistol and the blade, nothing else.
 export const DEFAULT_PRIMARY = null;

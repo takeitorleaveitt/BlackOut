@@ -12,6 +12,10 @@ import { perf } from './Perf.js';
 import { bus } from './EventBus.js';
 import { clamp } from '../shared/constants.js';
 
+// How often the sun's shadow map is re-rendered, in hertz. The map only has to
+// keep up with moving players; the world it is cast from never changes.
+const SHADOW_HZ = 30;
+
 export class Engine {
   constructor(canvas) {
     this.canvas = canvas;
@@ -27,6 +31,16 @@ export class Engine {
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = S.shadows !== 'off';
     this.renderer.shadowMap.type = S.shadows === 'ultra' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    // The sun's shadow map was re-rendered on every single frame. Nothing in
+    // this world casts a shadow that needs that: the geometry is static and
+    // only the players move, so the whole scene was being drawn a second time
+    // at 144 Hz to move a few soft blobs on the floor. Driven manually at
+    // SHADOW_HZ instead — a shadow one thirtieth of a second behind a running
+    // player is not something anyone can see, and the cost of the second pass
+    // scales with shadow resolution, which is exactly where it hurts.
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
+    this._shadowT = 0;
     this.renderer.info.autoReset = false;
 
     this.scene = new THREE.Scene();
@@ -98,6 +112,7 @@ export class Engine {
       this.renderer.shadowMap.enabled = S.shadows !== 'off';
       this.renderer.shadowMap.type = S.shadows === 'ultra' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
       this.configureShadow();
+      this.renderer.shadowMap.autoUpdate = false;
       this.renderer.shadowMap.needsUpdate = true;
     }
     if (['bloom', 'aa', 'preset', 'renderScale', '*'].includes(key)) {
@@ -207,6 +222,15 @@ export class Engine {
 
     this.sky.update(this.time, this.camera);
     this.postfx.update(dt, this.postCtx);
+
+    // Re-render the shadow map on its own clock rather than the frame's.
+    if (this.renderer.shadowMap.enabled) {
+      this._shadowT += dt;
+      if (this._shadowT >= 1 / SHADOW_HZ) {
+        this._shadowT = 0;
+        this.renderer.shadowMap.needsUpdate = true;
+      }
+    }
 
     this.renderer.info.reset();
     this.postfx.render();

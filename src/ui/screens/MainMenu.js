@@ -17,33 +17,6 @@ const ITEMS = [
   { key: 'quit', label: 'QUIT', desc: 'END SESSION' }
 ];
 
-/**
- * Cheat console. Type a code and press enter to toggle it.
- *
- * These are deliberately restricted to offline play against bots. The game
- * has an online mode against real people, and Quick Match and Standard are
- * player-only playlists by design — shipping a working aimbot into those
- * would be building a tool for cheating against other players rather than a
- * cheat code for your own game. Offline, they do exactly what they say.
- */
-function codeBox(game) {
-  const status = el('span.dim', { style: { minWidth: '150px', fontSize: '11px' } }, 'CODE');
-  const input = el('input', {
-    type: 'text', placeholder: 'ENTER CODE',
-    style: { width: '150px', textTransform: 'uppercase' },
-    onkeydown: (e) => {
-      if (e.key !== 'Enter') return;
-      const code = String(e.target.value || '').trim().toUpperCase();
-      e.target.value = '';
-      const res = game.applyCheatCode(code);
-      status.textContent = res.message;
-      status.style.color = res.ok ? 'var(--accent, #c8ff4d)' : '';
-      audio.ui(res.ok ? 'accept' : 'deny');
-    }
-  });
-  return el('div.flex.gap8.center', input, status);
-}
-
 export function createMainMenu(game) {
   let ui = null;
   let clock = null;
@@ -84,9 +57,10 @@ export function createMainMenu(game) {
           el('span', el('b', '↑↓ '), 'NAVIGATE'),
           el('span', el('b', 'ENTER '), 'SELECT'),
           el('span', el('b', 'ESC '), 'BACK')),
-        // Quick Match and Training live on the PLAY screen now; this slot is
-        // the cheat console instead. Codes: WALLS, AUTO, AIMBOT.
-        el('div.flex.gap8', codeBox(game))));
+        el('div.telemetry',
+          el('span', el('b', 'B '), 'BUY'),
+          el('span', el('b', 'Z '), 'PING'),
+          el('span', el('b', 'TAB '), 'SCORES'))));
 
       select(0);
     },

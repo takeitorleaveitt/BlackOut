@@ -117,6 +117,9 @@ export class MatchSim {
       connected: true,
       // --- economy (TDM only) ---
       money: START_MONEY,
+      // What this round has paid, and why. Money that turns up without a
+      // reason attached reads as a bug even when the sum is right.
+      income: { kills: 0, round: 0, roundLabel: '' },
       // What this player owns going into the next round. Set from what they
       // were carrying when the round ended, or wiped back to a pistol if they
       // did not survive it.
@@ -202,9 +205,14 @@ export class MatchSim {
   }
 
   /** Award money and remember it, clamped to the cap. */
-  award(p, amount) {
+  award(p, amount, reason = null, label = '') {
     if (!this.economy || !p) return;
+    const before = p.money;
     p.money = clampMoney(p.money + amount);
+    if (reason && p.income) {
+      p.income[reason] += p.money - before;
+      if (reason === 'round') p.income.roundLabel = label;
+    }
   }
 
   /**
@@ -259,7 +267,11 @@ export class MatchSim {
     // here. Tell it.
     if (this.economy) {
       this.emit(EV.ECONOMY, {
-        p: p.id, money: p.money, loadout: { ...p.loadout }
+        // `income` rides along: this event is what the buy screen redraws
+        // from, and without it the breakdown under the wallet was always
+        // empty — economyFor() carried it, the event did not, and the event
+        // is the one that actually arrives when a buy phase opens.
+        p: p.id, money: p.money, income: { ...p.income }, loadout: { ...p.loadout }
       });
     }
   }
@@ -513,7 +525,7 @@ export class MatchSim {
       attacker.streak++;
       attacker.score += 100 + (zone === 'head' ? 50 : 0);
       if (!this.mode.rounds) this.addScore(attacker.team, 1);
-      this.award(attacker, KILL_REWARD);
+      this.award(attacker, KILL_REWARD, 'kills');
     } else if (friendly) {
       attacker.score -= 50;
     }
@@ -587,15 +599,24 @@ export class MatchSim {
   }
 
   visibleEnemies(p) {
-    const out = [];
+    // Reused per player: this is called once per bot per tick, and the objects
+    // in it do not outlive the think() that reads them.
+    const out = p._enemyScratch || (p._enemyScratch = []);
+    let n = 0;
     for (const o of this.players.values()) {
       if (o.id === p.id || !o.alive) continue;
       if (this.mode.teams && o.team === p.team) continue;
-      out.push({
-        id: o.id, x: o.state.x, y: o.state.y, z: o.state.z,
-        vx: o.state.vx, vz: o.state.vz, crouchT: o.state.crouchT, alive: o.alive
-      });
+      // Overwrite the slot rather than pushing a fresh object: the entries do
+      // not outlive the think() that reads them, and one object per enemy per
+      // bot per tick is a steady stream of garbage for no benefit.
+      const e = out[n] || (out[n] = {});
+      e.id = o.id;
+      e.x = o.state.x; e.y = o.state.y; e.z = o.state.z;
+      e.vx = o.state.vx; e.vz = o.state.vz;
+      e.crouchT = o.state.crouchT; e.alive = o.alive;
+      n++;
     }
+    out.length = n;
     return out;
   }
 
@@ -681,7 +702,11 @@ export class MatchSim {
       // Whether pulling the trigger this tick actually produces a round. The
       // brain counts its bursts in bullets, so it has to know.
       canShoot: this.time - p.lastFire >= fireInterval(w.def),
-      enemyHints: enemies.map((e) => [e.x, e.y, e.z])
+      // The enemy list itself, not a fresh array of position triples. Only
+      // pickTarget reads this, and that runs once every few seconds — building
+      // one array per enemy per bot per tick to serve it was seventeen hundred
+      // throwaway arrays a second with a full lobby.
+      enemyHints: enemies
     });
     const cmd = {
       seq: 0,
@@ -782,6 +807,13 @@ export class MatchSim {
         if (this.time >= this.phaseEnd) {
           this.phase = PHASE.LIVE;
           this.phaseEnd = this.time + this.options.roundTimeSec;
+          // Buy time is over: the ledger starts counting this round's earnings,
+          // which is what the NEXT buy screen will show you.
+          if (this.economy) {
+            for (const p of this.players.values()) {
+              p.income = { kills: 0, round: 0, roundLabel: '' };
+            }
+          }
         }
         break;
       case PHASE.LIVE:
@@ -844,7 +876,9 @@ export class MatchSim {
       for (const p of this.players.values()) {
         // Losing still pays, or a team that drops the first two rounds can
         // never buy its way back into the match.
-        this.award(p, p.team === winner ? ROUND_WIN_REWARD : ROUND_LOSS_REWARD);
+        const won = p.team === winner;
+        this.award(p, won ? ROUND_WIN_REWARD : ROUND_LOSS_REWARD, 'round',
+          won ? 'ROUND WON' : 'ROUND LOST');
         p.nextLoadout = p.alive
           ? { ...p.loadout }
           : {
@@ -1043,7 +1077,8 @@ export class MatchSim {
       money: p.money,
       loadout: { ...p.loadout },
       canBuy: this.phase === PHASE.FREEZE,
-      bought: [...p.boughtThisRound]
+      bought: [...p.boughtThisRound],
+      income: { ...p.income }
     };
   }
 

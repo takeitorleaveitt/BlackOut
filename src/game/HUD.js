@@ -8,6 +8,26 @@ import { S } from '../core/Settings.js';
 import { perf } from '../core/Perf.js';
 import { clamp } from '../shared/constants.js';
 
+// Writing a DOM property costs whether or not the value changed: the browser
+// still invalidates style for that element. The HUD runs every frame, and most
+// of what it writes is the same string it wrote last frame — the ammo count
+// only moves when you shoot, the score only when someone dies, the crosshair
+// gap only when the rounded pixel value actually changes. These two helpers
+// keep the last value on the node and skip the write when nothing moved, which
+// takes the HUD from roughly thirty style invalidations a frame to a handful.
+function setText(node, value) {
+  if (!node || node._v === value) return;
+  node._v = value;
+  node.textContent = value;
+}
+function setStyle(node, prop, value) {
+  if (!node) return;
+  const k = '_s_' + prop;
+  if (node[k] === value) return;
+  node[k] = value;
+  node.style[prop] = value;
+}
+
 export class HUD {
   constructor(root, game) {
     this.root = root;
@@ -49,6 +69,7 @@ export class HUD {
 
     // ammo / weapon
     this.ammo = el('div.ammo', '30', el('small', ' / 180'));
+    this.ammoSmall = this.ammo.querySelector('small');
     this.wname = el('div.wname', 'M4A1');
     this.wmode = el('div.wmode', 'AUTO · MRDS');
     this.br = el('div.hud-br', this.ammo, this.wname, this.wmode);
@@ -133,6 +154,9 @@ export class HUD {
    */
   setSpectating(on) {
     this.spectating = !!on;
+    // Coming back from spectating has to redraw the weapon panel even though
+    // the gun has not changed, so drop the cached signature.
+    this._weaponSig = null;
     this.br.style.display = on ? 'none' : '';
     this.bl.style.display = on ? 'none' : '';
     this.crosshair.style.display = on ? 'none' : '';
@@ -141,23 +165,29 @@ export class HUD {
   setWeapon(w) {
     if (!w || this.spectating) return;
     const d = w.def;
+    // This is called every frame from the game loop. Almost every one of those
+    // calls has nothing to say — the gun is the same gun with the same rounds
+    // in it — and it used to do two querySelector()s and six DOM writes anyway.
+    const sig = `${d.key}|${w.ammo}|${w.reserve}|${(d.attached || []).join(',')}`;
+    if (sig === this._weaponSig) return;
+    this._weaponSig = sig;
     // A blade has no magazine and no reserve, so it gets no ammo counter —
     // showing "1 / 1" over a knife was the last thing making it read as a gun
     // you happen to be holding backwards.
     if (d.melee) {
       this.ammo.firstChild.nodeValue = '—';
-      this.ammo.querySelector('small').textContent = '';
+      setText(this.ammoSmall, '');
       this.ammo.classList.remove('low', 'empty');
     } else {
       this.ammo.firstChild.nodeValue = String(w.ammo);
-      this.ammo.querySelector('small').textContent = ` / ${w.reserve}`;
+      setText(this.ammoSmall, ` / ${w.reserve}`);
       this.ammo.classList.toggle('low', w.ammo <= d.magSize * 0.25 && w.ammo > 0);
       this.ammo.classList.toggle('empty', w.ammo === 0);
     }
-    this.wname.textContent = d.name;
+    setText(this.wname, d.name);
     const att = (d.attached || []).map((a) => a.toUpperCase()).join(' · ');
     const action = d.melee ? 'MELEE' : d.auto ? 'AUTO' : d.pumpTime ? 'BOLT' : 'SEMI';
-    this.wmode.textContent = action + (att ? ' · ' + att : '');
+    setText(this.wmode, action + (att ? ' · ' + att : ''));
   }
 
   setHealth(h) {
@@ -272,11 +302,16 @@ export class HUD {
     this.spread += (target - this.spread) * (1 - Math.exp(-14 * dt));
     const g = Math.round(this.spread);
     const c = this.crosshair;
-    c.children[0].style.transform = `translateY(${-g - 7}px)`;
-    c.children[1].style.transform = `translateY(${g}px)`;
-    c.children[2].style.transform = `translateX(${-g - 7}px)`;
-    c.children[3].style.transform = `translateX(${g}px)`;
-    c.style.opacity = ctx.ads > 0.6 ? '0' : String(1 - ctx.ads * 0.9);
+    // The gap is a rounded pixel value, so it holds still for many frames at a
+    // time even while the underlying spread is drifting.
+    if (g !== this._gap) {
+      this._gap = g;
+      c.children[0].style.transform = `translateY(${-g - 7}px)`;
+      c.children[1].style.transform = `translateY(${g}px)`;
+      c.children[2].style.transform = `translateX(${-g - 7}px)`;
+      c.children[3].style.transform = `translateX(${g}px)`;
+    }
+    setStyle(c, 'opacity', ctx.ads > 0.6 ? '0' : (1 - ctx.ads * 0.9).toFixed(2));
 
     // Scoped sights swap the whole view for the scope picture once the aim has
     // mostly settled. Below that the weapon model is still swinging up, and
@@ -310,10 +345,10 @@ export class HUD {
 
     this.hurtT = Math.max(0, this.hurtT - dt);
     const hurtBase = 1 - clamp((ctx.health ?? 100) / 100, 0, 1);
-    this.hurtVig.style.opacity = String(clamp(hurtBase * 0.5 + this.hurtT * 0.42, 0, 0.8));
+    setStyle(this.hurtVig, 'opacity', clamp(hurtBase * 0.5 + this.hurtT * 0.42, 0, 0.8).toFixed(3));
 
     this.flashT = Math.max(0, this.flashT - dt * 2.2);
-    this.flash.style.opacity = String(this.flashT);
+    setStyle(this.flash, 'opacity', this.flashT.toFixed(3));
 
     // damage direction arrows
     for (let i = this.dmgDirs.length - 1; i >= 0; i--) {
@@ -332,8 +367,9 @@ export class HUD {
       else if (k.life < 1) k.node.style.opacity = String(k.life);
     }
 
-    this.leanInd.style.opacity = Math.abs(ctx.lean ?? 0) > 0.15 ? '0.8' : '0';
-    if (Math.abs(ctx.lean ?? 0) > 0.15) this.leanInd.textContent = ctx.lean < 0 ? '◄ LEAN' : 'LEAN ►';
+    const leaning = Math.abs(ctx.lean ?? 0) > 0.15;
+    setStyle(this.leanInd, 'opacity', leaning ? '0.8' : '0');
+    if (leaning) setText(this.leanInd, ctx.lean < 0 ? '◄ LEAN' : 'LEAN ►');
 
     // bodycam chrome
     const t = ctx.matchTime ?? (performance.now() / 1000);
@@ -341,7 +377,7 @@ export class HUD {
     const mm = String(Math.floor(t / 60) % 60).padStart(2, '0');
     const ss = String(Math.floor(t) % 60).padStart(2, '0');
     const ff = String(Math.floor((t % 1) * 30)).padStart(2, '0');
-    this.tc.textContent = `${hh}:${mm}:${ss}:${ff}`;
+    setText(this.tc, `${hh}:${mm}:${ss}:${ff}`);
     if (!this._battT || performance.now() - this._battT > 8000) {
       this._battT = performance.now();
       this._batt = this._batt === undefined ? 87 : Math.max(11, this._batt - 1);
@@ -349,6 +385,14 @@ export class HUD {
     }
 
     // telemetry
+    //
+    // This block used to assign innerHTML every frame, which reparses the
+    // markup and rebuilds the subtree from scratch — for numbers that change
+    // a few times a second at most. Four updates a second is plenty for an FPS
+    // counter, and the write is skipped entirely when the text is unchanged.
+    this._netT = (this._netT || 0) + dt;
+    if (this._netT < 0.25) return;
+    this._netT = 0;
     const parts = [];
     if (S.showFps) parts.push(`<b>FPS</b> ${perf.fps}`);
     if (S.showPing && ctx.net) {
@@ -366,7 +410,11 @@ export class HUD {
       parts.push(`<b>DC</b> ${perf.drawCalls}`);
       parts.push(`<b>TRI</b> ${(perf.triangles / 1000).toFixed(0)}k`);
     }
-    this.netgraph.innerHTML = parts.join('<br>');
+    const html = parts.join('<br>');
+    if (html !== this._netHtml) {
+      this._netHtml = html;
+      this.netgraph.innerHTML = html;
+    }
   }
 
   show(on) { this.root.hidden = !on; }
