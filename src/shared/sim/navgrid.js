@@ -119,7 +119,12 @@ export class NavGrid {
     this.stamp = new Int32Array(this.nodes.length);
     this.closed = new Uint8Array(this.nodes.length);
     this.searchId = 0;
-    this.open = [];
+    // Binary min-heap over `f`, as a flat Int32Array of node ids plus a size.
+    // The open list used to be scanned linearly for the cheapest node on
+    // every expansion, which is O(n^2) over the search and was about a sixth
+    // of a simulation tick once bots were pathing across a 17,000-node map.
+    this.open = new Int32Array(this.nodes.length + 1);
+    this.openN = 0;
   }
 
   colIndex(ix, iz) { return iz * this.nx + ix; }
@@ -287,24 +292,17 @@ export class NavGrid {
 
     const id = ++this.searchId;
     const { g, f, from, stamp, closed, nodes } = this;
-    const open = this.open;
-    open.length = 0;
+    this.openN = 0;
 
     stamp[start] = id; closed[start] = 0;
     g[start] = 0;
     f[start] = this.heuristic(nodes[start], nodes[goal]);
     from[start] = -1;
-    open.push(start);
+    this.heapPush(start);
 
     let expansions = 0;
-    while (open.length) {
-      // Linear scan for the cheapest open node. The frontier on these maps is
-      // small enough that a binary heap costs more in bookkeeping than it saves.
-      let bi = 0;
-      for (let i = 1; i < open.length; i++) if (f[open[i]] < f[open[bi]]) bi = i;
-      const cur = open[bi];
-      open[bi] = open[open.length - 1];
-      open.pop();
+    while (this.openN > 0) {
+      const cur = this.heapPop();
       if (cur === goal) return this.rebuild(cur, tx, ty, tz);
       if (closed[cur] === 1 && stamp[cur] === id) continue;
       closed[cur] = 1;
@@ -320,10 +318,55 @@ export class NavGrid {
         g[nid] = ng;
         f[nid] = ng + this.heuristic(nodes[nid], nodes[goal]);
         from[nid] = cur;
-        open.push(nid);
+        this.heapPush(nid);
       }
     }
     return null;
+  }
+
+  /**
+   * Lazy-deletion binary heap. Improving a node's cost pushes it again rather
+   * than sifting the old entry, and the stale copy is skipped when it comes
+   * out — the `closed` test at the top of the loop already does exactly that.
+   * The heap can therefore hold more entries than there are nodes, so it is
+   * allowed to grow.
+   */
+  heapPush(nid) {
+    let open = this.open;
+    if (this.openN >= open.length) {
+      const bigger = new Int32Array(open.length * 2);
+      bigger.set(open);
+      open = this.open = bigger;
+    }
+    const f = this.f;
+    let i = this.openN++;
+    open[i] = nid;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (f[open[parent]] <= f[open[i]]) break;
+      const t = open[parent]; open[parent] = open[i]; open[i] = t;
+      i = parent;
+    }
+  }
+
+  heapPop() {
+    const open = this.open, f = this.f;
+    const top = open[0];
+    const last = open[--this.openN];
+    if (this.openN > 0) {
+      open[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = i * 2 + 1, r = l + 1;
+        let small = i;
+        if (l < this.openN && f[open[l]] < f[open[small]]) small = l;
+        if (r < this.openN && f[open[r]] < f[open[small]]) small = r;
+        if (small === i) break;
+        const t = open[small]; open[small] = open[i]; open[i] = t;
+        i = small;
+      }
+    }
+    return top;
   }
 
   rebuild(goalId, tx, ty, tz) {

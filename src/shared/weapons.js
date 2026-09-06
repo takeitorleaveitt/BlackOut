@@ -354,6 +354,11 @@ export const WEAPONS = [
     slot: SLOT.SECONDARY,
     desc: 'Six rounds, thirty-eight in the pouch, and no sight to aim down. Nothing else in the game puts a round exactly where the crosshair is — but you get one every two thirds of a second and it takes five and a half to fill again.',
     damage: 62, damageMin: 44, falloffStart: 28, falloffEnd: 64,
+    // One tap to the head, unconditionally. 62 x the 3.35 head multiplier is
+    // already 208 in the open and 147 at the far end of the falloff, so the
+    // floor only ever bites on a round that has spent energy getting there —
+    // through a wall, or through somebody else.
+    headshotDamage: 110,
     rpm: 96, auto: false, burst: 0,
     muzzleVelocity: 535, dropScale: 1.0,
     // 6 in the cylinder and 32 in the pouch: 38 rounds for the whole match,

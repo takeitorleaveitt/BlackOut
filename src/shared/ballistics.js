@@ -185,7 +185,16 @@ export function simulateBullet(opts) {
       const p = bestPlayer.player;
       const hx = px + ix * bestPlayer.t, hy = py + iy * bestPlayer.t, hz = pz + iz * bestPlayer.t;
       const dist = travelled + bestPlayer.t;
-      const dmg = damageAtRange(weapon, dist) * bestPlayer.mult * energy;
+      let dmg = damageAtRange(weapon, dist) * bestPlayer.mult * energy;
+      // `headshotDamage` is a FLOOR, not a bonus: a weapon that carries one
+      // kills on any head hit that reaches the target, whatever the range and
+      // whatever the round went through on the way. The revolver's headshot
+      // already cleared 100 in the open at every range; this is what makes it
+      // true through cover and through a body as well, so "one tap to the
+      // head" means one tap and not "one tap unless".
+      if (weapon.headshotDamage && bestPlayer.zone === 'head') {
+        dmg = Math.max(dmg, weapon.headshotDamage);
+      }
       hits.push({
         id: p.id, zone: bestPlayer.zone, damage: dmg, distance: dist,
         point: [hx, hy, hz], dir: [ix, iy, iz], mult: bestPlayer.mult, penetrated: energy < 0.999

@@ -59,6 +59,8 @@ export class World {
     this.meta = meta;
     this.colliders = [];
     this.grid = new Map();
+    this._stamp = null;
+    this._gen = 0;
     this.bounds = { minX: Infinity, minZ: Infinity, maxX: -Infinity, maxZ: -Infinity, minY: Infinity, maxY: -Infinity };
     for (const b of brushes) this.add(b);
   }
@@ -84,21 +86,38 @@ export class World {
     return c;
   }
 
-  /** Colliders whose AABB may overlap the given XZ box. */
+  /**
+   * Colliders whose AABB may overlap the given XZ box.
+   *
+   * A collider spanning several grid cells appears in each of them, so the
+   * scan has to reject duplicates. That used to be a Set cleared on every
+   * call — and this method is the single hottest thing in the simulation
+   * (movement, every clearance probe and every bullet segment come through
+   * it), so the hashing showed up as about a third of a tick with eight bots
+   * running. It is a generation-stamped array now: one integer compare and
+   * one store per candidate, and "clearing" is incrementing a counter.
+   */
   query(minX, minZ, maxX, maxZ, out = []) {
     out.length = 0;
     const ix0 = Math.floor(minX / CELL), ix1 = Math.floor(maxX / CELL);
     const iz0 = Math.floor(minZ / CELL), iz1 = Math.floor(maxZ / CELL);
-    const seen = this._seen || (this._seen = new Set());
-    seen.clear();
+    let stamp = this._stamp;
+    if (!stamp || stamp.length < this.colliders.length) {
+      // Grow with headroom; brushes can be added after construction.
+      stamp = this._stamp = new Int32Array(Math.max(64, this.colliders.length * 2));
+      this._gen = 0;
+    }
+    // Int32Array wraps at 2^31; restart the stamps rather than alias them.
+    if (++this._gen >= 0x7fffffff) { stamp.fill(0); this._gen = 1; }
+    const gen = this._gen;
     for (let ix = ix0; ix <= ix1; ix++) {
       for (let iz = iz0; iz <= iz1; iz++) {
         const arr = this.grid.get(key(ix, iz));
         if (!arr) continue;
         for (let i = 0; i < arr.length; i++) {
           const c = arr[i];
-          if (seen.has(c.index)) continue;
-          seen.add(c.index);
+          if (stamp[c.index] === gen) continue;
+          stamp[c.index] = gen;
           if (c.maxX < minX || c.minX > maxX || c.maxZ < minZ || c.minZ > maxZ) continue;
           out.push(c);
         }
