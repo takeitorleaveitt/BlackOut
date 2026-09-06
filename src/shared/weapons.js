@@ -343,6 +343,48 @@ export const WEAPONS = [
     // The scope lives in the optic slot, so fitting it swaps out nothing else.
     // Deagle and the shotgun have no optics at all; this one ships with one.
     attachments: ['scope', 'suppressor', 'grip', 'laser']
+  },
+  {
+    id: 9,
+    key: 'revolver',
+    name: 'Revolver',
+    fullName: 'Model 627 .357 Magnum',
+    caliber: '.357 Magnum',
+    class: 'Revolver',
+    slot: SLOT.SECONDARY,
+    desc: 'Six rounds, thirty-eight in the pouch, and no sight to aim down. Nothing else in the game puts a round exactly where the crosshair is — but you get one every two thirds of a second and it takes five and a half to fill again.',
+    damage: 62, damageMin: 44, falloffStart: 28, falloffEnd: 64,
+    rpm: 96, auto: false, burst: 0,
+    muzzleVelocity: 535, dropScale: 1.0,
+    // 6 in the cylinder and 32 in the pouch: 38 rounds for the whole match,
+    // which is the entire point of the gun. Every trigger pull is 2.6% of
+    // everything you have.
+    magSize: 6, reserve: 32,
+    // Loaded one round at a time, like the shotgun's shells. The numbers are
+    // chosen so an empty cylinder takes exactly 5.30 s end to end:
+    //   0.85 swing out + 6 x 0.62 feeding + 0.73 snap shut = 5.30
+    reloadTactical: 0.62, reloadEmpty: 0.62, shellReload: true,
+    reloadStart: 0.85, reloadEnd: 0.73,
+    drawTime: 0.58, holsterTime: 0.40,
+    // No optic, no irons worth the name, and `noAds` blocks the aim blend
+    // outright — right-click does nothing on this gun. It does not need to:
+    // the hip spread is already close enough to zero that the round lands
+    // where the crosshair is.
+    noAds: true,
+    adsTime: 0.30, adsFov: 1.0,
+    spreadHip: 0.045, spreadAds: 0.045, spreadMove: 0.12, spreadJump: 0.40,
+    spreadPerShot: 0.018, spreadMax: 0.40, spreadRecover: 9.0,
+    recoil: {
+      vert: 0.0385, horiz: 0.0105, recovery: 5.4, viewKick: 2.1, camShake: 1.25,
+      firstShotMult: 1.0, kickBack: 0.105,
+      pattern: pattern('0,1 -0.3,1 0.35,1 -0.4,1 0.3,1 -0.25,1')
+    },
+    weight: 1.6, mobility: 1.00, adsMobility: 0.72,
+    sway: { amp: 0.86, freq: 1.14, inertia: 0.78 },
+    penetration: 0.58, pellets: 1, pelletSpread: 0,
+    audio: { punch: 84, body: 300, crack: 2600, tail: 0.58, level: 1.15, tone: 0.46 },
+    model: { barrel: 0.17, receiver: 0.20, stock: 'none', handguard: 'none', mag: 'cylinder', tint: 0x4e5257, accent: 0x5a3a24 },
+    attachments: ['flashlight', 'laser']
   }
 ];
 

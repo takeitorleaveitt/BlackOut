@@ -34,6 +34,7 @@ export const WEAPON_PRICE = {
   // pistols
   glock17: 450,
   deagle: 700,
+  revolver: 900,
   // sub-machine guns
   mp7: 1000,
   mp5: 1500,
@@ -77,7 +78,7 @@ export const clampMoney = (v) => Math.max(0, Math.min(MAX_MONEY, Math.round(v)))
  * `slot` says which loadout slot a purchase fills.
  */
 export const BUY_CATEGORIES = [
-  { key: 'pistols', name: 'Pistols', slot: 'secondary', items: ['glock17', 'deagle'] },
+  { key: 'pistols', name: 'Pistols', slot: 'secondary', items: ['glock17', 'deagle', 'revolver'] },
   { key: 'smg', name: 'Mid-Tier', slot: 'primary', items: ['mp7', 'mp5', 'm870'] },
   { key: 'rifles', name: 'Rifles', slot: 'primary', items: ['m4a1', 'ak74', 'scarh', 'm40'] },
   { key: 'gear', name: 'Attachments', slot: 'attachment', items: ['acog', 'holo', 'compensator', 'reddot', 'scope', 'suppressor', 'grip', 'laser', 'flashlight'] }

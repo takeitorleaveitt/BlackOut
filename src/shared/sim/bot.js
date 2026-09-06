@@ -10,11 +10,16 @@ import { eyeHeight, playerHeight } from '../movement.js';
 // doubled, aim jitter roughly doubled-to-tripled, and tracking speed cut by
 // nearly half across every tier — the ordering (easy < normal < hard <
 // elite) is unchanged, the whole curve just got more human.
+// Aim error is in radians of cone half-angle, before the range and
+// just-spotted multipliers below. Every tier carries about a third more of it
+// than it used to, and swings onto target a little slower: the old numbers
+// meant a bot that saw you first usually won the trade outright, which is not
+// a fight so much as a coin toss you already lost.
 const SKILLS = {
-  easy: { react: 0.62, aimError: 0.150, aimSpeed: 2.6, burst: [2, 5], pause: [0.55, 1.3], range: 38, hearing: 20 },
-  normal: { react: 0.42, aimError: 0.095, aimSpeed: 4.2, burst: [3, 7], pause: [0.4, 0.9], range: 52, hearing: 26 },
-  hard: { react: 0.26, aimError: 0.055, aimSpeed: 6.8, burst: [4, 9], pause: [0.25, 0.6], range: 70, hearing: 34 },
-  elite: { react: 0.16, aimError: 0.030, aimSpeed: 10.0, burst: [5, 12], pause: [0.15, 0.4], range: 90, hearing: 40 }
+  easy: { react: 0.70, aimError: 0.205, aimSpeed: 2.25, burst: [2, 5], pause: [0.55, 1.3], range: 38, hearing: 20 },
+  normal: { react: 0.48, aimError: 0.132, aimSpeed: 3.6, burst: [3, 7], pause: [0.4, 0.9], range: 52, hearing: 26 },
+  hard: { react: 0.30, aimError: 0.076, aimSpeed: 5.8, burst: [4, 9], pause: [0.25, 0.6], range: 70, hearing: 34 },
+  elite: { react: 0.19, aimError: 0.042, aimSpeed: 8.6, burst: [5, 12], pause: [0.15, 0.4], range: 90, hearing: 40 }
 };
 
 export class BotBrain {

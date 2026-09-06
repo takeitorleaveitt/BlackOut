@@ -181,6 +181,36 @@ const BUILD = {
     g.add(part(b(0.032, 0.055, 0.02), M.steel, 0, -0.06, -0.03));              // trigger guard
     g.name = 'scarh';
   },
+  // A big-frame .357. Everything the eye uses to tell a revolver from a
+  // pistol is here as a separate block: the vented top rib, the ejector-rod
+  // shroud under the barrel, the fluted cylinder standing proud of the frame,
+  // the exposed hammer spur and a wood grip. The cylinder itself is NOT built
+  // here — buildWeaponModel hangs it off its own crane pivot so the reload can
+  // swing it out to the left and spin it.
+  revolver(g) {
+    // The frame is built as a TOP STRAP and a BOTTOM RAIL with an open window
+    // between them, not as one solid block — the cylinder has to stand proud
+    // of the frame on all four sides or the gun reads as a chunky pistol. A
+    // solid frame here swallowed it whole.
+    g.add(part(b(0.042, 0.072, 0.028), M.steel, 0, 0.018, 0.040));            // standing breech
+    g.add(part(b(0.034, 0.012, 0.092), M.steel, 0, 0.050, -0.012));           // top strap
+    g.add(part(b(0.032, 0.012, 0.092), M.steel, 0, -0.014, -0.012));          // bottom rail
+    g.add(part(b(0.030, 0.030, 0.022), M.steel, 0, 0.036, -0.052));           // forcing cone
+    g.add(part(b(0.028, 0.028, 0.150), M.steel, 0, 0.036, -0.132));           // barrel
+    g.add(part(b(0.034, 0.010, 0.150), M.steelWorn, 0, 0.054, -0.132));       // vented top rib
+    for (let i = 0; i < 4; i++) {
+      g.add(part(b(0.036, 0.004, 0.012), M.black, 0, 0.058, -0.085 - i * 0.028)); // rib cuts
+    }
+    g.add(part(b(0.024, 0.022, 0.132), M.steel, 0, 0.014, -0.124));           // ejector shroud
+    g.add(part(b(0.010, 0.010, 0.108), M.steelWorn, 0, 0.014, -0.120));       // ejector rod
+    g.add(part(b(0.012, 0.016, 0.010), M.black, 0, 0.060, -0.200));           // front sight blade
+    g.add(part(b(0.030, 0.012, 0.014), M.black, 0, 0.058, 0.046));            // rear notch
+    g.add(part(b(0.046, 0.100, 0.058), M.wood, 0, -0.064, 0.040, 0.20));      // grip
+    g.add(part(b(0.050, 0.024, 0.020), M.wood, 0, -0.022, 0.048, 0.20));      // grip swell
+    g.add(part(b(0.014, 0.038, 0.012), M.steelWorn, 0, -0.030, 0.004));       // trigger
+    g.add(part(b(0.030, 0.008, 0.046), M.steel, 0, -0.046, 0.002));           // trigger guard
+    g.name = 'revolver';
+  },
   knife(g) {
     g.add(part(b(0.028, 0.032, 0.14), M.black, 0, -0.01, 0.06));            // grip
     g.add(part(b(0.030, 0.006, 0.020), M.black, 0, 0.010, 0.005));          // finger ridge
@@ -206,7 +236,11 @@ const MAGS = {
   glock17: () => { const m = new THREE.Mesh(b(0.022, 0.10, 0.035), M.black); m.position.set(0, -0.10, 0.03); return m; },
   deagle: () => { const m = new THREE.Mesh(b(0.028, 0.12, 0.045), M.black); m.position.set(0, -0.115, 0.03); return m; },
   scarh: () => { const m = new THREE.Mesh(b(0.034, 0.15, 0.06), M.polymerTan); m.position.set(0, -0.11, -0.03); return m; },
-  m40: () => { const m = new THREE.Mesh(b(0.036, 0.075, 0.05), M.steel); m.position.set(0, -0.088, -0.02); return m; }
+  m40: () => { const m = new THREE.Mesh(b(0.036, 0.075, 0.05), M.steel); m.position.set(0, -0.088, -0.02); return m; },
+  // The revolver's "magazine" is its cylinder, which needs a swing pivot the
+  // mag slot cannot give it — buildWeaponModel builds that separately. This
+  // entry exists so the m4a1 fallback does not bolt a rifle mag to it.
+  revolver: () => { const m = new THREE.Mesh(b(0.001, 0.001, 0.001), M.black); m.visible = false; return m; }
 };
 
 // The reciprocating part: a charging handle for rifles, the whole slide for
@@ -234,7 +268,15 @@ const BOLTS = {
     return g;
   },
   scarh: () => part(b(0.022, 0.022, 0.055), M.steelWorn, 0.038, 0.055, 0.03),
-  m40: () => part(b(0.026, 0.026, 0.09), M.steelWorn, 0.0, 0.030, 0.06)
+  m40: () => part(b(0.026, 0.026, 0.09), M.steelWorn, 0.0, 0.030, 0.06),
+  // Exposed hammer spur. It is the 'bolt', so the existing fire animation
+  // already cocks and drops it without any extra plumbing.
+  revolver: () => {
+    const g = new THREE.Group();
+    g.add(part(b(0.014, 0.030, 0.014), M.steelWorn, 0, 0.056, 0.058));
+    g.add(part(b(0.018, 0.010, 0.020), M.black, 0, 0.070, 0.064));
+    return g;
+  }
 };
 
 /** Attachment meshes, parented to the rail / muzzle / side nodes. */
@@ -450,6 +492,32 @@ export function buildWeaponModel(weapon, attachments = []) {
   const bolt = weapon.melee ? null : (BOLTS[weapon.key] || BOLTS.m4a1)();
   if (bolt) { bolt.name = 'bolt'; root.add(bolt); }
 
+  // The revolver's cylinder rides on a crane: an outer group pivoting at the
+  // frame's left side so it swings out, and an inner group that spins about
+  // the bore so the chambers index round. Two nodes, because one cannot both
+  // hinge and rotate.
+  let cylinder = null, cylinderCore = null;
+  if (weapon.key === 'revolver') {
+    cylinder = new THREE.Group();
+    cylinder.name = 'crane';
+    cylinder.position.set(-0.024, 0.019, -0.012);      // the hinge, left of the frame
+    cylinderCore = new THREE.Group();
+    cylinderCore.name = 'cylinder';
+    cylinderCore.position.set(0.024, 0, 0);            // back out to the bore line
+    const CR = 0.020;
+    cylinderCore.add(part(b(0.062, 0.062, 0.078), M.steelWorn, 0, 0, 0));
+    for (let i = 0; i < 6; i++) {                      // six chambers and their flutes
+      const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+      cylinderCore.add(part(b(0.011, 0.011, 0.084), M.black,
+        Math.cos(a) * CR, Math.sin(a) * CR, 0));
+      cylinderCore.add(part(b(0.013, 0.013, 0.056), M.black,
+        Math.cos(a) * CR * 1.55, Math.sin(a) * CR * 1.55, 0.006));
+    }
+    cylinderCore.add(part(b(0.012, 0.012, 0.020), M.steelWorn, 0, 0, 0.048)); // ratchet
+    cylinder.add(cylinderCore);
+    root.add(cylinder);
+  }
+
   // the shotgun's forend cycles on its own
   let pump = null;
   if (weapon.key === 'm870') {
@@ -460,7 +528,7 @@ export function buildWeaponModel(weapon, attachments = []) {
 
   // Both pistols share the same compact proportions (no stock/handguard rail
   // to hang the usual anchors off), so they take the same overrides below.
-  const isPistol = weapon.key === 'glock17' || weapon.key === 'deagle';
+  const isPistol = weapon.key === 'glock17' || weapon.key === 'deagle' || weapon.key === 'revolver';
 
   const muzzle = new THREE.Object3D();
   muzzle.name = 'muzzle';
@@ -529,7 +597,8 @@ export function buildWeaponModel(weapon, attachments = []) {
   });
 
   return {
-    root, body, mag, bolt, pump, muzzle, eject, optics, underMount, sideMount,
+    root, body, mag, bolt, pump, cylinder, cylinderCore,
+    muzzle, eject, optics, underMount, sideMount,
     attached, sightHeight: opticHeight || ironHeight, suppressed,
     hasOptic: opticHeight > 0
   };
@@ -548,5 +617,8 @@ export function buildWorldWeapon(weapon) {
     g.add(mag);
     if (BOLTS[weapon.key]) g.add(BOLTS[weapon.key]());
   }
+  // Third person gets the cylinder as one static block: it never swings out
+  // over there, and the silhouette is what matters at that distance.
+  if (weapon.key === 'revolver') g.add(part(b(0.062, 0.062, 0.078), M.steelWorn, 0, 0.019, -0.012));
   return g;
 }

@@ -226,7 +226,10 @@ export class WorldRenderer {
     this._sortT = (this._sortT || 0) - dt;
     if (this._sortT <= 0) {
       this._sortT = 0.25;
-      this._order = lights.slice().sort((a, b) => a.dist2 - b.dist2);
+      // Sort a persistent array rather than allocating a copy of the whole
+      // light list four times a second, forever, on every map.
+      if (!this._order || this._order.length !== lights.length) this._order = lights.slice();
+      this._order.sort((a, b) => a.dist2 - b.dist2);
       const budget = this.budget;
       for (let i = 0; i < this._order.length; i++) {
         const e = this._order[i];
@@ -247,7 +250,7 @@ export class WorldRenderer {
         const drop = n > 0.72 - e.flicker * 0.5 ? 0.12 : 1;
         e.light.intensity = e.base * (0.78 + 0.22 * n) * drop;
         if (e.fixture) e.fixture.visible = drop > 0.5;
-      } else e.light.intensity = e.base;
+      } else if (e.light.intensity !== e.base) e.light.intensity = e.base;
     }
   }
 

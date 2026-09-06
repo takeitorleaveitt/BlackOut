@@ -15,6 +15,29 @@ import { WS } from './Weapon.js';
 import { S } from '../core/Settings.js';
 import { clamp, lerp, smoothDamp } from '../shared/constants.js';
 
+// Easing set. Every animation in the view model is authored against these
+// rather than against raw linear time, because the difference between a
+// motion that reads as a prop being slid around and one that reads as a
+// weight being handled is almost entirely in the curve:
+//   ease            smoothstep — accelerate in, decelerate out
+//   easeOutCubic    fast start, long tail: things thrown or released
+//   easeInCubic     slow start, fast end: things falling or driven
+//   easeOutBack     overshoots the target and comes back — anything that
+//                   arrives with momentum instead of parking
+//   settle          a struck spring ringing down: the "and rest" that ends
+//                   a motion instead of it simply stopping
+const ease = (x) => x * x * (3 - 2 * x);
+const easeOutCubic = (x) => 1 - (1 - x) ** 3;
+const easeInCubic = (x) => x * x * x;
+const easeInOutCubic = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+const easeOutBack = (x, k = 1.7) => {
+  const u = x - 1;
+  return 1 + (k + 1) * u * u * u + k * u * u;
+};
+const pulse = (x) => Math.sin(x * Math.PI);
+const settle = (x, freq = 2.6, damp = 5.5) =>
+  Math.cos(x * Math.PI * freq) * Math.exp(-x * damp);
+
 // Per-weapon hip pose. Heavier guns sit lower and further out.
 const HIP = {
   m4a1: { p: [0.150, -0.148, -0.62], r: [0.03, -0.07, 0.0] },
@@ -24,6 +47,7 @@ const HIP = {
   m870: { p: [0.156, -0.156, -0.66], r: [0.04, -0.08, 0.0] },
   glock17: { p: [0.120, -0.126, -0.48], r: [0.03, -0.09, 0.0] },
   deagle: { p: [0.128, -0.132, -0.50], r: [0.03, -0.09, 0.0] },
+  revolver: { p: [0.126, -0.128, -0.50], r: [0.03, -0.09, 0.0] },
   scarh: { p: [0.162, -0.162, -0.68], r: [0.04, -0.075, 0.0] },
   knife: { p: [0.096, -0.110, -0.28], r: [0.10, -0.14, 0.0] }
 };
@@ -57,6 +81,8 @@ export class ViewModel {
 
     this.model = null;
     this.weapon = null;
+    // key -> built model, in least-recently-used order (Map preserves it)
+    this.modelCache = new Map();
 
     // Persistent arms — built once, repositioned per weapon in equip(). As
     // children of `holder` they ride along with every bit of animation the
@@ -114,15 +140,55 @@ export class ViewModel {
 
   equip(weapon) {
     if (!weapon || !weapon.def) return null;
-    if (this.model) {
-      this.holder.remove(this.model.root);
-      disposeWeaponModel(this.model);
-    }
+    if (this.model) this.holder.remove(this.model.root);
     this.weapon = weapon;
-    this.model = buildWeaponModel(weapon.def, weapon.attachments);
-    this.holder.add(this.model.root);
+    // Weapon models are CACHED, not rebuilt. Every switch used to throw away
+    // a few hundred box geometries and build a few hundred more, mid-match,
+    // in the frame the key was pressed — for a set of models that never
+    // changes. Keyed by weapon plus its fitted attachments, because an optic
+    // changes the geometry.
+    const cacheKey = weapon.def.key + '|' + weapon.attachments.slice().sort().join(',');
+    let model = this.modelCache.get(cacheKey);
+    if (model) {
+      // freshen the LRU order
+      this.modelCache.delete(cacheKey);
+    } else {
+      model = buildWeaponModel(weapon.def, weapon.attachments);
+      // Bound it. A session only ever sees a handful of combinations, but a
+      // cache with no ceiling is a leak waiting for someone to find it.
+      while (this.modelCache.size >= 12) {
+        const oldest = this.modelCache.keys().next().value;
+        disposeWeaponModel(this.modelCache.get(oldest));
+        this.modelCache.delete(oldest);
+      }
+    }
+    this.modelCache.set(cacheKey, model);
+    this.model = model;
+    // A reused model still carries whatever pose it was left in.
+    model.root.position.set(0, 0, 0);
+    model.root.rotation.set(0, 0, 0);
+    if (model.mag) {
+      model.mag.position.y = model.mag.userData.baseY ?? model.mag.position.y;
+      model.mag.rotation.set(0, 0, 0);
+      model.mag.visible = true;
+    }
+    if (model.bolt) {
+      model.bolt.position.z = model.bolt.userData.baseZ ?? model.bolt.position.z;
+      model.bolt.rotation.set(0, 0, 0);
+    }
+    if (model.pump) model.pump.position.z = model.pump.userData.baseZ ?? model.pump.position.z;
+    if (model.cylinder) { model.cylinder.rotation.set(0, 0, 0); model.cylinderCore.rotation.set(0, 0, 0); }
+    this.holder.add(model.root);
     this.pose = HIP[weapon.def.key] || HIP.m4a1;
     this.reloadPhase = 0;
+    // Revolver bookkeeping is per-weapon: carrying a spin target across a
+    // weapon switch would snap the next cylinder to wherever the last one was.
+    this.lastAmmo = weapon.ammo;
+    this.cylTarget = 0;
+    this.cylSpin = 0;
+    this.cylOut = 0;
+    this.spinX = 0;
+    if (this.model.root) this.model.root.rotation.set(0, 0, 0);
     this.placeArms(weapon.def);
     return this.model;
   }
@@ -133,7 +199,7 @@ export class ViewModel {
     this.rightArm.position.set(grip.p[0], grip.p[1], grip.p[2]);
     this.rightArm.rotation.set(grip.r[0], grip.r[1], grip.r[2]);
 
-    if (def.key === 'glock17' || def.key === 'deagle') {
+    if (def.key === 'glock17' || def.key === 'deagle' || def.key === 'revolver') {
       // pistols get a two-handed cup instead of a handguard grip
       this.leftArmBaseP.set(PISTOL_SUPPORT.p[0], PISTOL_SUPPORT.p[1], PISTOL_SUPPORT.p[2]);
       this.leftArmBaseR.set(PISTOL_SUPPORT.r[0], PISTOL_SUPPORT.r[1], PISTOL_SUPPORT.r[2]);
@@ -297,168 +363,290 @@ export class ViewModel {
     this.root.visible = this.visible && !ctx.dead;
   }
 
-  /** Drives the animated parts: magazine, bolt, pump, and the hand motion. */
+  /** Drives the animated parts: magazine, bolt, pump, cylinder, and the hands. */
   updateAnim(dt, w) {
     const m = this.model;
     const t = w.stateT;
     const dur = Math.max(0.001, w.stateDur);
     const k = clamp(t / dur, 0, 1);
     let ox = 0, oy = 0, oz = 0, rx = 0, ry = 0, rz = 0;
-    let magY = 0, magR = 0, magVisible = true, boltZ = 0, pumpZ = 0;
+    let magY = 0, magR = 0, magRX = 0, magVisible = true, boltZ = 0, pumpZ = 0;
+    // Revolver: how far the cylinder is swung out of the frame (0..1), and a
+    // whole-gun spin used only by its inspect.
+    let cylOut = 0, spinX = 0;
     // left (support) hand reach, local to its resting anchor on the handguard
     let lox = 0, loy = 0, loz = 0, lrx = 0, lry = 0, lrz = 0;
 
-    const ease = (x) => x * x * (3 - 2 * x);
-    const pulse = (x) => Math.sin(x * Math.PI);
+    const isRevolver = w.def.key === 'revolver';
 
     switch (w.state) {
       case WS.DRAWING: {
-        const e = 1 - ease(k);
-        oy = -0.24 * e;
-        oz = 0.10 * e;
-        rx = 0.75 * e;
-        rz = -0.35 * e;
+        // Comes up fast, overshoots a few degrees past level, then rings down.
+        // The old draw interpolated to the rest pose and stopped dead, which
+        // is the single thing that made every animation in the game read as a
+        // slider being dragged rather than a weight being moved.
+        const e = 1 - easeOutBack(k, 1.15);
+        oy = -0.24 * e; oz = 0.10 * e; ox = 0.05 * e;
+        rx = 0.75 * e; rz = -0.35 * e; ry = -0.20 * e;
+        const s = settle(clamp((k - 0.5) / 0.5, 0, 1), 2.2, 6.0) * (1 - k);
+        rx += s * 0.075; rz += s * 0.045; ry += s * 0.030; oy += s * 0.008;
+        // the support hand arrives a beat after the gun does
+        const grab = ease(clamp((k - 0.22) / 0.55, 0, 1));
+        lox = -0.045 * (1 - grab); loy = -0.075 * (1 - grab); loz = 0.055 * (1 - grab);
+        lrx = 0.42 * (1 - grab);
         break;
       }
       case WS.HOLSTERING: {
-        const e = ease(k);
-        oy = -0.26 * e;
-        rx = 0.85 * e;
-        rz = -0.4 * e;
+        // A beat of anticipation — the muzzle lifts — before it drops away.
+        // Motion that starts by going the other way reads as intended; motion
+        // that just starts reads as a cut.
+        const anti = pulse(clamp(k / 0.20, 0, 1));
+        const e = easeInCubic(clamp((k - 0.12) / 0.88, 0, 1));
+        oy = 0.022 * anti - 0.30 * e;
+        oz = -0.012 * anti + 0.050 * e;
+        ox = 0.030 * e;
+        rx = -0.12 * anti + 0.95 * e;
+        rz = 0.07 * anti - 0.46 * e;
+        ry = 0.32 * e;
+        lrx = 0.35 * e; loy = -0.06 * e;
         break;
       }
       case WS.RELOADING: {
-        // three beats: drop the mag, bring the new one up, seat it (+ bolt if empty)
+        // Four beats now, not three: roll the gun over and break the mag out,
+        // let it tumble clear, bring the fresh one up and seat it with a shove,
+        // then let the whole thing ring back to level instead of arriving there.
         const dropEnd = w.emptyReload ? 0.30 : 0.34;
         const insertEnd = w.emptyReload ? 0.68 : 0.78;
         if (k < dropEnd) {
           const a = k / dropEnd;
-          oy = -0.075 * a; rz = -0.30 * a; rx = 0.18 * a; ox = -0.02 * a;
-          magY = -0.32 * a * a;
-          magR = a * 0.9;
+          const e = easeOutCubic(a);
+          oy = -0.078 * e; rz = -0.32 * e; rx = 0.20 * e; ox = -0.026 * e;
+          ry = 0.16 * e;
+          // the mag is pushed, then falls under its own weight and tumbles
+          magY = -0.42 * a * a;
+          magR = a * 1.1;
+          magRX = a * a * 0.9;
           if (a > 0.55) magVisible = false;
           // left hand lets go of the handguard and drops to the mag pouch
-          lox = -0.03 * a; loy = -0.34 * a; loz = 0.24 * a;
-          lrx = 0.95 * a; lry = -0.18 * a;
+          const reach = easeInOutCubic(a);
+          lox = -0.035 * reach; loy = -0.36 * reach; loz = 0.26 * reach;
+          lrx = 1.02 * reach; lry = -0.20 * reach; lrz = 0.18 * reach;
         } else if (k < insertEnd) {
           const a = (k - dropEnd) / (insertEnd - dropEnd);
-          oy = -0.075 - 0.035 * pulse(a); rz = -0.30 + 0.06 * a; rx = 0.18 - 0.05 * a;
-          ox = -0.02 + 0.015 * a;
+          const shove = pulse(clamp((a - 0.55) / 0.45, 0, 1));
+          oy = -0.078 - 0.040 * shove; rz = -0.32 + 0.07 * a; rx = 0.20 - 0.055 * a;
+          ox = -0.026 + 0.018 * a; ry = 0.16 - 0.10 * a;
+          oz = -0.020 * shove;                     // the gun takes the push back
           magVisible = a > 0.42;
-          magY = -0.22 * (1 - clamp((a - 0.42) / 0.5, 0, 1));
-          magR = 0.5 * (1 - clamp((a - 0.42) / 0.5, 0, 1));
-          // fresh mag rises from the pouch and seats in the well
-          const rise = clamp(a / 0.65, 0, 1);
-          lox = -0.03 * (1 - rise) - 0.01 * rise; loy = -0.34 + 0.31 * rise; loz = 0.24 - 0.22 * rise;
-          lrx = 0.95 * (1 - rise) + 0.08 * rise; lry = -0.18 * (1 - rise);
+          const seat = clamp((a - 0.42) / 0.5, 0, 1);
+          magY = -0.24 * (1 - easeOutCubic(seat));
+          magR = 0.55 * (1 - seat);
+          magRX = 0.35 * (1 - seat);
+          // fresh mag rises out of the pouch on an arc, not a straight line
+          const rise = easeOutCubic(clamp(a / 0.65, 0, 1));
+          lox = -0.035 * (1 - rise) - 0.012 * rise;
+          loy = -0.36 + 0.33 * rise;
+          loz = 0.26 - 0.24 * rise + 0.03 * pulse(rise);
+          lrx = 1.02 * (1 - rise) + 0.09 * rise; lry = -0.20 * (1 - rise);
+          lrz = 0.18 * (1 - rise);
         } else {
           const a = (k - insertEnd) / (1 - insertEnd);
-          oy = -0.11 * (1 - ease(a)); rz = -0.24 * (1 - ease(a)); rx = 0.13 * (1 - ease(a));
-          magY = 0; magR = 0;
-          // hand settles back onto the handguard
-          const back = ease(a);
-          lox = -0.01 * (1 - back); loy = -0.03 * (1 - back); loz = 0.02 * (1 - back);
-          lrx = 0.08 * (1 - back);
+          const e = easeOutCubic(a);
+          const s = settle(a, 2.4, 5.2) * (1 - a);
+          oy = -0.115 * (1 - e) + s * 0.010;
+          rz = -0.25 * (1 - e) + s * 0.055;
+          rx = 0.14 * (1 - e) + s * 0.045;
+          ry = 0.06 * (1 - e);
+          magY = 0; magR = 0; magRX = 0;
+          const back = e;
+          lox = -0.012 * (1 - back); loy = -0.035 * (1 - back); loz = 0.025 * (1 - back);
+          lrx = 0.09 * (1 - back);
           if (w.emptyReload) {
-            // charging handle yank at the end
-            const b = clamp((a - 0.35) / 0.45, 0, 1);
-            boltZ = pulse(b) * 0.075;
-            rx += pulse(b) * 0.10;
-            ox += pulse(b) * 0.03;
-            lrx += pulse(b) * 0.12;
-            loy -= pulse(b) * 0.02;
+            // charging handle yanked back and released — it snaps home faster
+            // than it was pulled, which is the whole character of the motion
+            const b = clamp((a - 0.30) / 0.45, 0, 1);
+            const pull = b < 0.55 ? easeOutCubic(b / 0.55) : 1 - easeInCubic((b - 0.55) / 0.45);
+            boltZ = pull * 0.080;
+            rx += pull * 0.11; ox += pull * 0.032; ry += pull * 0.05;
+            lrx += pull * 0.14; loy -= pull * 0.024; lox += pull * 0.02;
           }
         }
         break;
       }
       case WS.RELOAD_LOOP: {
-        // shell-by-shell: hand dips to the pouch and back on every shell
-        const a = k;
-        oy = -0.055 * pulse(a);
-        ox = -0.04 * pulse(a);
-        rz = -0.22 * pulse(a);
-        rx = 0.12 * pulse(a);
-        lox = -0.02 * pulse(a); loy = -0.24 * pulse(a); loz = 0.16 * pulse(a);
-        lrx = 0.62 * pulse(a);
+        if (isRevolver) {
+          // The revolver has two different beats sharing this state: the long
+          // first one that breaks the cylinder out and punches the ejector,
+          // and the short repeating one that feeds a single round. They are
+          // told apart by their duration — reload() opens with reloadStart and
+          // loadShell() then re-enters with the per-round time.
+          const opening = w.stateDur > w.def.reloadTactical + 0.05;
+          cylOut = 1;
+          if (opening) {
+            const swing = easeOutBack(clamp(k / 0.55, 0, 1), 1.1);
+            cylOut = swing;
+            // gun rolls left and tips up so the empties fall out of it
+            oy = -0.045 * swing; ox = -0.030 * swing; oz = 0.035 * swing;
+            rz = -0.62 * swing; rx = -0.34 * swing; ry = 0.30 * swing;
+            // left hand comes across, cups the cylinder and slaps the ejector
+            const eject = pulse(clamp((k - 0.5) / 0.5, 0, 1));
+            lox = -0.055 * swing + 0.02 * eject;
+            loy = -0.045 * swing - 0.03 * eject;
+            loz = 0.020 * swing - 0.05 * eject;
+            lrx = 0.30 * swing + 0.25 * eject; lry = -0.35 * swing;
+            rx += eject * 0.06;
+          } else {
+            // One round: hand dips to the belt, comes back, pushes it home.
+            const feed = pulse(k);
+            const push = pulse(clamp((k - 0.62) / 0.38, 0, 1));
+            oy = -0.045 - 0.012 * feed; ox = -0.030; oz = 0.035;
+            rz = -0.62 + 0.05 * feed; rx = -0.34; ry = 0.30;
+            rx += push * 0.05;
+            lox = -0.055 - 0.055 * feed;
+            loy = -0.045 - 0.30 * feed + 0.04 * push;
+            loz = 0.020 + 0.22 * feed - 0.06 * push;
+            lrx = 0.30 + 0.72 * feed; lry = -0.35 - 0.16 * feed; lrz = 0.20 * feed;
+          }
+        } else {
+          // shell-by-shell: hand dips to the pouch and back on every shell,
+          // and the gun rocks with it rather than hanging still
+          const a = k;
+          const feed = pulse(a);
+          const push = pulse(clamp((a - 0.6) / 0.4, 0, 1));
+          oy = -0.060 * feed; ox = -0.045 * feed; oz = 0.014 * push;
+          rz = -0.24 * feed; rx = 0.13 * feed + 0.05 * push; ry = 0.10 * feed;
+          lox = -0.024 * feed; loy = -0.26 * feed; loz = 0.17 * feed - 0.03 * push;
+          lrx = 0.66 * feed; lrz = 0.14 * feed;
+        }
         break;
       }
       case WS.CYCLING: {
-        if (w.def.key === 'm40') {
+        if (isRevolver) {
+          // Snapping the cylinder shut: a flick of the wrist, then the whole
+          // gun rings back to level.
+          const shut = easeOutCubic(clamp(k / 0.42, 0, 1));
+          cylOut = 1 - shut;
+          const s = settle(clamp((k - 0.35) / 0.65, 0, 1), 2.6, 5.0);
+          const hold = 1 - easeOutCubic(clamp((k - 0.3) / 0.7, 0, 1));
+          oy = -0.045 * hold + s * 0.008;
+          ox = -0.030 * hold;
+          oz = 0.035 * hold;
+          rz = -0.62 * hold + s * 0.09;
+          rx = -0.34 * hold + s * 0.06;
+          ry = 0.30 * hold;
+          const off = hold;
+          lox = -0.055 * off; loy = -0.045 * off; loz = 0.020 * off;
+          lrx = 0.30 * off; lry = -0.35 * off;
+        } else if (w.def.key === 'm40') {
           // Bolt worked by hand: lift, pull straight back, shove home, turn
           // down. The rifle rolls to the right as the hand comes off the grip.
           const up = clamp(k / 0.22, 0, 1);
           const back = clamp((k - 0.18) / 0.32, 0, 1);
           const fwd = clamp((k - 0.52) / 0.30, 0, 1);
           const down = clamp((k - 0.80) / 0.20, 0, 1);
-          boltZ = (ease(back) - ease(fwd)) * 0.105;
+          boltZ = (easeOutCubic(back) - easeInCubic(fwd)) * 0.105;
           rz = ease(up) * 0.30 - ease(down) * 0.30;
           rx = (ease(back) - ease(fwd)) * 0.075;
+          ry = ease(up) * 0.10 - ease(down) * 0.10;
           oz = (ease(back) - ease(fwd)) * 0.030;
           oy = -pulse(k) * 0.015;
-          // the support hand comes off the forend to work the bolt and returns
           const off = ease(up) - ease(down);
           lox = off * 0.055; loy = off * -0.035; loz = off * 0.075;
           lrx = off * 0.35; lry = off * -0.22;
         } else {
-          pumpZ = pulse(k) * 0.085;
-          boltZ = pulse(k) * 0.05;
-          oz = pulse(k) * 0.022;
-          rx = pulse(k) * 0.055;
+          // Pump: rack back hard, slam forward, and let the gun buck with it.
+          const back = easeOutCubic(clamp(k / 0.42, 0, 1));
+          const fwd = easeInCubic(clamp((k - 0.42) / 0.38, 0, 1));
+          const s = settle(clamp((k - 0.78) / 0.22, 0, 1), 2.4, 5.5) * 0.6;
+          pumpZ = (back - fwd) * 0.095;
+          boltZ = (back - fwd) * 0.05;
+          oz = (back - fwd) * 0.026;
+          rx = (back - fwd) * 0.062 + s * 0.05;
+          rz = (back - fwd) * -0.05;
+          loz = (back - fwd) * 0.070; lrx = (back - fwd) * 0.14;
         }
         break;
       }
       case WS.INSPECTING: {
         const a = k;
         if (w.def.melee) {
-          // The knife gets its own inspect: it is brought up close, spun once
-          // in the fingers and flipped over to show the other face of the
-          // blade, then dropped back to the ready pose. Nothing here checks a
-          // chamber or racks a bolt, because a knife has neither.
-          const bring = Math.sin(a * Math.PI);
-          oz = bring * 0.10;                       // pull it toward the eye
-          oy = bring * 0.035;
-          ox = bring * -0.03;
-          rz = Math.sin(a * Math.PI * 2) * 1.65;   // spin in the fingers
-          ry = Math.sin(a * Math.PI) * 0.75;       // turn to show the flat
-          rx = Math.sin(a * Math.PI * 3) * 0.18;   // small wrist flick
-          boltZ = 0;
-        } else {
-          // Three beats instead of one continuous wobble: tip the gun over to
-          // read the left side of the receiver, roll it back the other way to
-          // check the ejection port and thumb the bolt, then let it settle.
-          // The old version just rotated the whole thing back and forth twice,
-          // which read as the gun swimming rather than being looked at.
-          if (a < 0.38) {
-            const e = ease(a / 0.38);
-            oz = 0.085 * e; oy = 0.020 * e; ox = -0.030 * e;
-            ry = 0.95 * e;                       // turn the left flat into view
-            rz = 0.30 * e;
-            rx = -0.16 * e;
-          } else if (a < 0.74) {
-            const e = ease((a - 0.38) / 0.36);
-            oz = 0.085 - 0.020 * e; oy = 0.020 - 0.045 * e; ox = -0.030 + 0.075 * e;
-            ry = 0.95 - 1.55 * e;                // roll across to the other side
-            rz = 0.30 - 0.82 * e;
-            rx = -0.16 + 0.42 * e;
-            // thumb the bolt back and let it run home, once, mid-roll
-            const bolt = clamp((e - 0.35) / 0.5, 0, 1);
-            boltZ = pulse(bolt) * 0.085;
-            rx += pulse(bolt) * 0.07;
+          // Brought up close, spun in the fingers, flipped to show the other
+          // face of the blade, then dropped back to the ready pose.
+          const bring = pulse(a);
+          const soft = pulse(easeInOutCubic(a));
+          oz = soft * 0.105; oy = bring * 0.038; ox = bring * -0.032;
+          rz = Math.sin(easeInOutCubic(a) * Math.PI * 2) * 1.75;
+          ry = soft * 0.80;
+          rx = Math.sin(a * Math.PI * 3) * 0.20 + settle(a, 3, 4) * 0.05 * a;
+        } else if (isRevolver) {
+          // Twirled on the trigger guard. Two turns, a look at the cylinder
+          // with it swung out, then a second twirl to catch it. Every phase
+          // lands on a whole rotation, so the spin never has to unwind.
+          if (a < 0.40) {
+            const e = easeInOutCubic(a / 0.40);
+            spinX = e * Math.PI * 2;
+            const p = pulse(a / 0.40);
+            oy = p * 0.050; oz = p * 0.055; ox = p * -0.022;
+            rz = Math.sin(e * Math.PI * 2) * 0.24;
+            ry = p * 0.18;
+          } else if (a < 0.78) {
+            const e = (a - 0.40) / 0.38;
+            spinX = Math.PI * 2;
+            const look = pulse(e);
+            cylOut = ease(clamp(e * 1.8, 0, 1)) * (1 - ease(clamp((e - 0.6) / 0.4, 0, 1)));
+            oz = 0.070 * look; oy = 0.030 * look; ox = -0.028 * look;
+            ry = 0.62 * look; rz = -0.34 * look; rx = -0.20 * look;
+            lox = -0.050 * look; loy = -0.030 * look; lry = -0.40 * look;
+            lrx = 0.28 * look;
           } else {
-            const e = ease((a - 0.74) / 0.26);
-            const back = 1 - e;
-            oz = 0.065 * back; oy = -0.025 * back; ox = 0.045 * back;
-            ry = -0.60 * back; rz = -0.52 * back; rx = 0.26 * back;
+            const e = easeInOutCubic((a - 0.78) / 0.22);
+            spinX = Math.PI * 2 + e * Math.PI * 2;
+            const p = pulse((a - 0.78) / 0.22);
+            oy = p * 0.042; oz = p * 0.040;
+            rz = Math.sin(e * Math.PI) * -0.18;
+          }
+        } else {
+          // Three beats: tip the gun over to read the left side of the
+          // receiver, roll it back the other way to check the ejection port
+          // and thumb the bolt, then let it ring down to level.
+          if (a < 0.38) {
+            const e = easeOutCubic(a / 0.38);
+            oz = 0.090 * e; oy = 0.024 * e; ox = -0.034 * e;
+            ry = 1.00 * e; rz = 0.32 * e; rx = -0.18 * e;
+            lox = -0.030 * e; loy = -0.020 * e; lrz = 0.20 * e;
+          } else if (a < 0.74) {
+            const e = easeInOutCubic((a - 0.38) / 0.36);
+            oz = 0.090 - 0.022 * e; oy = 0.024 - 0.050 * e; ox = -0.034 + 0.080 * e;
+            ry = 1.00 - 1.62 * e; rz = 0.32 - 0.86 * e; rx = -0.18 + 0.45 * e;
+            lox = -0.030 + 0.050 * e; loy = -0.020 - 0.020 * e; lrz = 0.20 - 0.34 * e;
+            // thumb the bolt back and let it run home, once, mid-roll
+            const b = clamp((e - 0.35) / 0.5, 0, 1);
+            const pull = b < 0.5 ? easeOutCubic(b / 0.5) : 1 - easeInCubic((b - 0.5) / 0.5);
+            boltZ = pull * 0.090;
+            rx += pull * 0.075; lrx += pull * 0.18;
+          } else {
+            const e = (a - 0.74) / 0.26;
+            const back = 1 - easeOutCubic(e);
+            const s = settle(e, 2.2, 5.0) * (1 - e) * 0.5;
+            oz = 0.068 * back; oy = -0.026 * back; ox = 0.046 * back;
+            ry = -0.62 * back + s * 0.06; rz = -0.54 * back + s * 0.05; rx = 0.27 * back + s * 0.04;
+            lox = 0.020 * back; loy = -0.040 * back; lrz = -0.14 * back;
           }
         }
         break;
       }
       default: {
-        // idle breathing
+        // Idle breathing, on two frequencies that never line up, plus a very
+        // slow figure-eight drift. One sine wave reads as a machine; two that
+        // beat against each other read as a person holding something heavy.
         const bt = performance.now() / 1000;
-        oy = Math.sin(bt * 1.15) * 0.0022 * (1 - w.adsT * 0.75);
-        ox = Math.cos(bt * 0.83) * 0.0018 * (1 - w.adsT * 0.75);
-        rz = Math.sin(bt * 0.71) * 0.006 * (1 - w.adsT * 0.7);
+        const calm = 1 - w.adsT * 0.75;
+        oy = (Math.sin(bt * 1.15) * 0.0022 + Math.sin(bt * 2.37) * 0.0007) * calm;
+        ox = (Math.cos(bt * 0.83) * 0.0018 + Math.sin(bt * 1.91) * 0.0006) * calm;
+        oz = Math.sin(bt * 0.61) * 0.0012 * calm;
+        rz = (Math.sin(bt * 0.71) * 0.006 + Math.sin(bt * 1.63) * 0.0018) * calm;
+        rx = Math.sin(bt * 0.94) * 0.0035 * calm;
+        ry = Math.cos(bt * 0.55) * 0.0040 * calm;
         break;
       }
     }
@@ -474,52 +662,92 @@ export class ViewModel {
     if (w.def.melee && w.sinceShot < MELEE_DUR) {
       const a = clamp(w.sinceShot / MELEE_DUR, 0, 1);
       if (isStab) {
-        // draw the blade back beside the head, then drive it straight forward
+        // Draw the blade back beside the head, hold for an instant, then
+        // drive it straight forward and let the arm ring out at the end.
         const windEnd = 0.42;
         if (a < windEnd) {
-          const e = ease(a / windEnd);
-          ox = 0.090 * e; oy = 0.070 * e; oz = 0.135 * e;
-          rx = -0.55 * e; ry = -0.42 * e; rz = -0.30 * e;
+          const e = easeOutCubic(a / windEnd);
+          ox = 0.095 * e; oy = 0.075 * e; oz = 0.140 * e;
+          rx = -0.58 * e; ry = -0.44 * e; rz = -0.32 * e;
         } else {
-          const e = ease((a - windEnd) / (1 - windEnd));
-          ox = 0.090 - 0.105 * e;
-          oy = 0.070 - 0.085 * e;
-          oz = 0.135 - 0.345 * e;         // punch forward, past the rest pose
-          rx = -0.55 + 0.72 * e;
-          ry = -0.42 + 0.50 * e;
-          rz = -0.30 + 0.36 * e;
-          const settle = clamp((e - 0.55) / 0.45, 0, 1);
-          const back = 1 - ease(settle);
-          ox *= back; oy *= back; oz *= back; rx *= back; ry *= back; rz *= back;
+          const e = easeOutCubic((a - windEnd) / (1 - windEnd));
+          ox = 0.095 - 0.112 * e;
+          oy = 0.075 - 0.092 * e;
+          oz = 0.140 - 0.360 * e;         // punch forward, past the rest pose
+          rx = -0.58 + 0.76 * e;
+          ry = -0.44 + 0.52 * e;
+          rz = -0.32 + 0.38 * e;
+          const st = clamp((e - 0.5) / 0.5, 0, 1);
+          const back = 1 - easeOutCubic(st);
+          const s = settle(st, 2.4, 5.5) * (1 - st) * 0.35;
+          ox = ox * back + s * 0.02; oy = oy * back; oz = oz * back;
+          rx = rx * back + s * 0.10; ry = ry * back; rz = rz * back + s * 0.08;
         }
       } else {
         // Slash. dir flips per swing so the two cuts mirror each other.
         const dir = w.slashIndex === 0 ? 1 : -1;
         const windEnd = 0.24;
         if (a < windEnd) {
-          const e = ease(a / windEnd);
-          ox = 0.080 * dir * e; oy = 0.050 * e; oz = 0.060 * e;
-          rz = -0.90 * dir * e; ry = -0.62 * dir * e; rx = -0.40 * e;
+          const e = easeOutCubic(a / windEnd);
+          ox = 0.085 * dir * e; oy = 0.055 * e; oz = 0.065 * e;
+          rz = -0.95 * dir * e; ry = -0.66 * dir * e; rx = -0.42 * e;
         } else {
-          const e = ease((a - windEnd) / (1 - windEnd));
-          ox = (0.080 - 0.320 * e) * dir;
-          oy = 0.050 - 0.140 * e;
-          oz = 0.060 - 0.150 * e;
-          rz = (-0.90 + 2.45 * e) * dir;
-          ry = (-0.62 + 1.35 * e) * dir;
-          rx = -0.40 + 0.92 * e;
-          const settle = clamp((e - 0.60) / 0.40, 0, 1);
-          const back = 1 - ease(settle);
+          const e = easeOutCubic((a - windEnd) / (1 - windEnd));
+          ox = (0.085 - 0.335 * e) * dir;
+          oy = 0.055 - 0.148 * e;
+          oz = 0.065 - 0.158 * e;
+          rz = (-0.95 + 2.55 * e) * dir;
+          ry = (-0.66 + 1.42 * e) * dir;
+          rx = -0.42 + 0.96 * e;
+          const st = clamp((e - 0.55) / 0.45, 0, 1);
+          const back = 1 - easeOutCubic(st);
+          const s = settle(st, 2.6, 6.0) * (1 - st) * 0.30;
           ox *= back; oy *= back; oz *= back;
-          rz *= back; ry *= back; rx *= back;
+          rz = rz * back + s * 0.12 * dir; ry = ry * back; rx = rx * back + s * 0.08;
         }
       }
       magVisible = true;
       boltZ = 0;
-    } else if (w.sinceShot < 0.09 && !w.def.pumpTime && !w.def.melee) {
-      // firing bolt cycle (guns only — a blade has no action to cycle)
-      const a = 1 - w.sinceShot / 0.09;
-      boltZ = Math.max(boltZ, a * (w.def.key === 'deagle' ? 0.065 : w.def.key === 'glock17' ? 0.05 : 0.035));
+    } else if (w.sinceShot < 0.12 && !w.def.pumpTime && !w.def.melee) {
+      // Firing action. The moving part is thrown back hard and returns on a
+      // slower curve, rather than fading linearly out of a single impulse.
+      const a = clamp(w.sinceShot / 0.12, 0, 1);
+      const throwBack = a < 0.30 ? easeOutCubic(a / 0.30) : 1 - easeInCubic((a - 0.30) / 0.70);
+      const amt = isRevolver ? 0.030 : w.def.key === 'deagle' ? 0.075
+        : w.def.key === 'glock17' ? 0.058 : 0.040;
+      boltZ = Math.max(boltZ, throwBack * amt);
+    }
+
+    // --- revolver cylinder -------------------------------------------------
+    // It indexes a sixth of a turn every time a round leaves or enters the
+    // gun, in opposite directions, so firing and loading do not look alike.
+    if (m.cylinderCore) {
+      if (this.lastAmmo === undefined) this.lastAmmo = w.ammo;
+      if (w.ammo !== this.lastAmmo) {
+        this.cylTarget = (this.cylTarget || 0) +
+          (w.ammo < this.lastAmmo ? Math.PI / 3 : -Math.PI / 3);
+        this.lastAmmo = w.ammo;
+      }
+      this.cylSpin = smoothDamp(this.cylSpin || 0, this.cylTarget || 0, 22, dt);
+      m.cylinderCore.rotation.z = this.cylSpin;
+      this.cylOut = smoothDamp(this.cylOut || 0, cylOut, 26, dt);
+      m.cylinder.rotation.y = this.cylOut * 1.30;
+      m.cylinder.rotation.z = this.cylOut * 0.10;
+    }
+    // The inspect twirl is applied to the weapon itself, not the hands, so the
+    // gun turns over in a grip that stays put. Every phase of it lands on a
+    // whole rotation; when the inspect ends — or is cut short by a shot or a
+    // weapon switch — the spin unwinds to the nearest whole turn instead of
+    // snapping back to zero, which would pop mid-twirl.
+    if (m.root) {
+      if (w.state === WS.INSPECTING) this.spinX = spinX;
+      else if (this.spinX) {
+        const turn = Math.PI * 2;
+        const nearest = Math.round(this.spinX / turn) * turn;
+        this.spinX = Math.abs(this.spinX - nearest) < 0.004
+          ? 0 : lerp(this.spinX, nearest, 1 - Math.exp(-16 * dt));
+      }
+      m.root.rotation.x = this.spinX || 0;
     }
 
     // aiming grip: the support hand tightens up and shifts forward when ADS,
@@ -550,24 +778,33 @@ export class ViewModel {
     // as odd as it sounds.
     this.leftArm.visible = !w.def.melee;
 
+    // Rotation chases a little softer than position, so the gun's angle
+    // trails its travel by a frame or two. That lag is most of what reads as
+    // weight — matched rates make the whole thing move like one rigid prop.
+    const pk = 1 - Math.exp(-32 * dt);
+    const rk = 1 - Math.exp(-24 * dt);
     this.animOffset.set(
-      lerp(this.animOffset.x, ox, 1 - Math.exp(-30 * dt)),
-      lerp(this.animOffset.y, oy, 1 - Math.exp(-30 * dt)),
-      lerp(this.animOffset.z, oz, 1 - Math.exp(-30 * dt))
+      lerp(this.animOffset.x, ox, pk),
+      lerp(this.animOffset.y, oy, pk),
+      lerp(this.animOffset.z, oz, pk)
     );
     this.animRot.set(
-      lerp(this.animRot.x, rx, 1 - Math.exp(-28 * dt)),
-      lerp(this.animRot.y, ry, 1 - Math.exp(-28 * dt)),
-      lerp(this.animRot.z, rz, 1 - Math.exp(-28 * dt))
+      lerp(this.animRot.x, rx, rk),
+      lerp(this.animRot.y, ry, rk),
+      lerp(this.animRot.z, rz, rk)
     );
 
     if (m.mag) {
       m.mag.position.y = (m.mag.userData.baseY ??= m.mag.position.y) + magY;
       m.mag.rotation.z = magR;
+      m.mag.rotation.x = magRX;
       m.mag.visible = magVisible;
     }
     if (m.bolt) {
-      m.bolt.position.z = (m.bolt.userData.baseZ ??= m.bolt.position.z) + boltZ;
+      // The revolver's "bolt" is its hammer: it rocks back on its pin rather
+      // than sliding, so the same drive value becomes a rotation there.
+      if (isRevolver) m.bolt.rotation.x = -boltZ * 14;
+      else m.bolt.position.z = (m.bolt.userData.baseZ ??= m.bolt.position.z) + boltZ;
     }
     if (m.pump) {
       m.pump.position.z = (m.pump.userData.baseZ ??= m.pump.position.z) + pumpZ;
@@ -575,7 +812,9 @@ export class ViewModel {
   }
 
   dispose() {
-    if (this.model) disposeWeaponModel(this.model);
+    for (const m of this.modelCache.values()) disposeWeaponModel(m);
+    this.modelCache.clear();
+    this.model = null;
     this.scene.clear();
   }
 }

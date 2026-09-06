@@ -91,8 +91,13 @@ export class Weapon {
     // a gun.
     // Holding the aim button on a blade arms the stab; it never raises a
     // sight, so the ADS blend itself stays pinned at zero.
-    const blockAds = this.def.melee || ctx.sprinting || this.state === WS.DRAWING ||
-      this.state === WS.HOLSTERING || this.state === WS.INSPECTING;
+    // `noAds` is the revolver: it carries no optic and no usable irons, so
+    // right-click does nothing at all rather than pulling a sight that is not
+    // there onto the camera axis. Its hip spread is already near zero, which
+    // is the trade.
+    const blockAds = this.def.melee || this.def.noAds || ctx.sprinting ||
+      this.state === WS.DRAWING || this.state === WS.HOLSTERING ||
+      this.state === WS.INSPECTING;
     const target = this.wantAds && !blockAds && !this.isReloading ? 1 : 0;
     // Move toward the target and STOP there.
     //

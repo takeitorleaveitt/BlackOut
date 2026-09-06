@@ -65,8 +65,15 @@ export const GRIP_ANCHOR = {
   m870: { p: [0, -0.110, 0.015], r: [0.30, 0.06, -0.12] },
   glock17: { p: [0, -0.110, 0.025], r: [0.30, 0.04, -0.12] },
   deagle: { p: [0, -0.108, 0.030], r: [0.30, 0.04, -0.12] },
+  revolver: { p: [0, -0.070, 0.040], r: [0.30, 0.04, -0.12] },
   scarh: { p: [0, -0.135, 0.035], r: [0.28, 0.06, -0.12] },
-  knife: { p: [0, -0.06, 0.06], r: [0.20, 0.10, -0.05] }
+  // The knife handle is a box centred at (0, -0.010, 0.060) running along Z.
+  // The fist closes below and slightly behind the arm's origin — palm at y 0,
+  // fingers curled at y -0.048 across z -0.009..0.045 — so putting the origin
+  // AT the handle leaves the blade lying on top of the knuckles. Lifting it
+  // to +0.015 and pulling it back to z 0.042 drops the handle into the curl,
+  // which is a fist holding a knife rather than a knife balanced on a hand.
+  knife: { p: [0, 0.015, 0.042], r: [0.26, 0.10, -0.05] }
 };
 
 // Support-hand offset relative to each weapon's `underMount` node (already
