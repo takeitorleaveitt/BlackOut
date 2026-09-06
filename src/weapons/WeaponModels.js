@@ -212,12 +212,23 @@ const BUILD = {
     g.name = 'revolver';
   },
   knife(g) {
-    g.add(part(b(0.028, 0.032, 0.14), M.black, 0, -0.01, 0.06));            // grip
-    g.add(part(b(0.030, 0.006, 0.020), M.black, 0, 0.010, 0.005));          // finger ridge
-    g.add(part(b(0.052, 0.010, 0.028), M.steelWorn, 0, 0.016, -0.02));      // guard
-    g.add(part(b(0.024, 0.005, 0.24), M.steel, 0, 0.020, -0.16));           // blade
-    g.add(part(b(0.024, 0.005, 0.05), M.steelWorn, 0, 0.020, -0.045, 0, 0, 0.5)); // sharpened tip taper hint
-    g.add(part(b(0.010, 0.010, 0.03), M.black, 0, -0.01, 0.15));            // pommel
+    // Carried point UP, not levelled down the sightline: a blade held out in
+    // front of you like a pistol is not how anyone holds a knife, and it is
+    // not what a CS knife looks like either. The parts go into an inner group
+    // whose ORIGIN IS THE HANDLE, so tilting that group swings the blade up
+    // around the grip and leaves the handle exactly where the fist is. Rotate
+    // the parts about the model origin instead and the handle swings out of
+    // the hand along with the blade.
+    const k = new THREE.Group();
+    k.position.set(0, -0.010, 0.060);      // the handle's centre, the pivot
+    k.rotation.set(0.74, 0.22, -0.26);     // up, angled across the body
+    k.add(part(b(0.028, 0.032, 0.14), M.black, 0, 0, 0));                    // grip
+    k.add(part(b(0.030, 0.006, 0.020), M.black, 0, 0.020, -0.055));          // finger ridge
+    k.add(part(b(0.052, 0.010, 0.028), M.steelWorn, 0, 0.026, -0.080));      // guard
+    k.add(part(b(0.024, 0.005, 0.24), M.steel, 0, 0.030, -0.220));           // blade
+    k.add(part(b(0.024, 0.005, 0.05), M.steelWorn, 0, 0.030, -0.105, 0, 0, 0.5)); // tip taper hint
+    k.add(part(b(0.010, 0.010, 0.03), M.black, 0, 0, 0.090));                // pommel
+    g.add(k);
     g.name = 'knife';
   }
 };
@@ -587,7 +598,10 @@ export function buildWeaponModel(weapon, attachments = []) {
   }
 
   // iron sight height when there is no optic fitted
-  const ironHeight = isPistol ? 0.052 : weapon.key === 'm870' ? 0.064 : 0.086;
+  // The revolver sights over its rib, not over a slide, so its line is a
+  // little higher than the two autos'.
+  const ironHeight = weapon.key === 'revolver' ? 0.059
+    : isPistol ? 0.052 : weapon.key === 'm870' ? 0.064 : 0.086;
 
   // Don't stomp a part that has deliberately asked to draw later (the optic
   // reticles use renderOrder 999 so they sit on top of their own housing).

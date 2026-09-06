@@ -366,13 +366,13 @@ export const WEAPONS = [
     reloadTactical: 0.62, reloadEmpty: 0.62, shellReload: true,
     reloadStart: 0.85, reloadEnd: 0.73,
     drawTime: 0.58, holsterTime: 0.40,
-    // No optic, no irons worth the name, and `noAds` blocks the aim blend
-    // outright — right-click does nothing on this gun. It does not need to:
-    // the hip spread is already close enough to zero that the round lands
-    // where the crosshair is.
-    noAds: true,
-    adsTime: 0.30, adsFov: 1.0,
-    spreadHip: 0.045, spreadAds: 0.045, spreadMove: 0.12, spreadJump: 0.40,
+    // It aims. There is no optic, but the rib carries a rear notch and a
+    // front blade and they line up, so right-click brings them onto the
+    // camera axis with a modest zoom. The hip spread is already close enough
+    // to zero that aiming buys sight picture and steadiness rather than
+    // accuracy — which is the point of a gun like this.
+    adsTime: 0.26, adsFov: 0.80,
+    spreadHip: 0.045, spreadAds: 0.026, spreadMove: 0.12, spreadJump: 0.40,
     spreadPerShot: 0.018, spreadMax: 0.40, spreadRecover: 9.0,
     recoil: {
       vert: 0.0385, horiz: 0.0105, recovery: 5.4, viewKick: 2.1, camShake: 1.25,
