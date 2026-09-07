@@ -2,7 +2,7 @@
 
 import { el, clear, button, header, footer, toggle, pingClass, fmtTime } from '../UI.js';
 import { audio } from '../../audio/AudioEngine.js';
-import { MODE_LIST, MODES, REGIONS, PLAYLIST_LIST, PLAYLISTS } from '../../shared/modes.js';
+import { PICKABLE_MODES, MODES, REGIONS, PLAYLIST_LIST, PLAYLISTS } from '../../shared/modes.js';
 import { MAP_INFO, mapsForMode } from '../../shared/maps/index.js';
 import { S, settings } from '../../core/Settings.js';
 
@@ -16,14 +16,10 @@ export function createPlayMenu(game) {
       ui = _ui;
       const cards = [
         ...PLAYLIST_LIST.map((pl) => ({
-          k: pl.key === 'quickmatch' ? 'QM' : pl.key === 'standard' ? 'ST' : 'FFA',
+          k: pl.key === 'quickmatch' ? 'QM' : 'ST',
           n: pl.name, d: pl.desc,
           go: () => game.playPlaylist(pl.key)
         })),
-        {
-          k: 'SB', n: 'SERVER BROWSER', d: 'Pick your map, mode, region and ping by hand.',
-          go: () => ui.show('browser')
-        },
         {
           k: 'PM', n: 'PRIVATE MATCH', d: 'Create a room, get a code, invite your friends.',
           go: () => ui.show('private')
@@ -53,101 +49,6 @@ export function createPlayMenu(game) {
 
 // ---------------------------------------------------------------------------
 // SERVER BROWSER
-// ---------------------------------------------------------------------------
-export function createServerBrowser(game) {
-  let ui = null, tbody = null, statusNode = null, selected = null;
-  let filterMode = 'all', filterRegion = 'all', refreshTimer = null;
-
-  function rows(list) {
-    clear(tbody);
-    const filtered = list.filter((r) =>
-      (filterMode === 'all' || r.mode === filterMode) &&
-      (filterRegion === 'all' || r.region === filterRegion));
-    if (!filtered.length) {
-      tbody.appendChild(el('tr', el('td', { colspan: 7, style: { textAlign: 'center', padding: '38px' } },
-        'NO MATCHES FOUND — TRY A DIFFERENT FILTER OR HOST YOUR OWN')));
-      return;
-    }
-    for (const r of filtered) {
-      const ping = game.pingFor(r.region);
-      const tr = el('tr.row', {
-        onclick: () => {
-          audio.ui('click');
-          selected = r;
-          [...tbody.children].forEach((n) => n.classList.remove('sel'));
-          tr.classList.add('sel');
-        },
-        ondblclick: () => game.joinRoom(r.id)
-      },
-        el('td', el('b', r.mapName), el('div', { style: { fontSize: '10px', opacity: 0.55 } }, r.mapSubtitle || '')),
-        el('td', r.modeName),
-        el('td', `${r.players + r.bots}/${r.maxPlayers}`,
-          el('div.bar', { style: { marginTop: '4px' } },
-            el('i', { style: { width: `${Math.min(100, ((r.players + r.bots) / r.maxPlayers) * 100)}%` } }))),
-        el('td', String(r.players)),
-        el('td.ping.' + pingClass(ping), `${ping} ms`),
-        el('td', (REGIONS.find((x) => x.key === r.region) || {}).name || r.region),
-        el('td', r.phase === 'live' ? 'IN PROGRESS' : r.phase.toUpperCase()));
-      tbody.appendChild(tr);
-    }
-  }
-
-  return {
-    build(node, _ui) {
-      ui = _ui;
-      const modeSel = el('select', {
-        onchange: (e) => { filterMode = e.target.value; audio.ui('tick'); rows(game.serverList); }
-      }, el('option', { value: 'all' }, 'ALL MODES'),
-        ...MODE_LIST.map((m) => el('option', { value: m.key }, m.name.toUpperCase())));
-      const regionSel = el('select', {
-        onchange: (e) => { filterRegion = e.target.value; audio.ui('tick'); rows(game.serverList); }
-      }, el('option', { value: 'all' }, 'ALL REGIONS'),
-        ...REGIONS.map((r) => el('option', { value: r.key }, r.name.toUpperCase())));
-
-      tbody = el('tbody');
-      statusNode = el('span.dim', 'READY');
-
-      const table = el('table.list',
-        el('thead', el('tr',
-          el('th', 'Map'), el('th', 'Mode'), el('th', 'Slots'),
-          el('th', 'Humans'), el('th', 'Ping'), el('th', 'Region'), el('th', 'Status'))),
-        tbody);
-
-      node.appendChild(header('SERVER BROWSER', statusNode));
-      node.appendChild(el('div.body', el('div.pane', { style: { flex: '1' } },
-        el('div.flex.between.center', { style: { marginBottom: '18px' } },
-          el('div', el('h1.title', 'Servers'), el('p.sub', { style: { margin: 0 } }, 'Live matches on this region cluster')),
-          el('div.flex.gap8', { style: { width: '420px' } }, modeSel, regionSel,
-            button('REFRESH', () => game.refreshServers(), { cls: 'sm' }))),
-        table)));
-      node.appendChild(footer(
-        [button('BACK', () => ui.back('play'))],
-        [
-          button('HOST PRIVATE', () => ui.show('private')),
-          button('JOIN', () => { if (selected) game.joinRoom(selected.id); else ui.toast('Select a server first', 'warn'); }, { cls: 'primary' })
-        ]));
-    },
-
-    enter() {
-      game.refreshServers();
-      rows(game.serverList);
-      refreshTimer = setInterval(() => game.refreshServers(), 5000);
-      this.unsub = game.onServerList((list) => {
-        statusNode.textContent = `${list.length} SERVERS`;
-        rows(list);
-      });
-    },
-
-    exit() {
-      clearInterval(refreshTimer);
-      this.unsub?.();
-    }
-  };
-}
-
-// ---------------------------------------------------------------------------
-// PRIVATE MATCH — create or join by code
-// ---------------------------------------------------------------------------
 export function createPrivateMatch(game) {
   let ui = null;
   const cfg = {
@@ -172,7 +73,7 @@ export function createPrivateMatch(game) {
       };
 
       const modeGrid = el('div.grid.c3');
-      for (const m of MODE_LIST) {
+      for (const m of PICKABLE_MODES) {
         const card = el('div.card' + (m.key === cfg.mode ? '.sel' : ''), {
           onclick: () => {
             audio.ui('click');
@@ -182,7 +83,7 @@ export function createPrivateMatch(game) {
             cfg.friendlyFire = m.friendlyFireDefault;
             const allowed = mapsForMode(m.key);
             if (!allowed.includes(cfg.map)) cfg.map = allowed[0];
-            [...modeGrid.children].forEach((n, i) => n.classList.toggle('sel', MODE_LIST[i].key === cfg.mode));
+            [...modeGrid.children].forEach((n, i) => n.classList.toggle('sel', PICKABLE_MODES[i].key === cfg.mode));
             rebuildMaps();
             syncFields();
           },
@@ -342,7 +243,7 @@ export function createTraining(game) {
         ...['easy', 'normal', 'hard', 'elite'].map((k) =>
           el('option', { value: k, selected: k === cfg.botSkill }, k.toUpperCase())));
       const mode = el('select', { onchange: (e) => { cfg.mode = e.target.value; } },
-        ...MODE_LIST.map((m) => el('option', { value: m.key, selected: m.key === cfg.mode }, m.name.toUpperCase())));
+        ...PICKABLE_MODES.map((m) => el('option', { value: m.key, selected: m.key === cfg.mode }, m.name.toUpperCase())));
 
       node.appendChild(header('TRAINING'));
       node.appendChild(el('div.body',

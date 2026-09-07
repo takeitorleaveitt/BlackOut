@@ -67,11 +67,6 @@ export const PLAYLISTS = {
     modes: ['tdm'], roundsToWin: 6, bots: false, minPlayers: 8,
     maps: ['warehouse', 'refinery']
   },
-  freeforall: {
-    key: 'freeforall', name: 'FREE FOR ALL',
-    desc: 'Everybody hostile. Fills with bots and real players alike.',
-    modes: ['ffa'], roundsToWin: 3, bots: true, minPlayers: 1
-  }
 };
 
 /**
@@ -87,6 +82,14 @@ export function mapsForPlaylist(playlistKey, modeKey, allMaps) {
 }
 
 export const PLAYLIST_LIST = Object.values(PLAYLISTS);
+
+/**
+ * The modes a player can PICK. Free For All is not one of them any more — it
+ * had no playlist behind it and every lobby it produced was bots — but the
+ * mode itself stays implemented below, because Training and the offline
+ * bootstrap still run on it.
+ */
+export const PICKABLE_MODES = MODE_LIST.filter((m) => m.key !== 'ffa');
 
 export const REGIONS = [
   { key: 'eu-west', name: 'EU West', city: 'Frankfurt' },

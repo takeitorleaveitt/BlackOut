@@ -23,7 +23,7 @@ import { NetClient } from './net/NetClient.js';
 import { LocalNet } from './net/LocalNet.js';
 import { UI, el } from './ui/UI.js';
 import { createMainMenu } from './ui/screens/MainMenu.js';
-import { createPlayMenu, createServerBrowser, createPrivateMatch, createLobby, createTraining } from './ui/screens/Play.js';
+import { createPlayMenu, createPrivateMatch, createLobby, createTraining } from './ui/screens/Play.js';
 import { createLoadout } from './ui/screens/Loadout.js';
 import { createSettings } from './ui/screens/SettingsScreen.js';
 import { createFriends, createPause, createEndMatch, createQueue, createProfile } from './ui/screens/Misc.js';
@@ -121,7 +121,6 @@ class Game {
     const u = this.ui;
     u.register('main', createMainMenu(this));
     u.register('play', createPlayMenu(this));
-    u.register('browser', createServerBrowser(this));
     u.register('private', createPrivateMatch(this));
     u.register('lobby', createLobby(this));
     u.register('training', createTraining(this));
@@ -1022,6 +1021,11 @@ class Game {
     audio.stopMenuMusic();
     audio.startAmbience(map.ambientSounds);
     audio.warmup(Object.values(WEAPON_BY_KEY));
+    // Whatever the idle drain has not got through yet, finish HERE. The menus
+    // usually give it plenty of time, but somebody who clicks straight into a
+    // match would otherwise carry the remainder into the fight — which is the
+    // one place a synth render must never land.
+    audio.drainWarmup();
     this.effects.clear();
     for (const r of this.remotes.values()) r.dispose();
     this.remotes.clear();

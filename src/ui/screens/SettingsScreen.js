@@ -66,7 +66,8 @@ export function createSettings(game) {
         'Internal resolution. The single biggest performance lever.'),
       selectRow('Shadows', 'shadows', [['off', 'OFF'], ['low', 'LOW'], ['medium', 'MEDIUM'], ['high', 'HIGH'], ['ultra', 'ULTRA']]),
       selectRow('Shadow resolution', 'shadowRes', [[512, '512'], [1024, '1024'], [2048, '2048'], [4096, '4096']]),
-      selectRow('Texture quality', 'textureQuality', [['low', 'LOW'], ['medium', 'MEDIUM'], ['high', 'HIGH']],
+      selectRow('Texture quality', 'textureQuality',
+        [['low', 'LOW (256)'], ['medium', 'MEDIUM (512)'], ['high', 'HIGH (1K)']],
         'Regenerates the procedural material set.'),
       selectRow('Anti-aliasing', 'aa', [['off', 'OFF'], ['fxaa', 'FXAA']]),
       selectRow('Anisotropic filtering', 'anisotropy', [[1, 'OFF'], [4, '4x'], [8, '8x'], [16, '16x']]),
@@ -88,20 +89,13 @@ export function createSettings(game) {
       sliderRow('Bodycam intensity', 'bodycam', 0, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`,
         'Master strength of the whole body-worn camera look.'),
       sliderRow('Camera shake', 'cameraShake', 0, 2, 0.05, (v) => `${Math.round(v * 100)}%`),
-      sliderRow('Head bob', 'headBob', 0, 2, 0.05, (v) => `${Math.round(v * 100)}%`),
       el('h3.sec', 'Post-processing'),
       toggleRow('Bloom', 'bloom'),
       toggleRow('Lens distortion', 'lensDistortion', 'The fisheye barrel of a wide-angle body camera.'),
-      toggleRow('Lens glare', 'lensFlare'),
-      toggleRow('Compression artefacts', 'compression', 'Macroblocking and scanlines from a cheap recorder.'),
-      sliderRow('Vignette', 'vignette', 0, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`),
       sliderRow('Exposure', 'exposure', 0.5, 1.8, 0.05, (v) => v.toFixed(2)),
-      sliderRow('Brightness', 'brightness', 0.6, 1.6, 0.05, (v) => v.toFixed(2)),
       el('h3.sec', 'Telemetry'),
       toggleRow('FPS counter', 'showFps'),
-      toggleRow('Ping counter', 'showPing'),
-      toggleRow('Net graph', 'showNetGraph', 'Packet loss, jitter and bandwidth.'),
-      toggleRow('Performance stats', 'showPerf', 'Draw calls, triangles, frame times.'));
+      toggleRow('Ping counter', 'showPing'));
   }
 
   function audioTab() {
@@ -111,7 +105,6 @@ export function createSettings(game) {
       sliderRow('Weapons', 'weaponVolume', 0, 1, 0.01, pct),
       sliderRow('Effects', 'effectsVolume', 0, 1, 0.01, pct),
       sliderRow('Ambience', 'ambienceVolume', 0, 1, 0.01, pct),
-      sliderRow('Voice chat', 'voiceVolume', 0, 1, 0.01, pct),
       sliderRow('Music', 'musicVolume', 0, 1, 0.01, pct),
       sliderRow('Interface', 'uiVolume', 0, 1, 0.01, pct),
       el('div.mt16', button('TEST GUNSHOT', () => game.testGunshot())),

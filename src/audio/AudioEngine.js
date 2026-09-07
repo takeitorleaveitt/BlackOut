@@ -295,27 +295,74 @@ export class AudioEngine {
    * no obvious reason. Spread across idle callbacks so warming the cache
    * doesn't itself cause the hitch it's trying to avoid.
    */
-  warmup(weaponDefs = []) {
-    if (!this.ctx) return;
+  warmup(weaponDefs = [], opts = {}) {
+    if (!this.ctx) return Promise.resolve();
     const jobs = [];
+    // EVERY VARIANT, not just the first. Playback picks a variant at random
+    // from four, so pre-rendering only variant 0 left three of them to be
+    // synthesised the first time they came up — which is during a firefight,
+    // one blocking DSP render at a time. Cold-rendering a single rifle's four
+    // shot variants and their distant tails measured 42 ms: two and a half
+    // dropped frames, in one burst, the moment somebody opened fire with a
+    // weapon this session had not heard yet. That is the gunfight stutter.
+    const VARIANTS = 4;
     for (const surface of Object.values(SURFACE)) {
-      jobs.push(() => makeFootstep(this.ctx, surface, 0));
-      jobs.push(() => makeImpact(this.ctx, surface, 0));
-      jobs.push(() => makeCasing(this.ctx, surface, false, 0));
+      for (let v = 0; v < VARIANTS; v++) {
+        jobs.push(() => makeFootstep(this.ctx, surface, v));
+        jobs.push(() => makeImpact(this.ctx, surface, v));
+        jobs.push(() => makeCasing(this.ctx, surface, false, v));
+      }
+      jobs.push(() => makeCasing(this.ctx, surface, true, 0));
     }
     for (const def of weaponDefs) {
       if (!def?.audio || def.melee) continue;
-      jobs.push(() => makeGunshot(this.ctx, def.audio, 0, {}));
+      for (let v = 0; v < VARIANTS; v++) {
+        // The main report and the tail slap are both played on every
+        // unsuppressed shot, so both are hot from the first trigger pull.
+        jobs.push(() => makeGunshot(this.ctx, def.audio, v, {}));
+        jobs.push(() => makeGunshot(this.ctx, def.audio, v, { distant: true }));
+      }
       jobs.push(() => makeGunshot(this.ctx, def.audio, 0, { suppressed: true }));
+      jobs.push(() => makeGunshot(this.ctx, def.audio, 1, { suppressed: true }));
     }
-    jobs.push(() => makeSwing(this.ctx, 0));
-    jobs.push(() => makeBulletCrack(this.ctx, 0), () => makeWhizz(this.ctx, 0));
-    jobs.push(() => makePain(this.ctx, 0));
-    jobs.push(() => makeMech(this.ctx, 'select', 0), () => makeMech(this.ctx, 'magOut', 0), () => makeMech(this.ctx, 'magIn', 0));
+    for (let v = 0; v < VARIANTS; v++) {
+      jobs.push(() => makeSwing(this.ctx, v));
+      jobs.push(() => makeBulletCrack(this.ctx, v));
+      jobs.push(() => makeWhizz(this.ctx, v));
+      jobs.push(() => makePain(this.ctx, v));
+      for (const k of ['select', 'magOut', 'magIn', 'boltRelease', 'dryfire', 'cloth', 'safety']) {
+        jobs.push(() => makeMech(this.ctx, k, v));
+      }
+    }
+
+    this._warmJobs = jobs;
+    this.warmTotal = jobs.length;
+    this.warmDone = 0;
+
+    // Two ways to drain it. During the loading screen we want it FINISHED
+    // before the first match, so the caller awaits a chunked drain that keeps
+    // the bar moving; in the background (returning to the menu) idle
+    // callbacks are right, because nothing is waiting on it.
+    if (opts.blocking) {
+      return new Promise((resolve) => {
+        const chunk = () => {
+          const until = performance.now() + 12;   // stay inside one frame
+          while (jobs.length && performance.now() < until) {
+            try { jobs.shift()(); } catch (e) { /* a miss must never break the match */ }
+            this.warmDone++;
+          }
+          opts.onProgress?.(this.warmDone / this.warmTotal);
+          if (jobs.length) setTimeout(chunk, 0);
+          else resolve();
+        };
+        chunk();
+      });
+    }
 
     const runNext = (deadline) => {
       while (jobs.length && (!deadline || deadline.timeRemaining() > 2)) {
         try { jobs.shift()(); } catch (e) { /* never let a warmup miss break the match */ }
+        this.warmDone++;
       }
       if (jobs.length) schedule(runNext);
     };
@@ -323,6 +370,7 @@ export class AudioEngine {
       ? (fn) => window.requestIdleCallback(fn, { timeout: 200 })
       : (fn) => setTimeout(() => fn(null), 16);
     schedule(runNext);
+    return Promise.resolve()
   }
 
   // -------------------------------------------------------------------------
@@ -360,6 +408,26 @@ export class AudioEngine {
         refDistance: 10, rolloff: 0.6, maxDistance: 400
       });
     }
+  }
+
+  /**
+   * Finish the warm-up NOW, whatever is left of it.
+   *
+   * The idle drain gets the whole time you spend in menus, which is usually
+   * plenty — but somebody who clicks straight through into a match would
+   * otherwise carry the remainder into the fight, which is the one place the
+   * synthesis cost must not land. Called on match entry: better to spend the
+   * tail of it on the deploy screen than to drop frames in a gunfight.
+   */
+  drainWarmup() {
+    const jobs = this._warmJobs;
+    if (!jobs || !jobs.length) return 0;
+    const n = jobs.length;
+    while (jobs.length) {
+      try { jobs.shift()(); } catch (e) { /* a miss must never break the match */ }
+      this.warmDone++;
+    }
+    return n;
   }
 
   /** A shot heard from far away — rolling, low-passed, no mechanical detail. */

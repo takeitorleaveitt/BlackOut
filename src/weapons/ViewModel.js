@@ -38,6 +38,17 @@ const pulse = (x) => Math.sin(x * Math.PI);
 const settle = (x, freq = 2.6, damp = 5.5) =>
   Math.cos(x * Math.PI * freq) * Math.exp(-x * damp);
 
+// How far below the sight line the weapon sits when aimed. See the compose
+// step in update(): a gun whose own body eats the lower screen needs to come
+// down, or aiming it means seeing less than hip fire did.
+const ADS_DROP = {
+  revolver: 0.052,
+  deagle: 0.014,
+  glock17: 0.012,
+  m870: 0.010,
+  default: 0.006
+};
+
 // Per-weapon hip pose. Heavier guns sit lower and further out.
 const HIP = {
   m4a1: { p: [0.150, -0.148, -0.62], r: [0.03, -0.07, 0.0] },
@@ -321,8 +332,15 @@ export class ViewModel {
     // --- compose -----------------------------------------------------------
     const hip = this.pose;
     const sight = this.model.sightHeight;
-    // ADS target: sight sits on the camera axis, slightly forward
-    const adsP = [0, -sight, -0.40];
+    // ADS target: the sight sits on the camera axis, slightly forward.
+    //
+    // ADS_DROP pulls the whole weapon down from there. A revolver sighted
+    // over its rib puts a lot of steel between you and the target — frame,
+    // cylinder, shroud and hand all sit in the lower half of the screen —
+    // so it drops furthest. The others get a token amount, which reads as
+    // holding the gun slightly below eyeline rather than welded to it.
+    const drop = ADS_DROP[w.def.key] ?? ADS_DROP.default;
+    const adsP = [0, -sight - drop, -0.40];
     const px = lerp(hip.p[0], adsP[0], ads);
     const py = lerp(hip.p[1], adsP[1], ads);
     const pz = lerp(hip.p[2], adsP[2], ads);

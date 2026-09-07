@@ -105,6 +105,10 @@ function listRooms() {
   const out = [];
   for (const r of rooms.values()) {
     if (r.private || r.closed) continue;
+    // A room with nobody in it but bots is not a game anybody is playing.
+    // It used to be listed and matched into, which is how you ended up in a
+    // "match" that was you and seven scripts.
+    if (r.humanCount === 0) continue;
     out.push(r.info());
   }
   return out;
@@ -125,6 +129,9 @@ function findQuickMatch(modeKey, opts = {}) {
     if (modeKey && r.modeKey !== modeKey) continue;
     if (r.humanCount + seats > r.maxPlayers) continue;
     if (!wantBots && r.botCount > 0) continue;
+    // Never match into a room that has no humans in it at all. Joining one
+    // means a lobby of bots wearing a match's clothes.
+    if (r.humanCount === 0) continue;
     // A playlist that excludes a map must not be matched INTO a live room
     // running it either, or the restriction only holds for the first person
     // through the door.

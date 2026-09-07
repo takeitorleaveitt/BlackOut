@@ -133,6 +133,11 @@ export class PlayerModel {
       this.torso.add(g);
     }
 
+    // Grip anchors, filled in by setWeapon(), and scratch for the IK.
+    this.gripLocal = new THREE.Vector3(0, -0.10, 0.04);
+    this.foreLocal = new THREE.Vector3();
+    this._ikV = new THREE.Vector3();
+
     // weapon carried in the right hand
     this.weaponMount = new THREE.Group();
     this.weaponMount.position.set(0.20, 0.30, -0.22);
@@ -148,6 +153,24 @@ export class PlayerModel {
   setWeapon(weaponDef) {
     if (this.weaponKey === weaponDef.key) return;
     this.weaponKey = weaponDef.key;
+    // Where this weapon is actually held, in weapon space. The arms are
+    // driven onto these points by IK below, which is the difference between
+    // a soldier holding a rifle and a soldier standing next to one.
+    const barrel = weaponDef.model?.barrel ?? 0.3;
+    const pistol = weaponDef.key === 'glock17' || weaponDef.key === 'deagle'
+      || weaponDef.key === 'revolver';
+    this.gripLocal.set(0, -0.10, 0.04);
+    if (weaponDef.melee) {
+      // one-handed: the support arm has nothing to hold
+      this.foreLocal = null;
+    } else if (pistol) {
+      // both hands cupped around the grip, a little forward of it
+      this.foreLocal = this.foreLocal || new THREE.Vector3();
+      this.foreLocal.set(-0.04, -0.09, -0.02);
+    } else {
+      this.foreLocal = this.foreLocal || new THREE.Vector3();
+      this.foreLocal.set(0, -0.02, -barrel * 0.55 - 0.05);
+    }
     this.weaponMount.clear();
     const w = buildWorldWeapon(weaponDef);
     w.rotation.set(0, 0, 0);
@@ -287,6 +310,54 @@ export class PlayerModel {
     const wmDX = wmX - 0.20, wmDY = wmY - 0.30, wmDZ = wmZ - (-0.22);
     this.armR.position.set(0.26 + wmDX * 0.75, 0.44 + wmDY * 0.75, wmDZ * 0.75);
     this.armL.position.set(-0.26 + wmDX * 0.55, 0.44 + wmDY * 0.55, wmDZ * 0.55);
+
+    // Then put the HANDS on the gun. Shoulders that only follow the weapon
+    // still leave the hands wherever the arm's rest angles happen to point,
+    // which is what "not actually holding it" looks like from outside. Two
+    // bones, solved: the shoulder aims at the grip and the elbow bends by
+    // exactly as much as the distance requires.
+    if (!st.dead) {
+      this.solveArm(this.armR, this.weaponPoint(this.gripLocal), 0.30, 0.30);
+      if (this.foreLocal) this.solveArm(this.armL, this.weaponPoint(this.foreLocal), 0.30, 0.30);
+    }
+  }
+
+  /** A point in weapon space, expressed in the torso space the arms live in. */
+  weaponPoint(local) {
+    return this._ikV.copy(local)
+      .applyEuler(this.weaponMount.rotation)
+      .add(this.weaponMount.position);
+  }
+
+  /**
+   * Two-bone IK for an arm that hangs along -Y at rest.
+   *
+   * The shoulder is rotated so its own -Y axis points at the target, then
+   * tilted back by the angle the law of cosines says the upper arm needs, and
+   * the elbow takes the remainder. Reach is clamped just short of full
+   * extension: at exactly L1+L2 the triangle degenerates and the elbow snaps.
+   */
+  solveArm(arm, target, L1, L2) {
+    const dx = target.x - arm.position.x;
+    const dy = target.y - arm.position.y;
+    const dz = target.z - arm.position.z;
+    let d = Math.hypot(dx, dy, dz);
+    if (d < 1e-4) return;
+    const maxReach = (L1 + L2) * 0.995;
+    const cl = Math.min(Math.max(d, 0.12), maxReach);
+    const inv = 1 / d;
+    const ux = dx * inv, uy = dy * inv, uz = dz * inv;
+    // Aim the rest axis (0,-1,0) along u, as Euler XYZ with no yaw:
+    //   Rx(b) * Rz(g) * (0,-1,0) = (sin g, -cos g cos b, -cos g sin b)
+    const g = Math.asin(Math.min(1, Math.max(-1, ux)));
+    const b = Math.atan2(-uz, -uy);
+    // Law of cosines on the triangle shoulder-elbow-hand.
+    const cosA = (L1 * L1 + cl * cl - L2 * L2) / (2 * L1 * cl);
+    const cosT = (L1 * L1 + L2 * L2 - cl * cl) / (2 * L1 * L2);
+    const a = Math.acos(Math.min(1, Math.max(-1, cosA)));
+    const t = Math.acos(Math.min(1, Math.max(-1, cosT)));
+    arm.rotation.set(b - a, 0, g);
+    arm.userData.fore.rotation.x = Math.PI - t;
   }
 
   dispose() {

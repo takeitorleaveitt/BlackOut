@@ -1,4 +1,4 @@
-// Main menu: PLAY / FRIENDS / LOADOUT / SETTINGS / SERVERS / QUIT.
+// Main menu: PLAY / FRIENDS / LOADOUT / SETTINGS / QUIT.
 // The 3D scene keeps rendering behind it, so the menu is literally a bodycam
 // feed of a live map with the interface overlaid.
 
@@ -14,7 +14,6 @@ const ITEMS = [
   { key: 'friends', label: 'FRIENDS', desc: 'SQUAD & INVITES' },
   { key: 'loadout', label: 'LOADOUT', desc: 'WEAPONS & ATTACHMENTS' },
   { key: 'settings', label: 'SETTINGS', desc: 'GRAPHICS · AUDIO · CONTROLS' },
-  { key: 'servers', label: 'SERVERS', desc: 'BROWSE ACTIVE MATCHES' },
   { key: 'quit', label: 'QUIT', desc: 'END SESSION' }
 ];
 
@@ -102,7 +101,6 @@ export function createMainMenu(game) {
       case 'friends': ui.show('friends'); break;
       case 'loadout': ui.show('loadout'); break;
       case 'settings': ui.show('settings'); break;
-      case 'servers': ui.show('browser'); break;
       case 'quit': game.quit(); break;
       default: break;
     }

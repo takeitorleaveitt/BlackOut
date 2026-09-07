@@ -270,8 +270,24 @@ const REPEATS = {
   [SURFACE.FABRIC]: 0.8, [SURFACE.GLASS]: 0.2, [SURFACE.WATER]: 0.2
 };
 
+/**
+ * Texture resolution per quality tier.
+ *
+ * The whole ladder moves up a step: 128/256/512 becomes 256/512/1024. Low was
+ * 128, which is where the muddiness came from.
+ *
+ * It does NOT go to 2048, and the reason is measured rather than assumed.
+ * Every surface generates three maps (albedo, roughness, normal) on the CPU
+ * into canvases, and the cost is per pixel: one surface at 1024 takes 853 ms
+ * here. 2048 is four times that — about 3.4 s per surface, so roughly 45 s of
+ * loading for the thirteen surfaces, and 624 MB of texture memory once they
+ * are resident. That is a worse game, not a better-looking one.
+ *
+ * Getting to a real 2K needs the generator moved off the main thread or onto
+ * the GPU; it is not a constant to raise.
+ */
 export function textureSizeFor(quality) {
-  return quality === 'low' ? 128 : quality === 'medium' ? 256 : 512;
+  return quality === 'low' ? 256 : quality === 'medium' ? 512 : 1024;
 }
 
 /** Build (and cache) the map set for a surface type. */

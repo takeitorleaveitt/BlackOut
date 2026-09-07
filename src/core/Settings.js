@@ -129,6 +129,19 @@ class SettingsStore {
     'motionBlur', 'filmGrain', 'chromatic', 'weaponSway', 'autoSprint'
   ];
 
+  /**
+   * Settings that still DO something but are no longer adjustable. Head bob,
+   * the vignette, brightness and the recorder artefacts were dials nobody
+   * needed and several people could get stuck on: turn head bob to zero once
+   * and the game quietly stops feeling like it moves, with no way back except
+   * a settings screen that no longer offers the slider. Pinned on load.
+   */
+  static PINNED = {
+    headBob: 1.0, vignette: 1.0, brightness: 1.0,
+    lensFlare: false, compression: false,
+    showNetGraph: false, showPerf: false
+  };
+
   load() {
     try {
       const raw = localStorage.getItem(KEY);
@@ -144,6 +157,9 @@ class SettingsStore {
     if (this.data.binds && this.data.binds.ping === 'KeyG') {
       this.data.binds.ping = 'KeyZ';
       migrated = true;
+    }
+    for (const [k, v] of Object.entries(SettingsStore.PINNED)) {
+      if (this.data[k] !== v) { this.data[k] = v; migrated = true; }
     }
     if (!this.data.name) this.data.name = randomCallsign();
     if (this.syncLoadout()) migrated = true;

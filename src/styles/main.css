@@ -1351,3 +1351,20 @@ select:focus-visible, input:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
 }
+
+
+/* ==========================================================================
+   MENU TYPE
+   Bigger and lighter. The rows were 14px semibold in a 12px box — small,
+   heavy and cramped all at once. Large thin type with room around it is
+   the whole difference between a menu and a list.
+   ========================================================================== */
+.menu-left { width: 380px; padding-top: 52px; gap: 2px; }
+.menu-item { padding: 17px 18px; }
+.menu-item .lbl {
+  font: 200 27px/1 var(--sans);
+  letter-spacing: 0.20em;
+}
+.menu-item:hover .lbl, .menu-item.sel .lbl { letter-spacing: 0.22em; }
+.menu-item .idx { font-size: 10px; width: 22px; }
+.menu-item .desc { font-size: 9px; letter-spacing: 0.16em; }
