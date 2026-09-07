@@ -52,10 +52,11 @@ lobby, and match.
   level-authoring DSL (`src/shared/maps/kit.js`) so the exact same
   brush/prop data drives both the renderer and the server's collision
   world — no separate art pass, no desync risk.
-- **Four game modes**: Team Deathmatch, Free For All, Elimination, and
-  Search & Destroy (plant/defuse), served through three playlists — Quick
-  Match and Standard are real players only and hold in matchmaking until
-  eight have arrived, while Free For All will fill with bots.
+- **Three game modes**: Team Deathmatch, Free For All and Elimination.
+  Matchmaking runs two playlists — Quick Match and Standard — and both are
+  real players only, holding in the queue until eight have arrived. Free For
+  All has no playlist of its own: a public FFA lobby was always bots, so it
+  lives in private matches and training, where you pick it deliberately.
 - **Team Deathmatch runs an economy** (`src/shared/economy.js`): 2:30 rounds,
   one life each, $1000 to start, $500 a kill, and a buy menu during the
   freeze. Survive a round and you keep what you are carrying; die and you are

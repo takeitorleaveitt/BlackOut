@@ -7,6 +7,25 @@ import * as THREE from 'three';
 import { buildWorldWeapon } from '../weapons/WeaponModels.js';
 import { lerp, clamp } from '../shared/constants.js';
 
+// The arm hangs straight down when unrotated.
+const REST_AXIS = new THREE.Vector3(0, -1, 0);
+// Upper arm plus forearm, minus the sliver the solver keeps back so the
+// elbow does not degenerate at full extension.
+const ARM_REACH = 0.60 * 0.995;
+// How far each elbow is swung outboard, around the shoulder-to-hand line.
+// See solveArm(): rolling about that axis moves the elbow and provably not
+// the hand, so the grip stays on the gun whatever these are set to.
+//
+// Signs are opposite because the arms mirror. Measured against the torso the
+// firing elbow travels about 25 cm across the usable range and the support
+// elbow only two or three: the support arm is nearly straight once it is out
+// on the handguard, and a straight arm's elbow has almost no circle left to
+// swing around. So the firing side is what actually reads as "arms out", and
+// these put that elbow out level with the shoulder and behind it, where a
+// shooter's is, rather than tucked down against the ribs.
+const ELBOW_ROLL_R = -0.45;
+const ELBOW_ROLL_L = 0.50;
+
 const TEAM_COLORS = {
   1: { kit: 0x2c3947, trim: 0x4a7ba8, pouch: 0x1f2833 },
   2: { kit: 0x453529, trim: 0xa8703c, pouch: 0x2a2019 },
@@ -137,6 +156,10 @@ export class PlayerModel {
     this.gripLocal = new THREE.Vector3(0, -0.10, 0.04);
     this.foreLocal = new THREE.Vector3();
     this._ikV = new THREE.Vector3();
+    this._ikU = new THREE.Vector3();
+    this._ikB = new THREE.Vector3();
+    this._ikQ = new THREE.Quaternion();
+    this._ikQ2 = new THREE.Quaternion();
 
     // weapon carried in the right hand
     this.weaponMount = new THREE.Group();
@@ -169,7 +192,11 @@ export class PlayerModel {
       this.foreLocal.set(-0.04, -0.09, -0.02);
     } else {
       this.foreLocal = this.foreLocal || new THREE.Vector3();
-      this.foreLocal.set(0, -0.02, -barrel * 0.55 - 0.05);
+      // Far enough down the handguard to look like a two-handed hold, but
+      // never further than an arm from a torso that cannot rotate: the
+      // sniper's barrel would otherwise put the support hand out past the
+      // muzzle, where the solver has to drag it back anyway.
+      this.foreLocal.set(0, -0.02, Math.max(-0.32, -barrel * 0.55 - 0.05));
     }
     this.weaponMount.clear();
     const w = buildWorldWeapon(weaponDef);
@@ -308,8 +335,14 @@ export class PlayerModel {
     // torso-relative rest spot — keeps the hands visually locked to the gun
     // through ADS/sprint/reload instead of drifting apart from it.
     const wmDX = wmX - 0.20, wmDY = wmY - 0.30, wmDZ = wmZ - (-0.22);
-    this.armR.position.set(0.26 + wmDX * 0.75, 0.44 + wmDY * 0.75, wmDZ * 0.75);
-    this.armL.position.set(-0.26 + wmDX * 0.55, 0.44 + wmDY * 0.55, wmDZ * 0.55);
+    // The support shoulder also sits wider and further forward than the
+    // firing one. It is what a person does to get their hand onto a
+    // handguard forty centimetres in front of them without turning their
+    // chest, and it is most of what "the arms stick out" means from outside:
+    // the support arm reads as extended along the weapon instead of folded
+    // in against the ribs.
+    this.armR.position.set(0.28 + wmDX * 0.75, 0.44 + wmDY * 0.75, wmDZ * 0.75);
+    this.armL.position.set(-0.30 + wmDX * 0.55, 0.45 + wmDY * 0.55, -0.09 + wmDZ * 0.55);
 
     // Then put the HANDS on the gun. Shoulders that only follow the weapon
     // still leave the hands wherever the arm's rest angles happen to point,
@@ -317,9 +350,45 @@ export class PlayerModel {
     // bones, solved: the shoulder aims at the grip and the elbow bends by
     // exactly as much as the distance requires.
     if (!st.dead) {
-      this.solveArm(this.armR, this.weaponPoint(this.gripLocal), 0.30, 0.30);
-      if (this.foreLocal) this.solveArm(this.armL, this.weaponPoint(this.foreLocal), 0.30, 0.30);
+      this.solveArm(this.armR, this.weaponPoint(this.gripLocal), 0.30, 0.30, ELBOW_ROLL_R);
+      if (this.foreLocal) {
+        this.solveArm(this.armL, this.reachable(this.weaponPoint(this.foreLocal), this.armL, ARM_REACH),
+          0.30, 0.30, ELBOW_ROLL_L);
+      }
     }
+  }
+
+  /**
+   * Slide a hold point back along the weapon until the arm can actually get
+   * to it.
+   *
+   * The support hand is anchored to the handguard, which on the sniper and
+   * the shotgun is further from the left shoulder than an arm is long. The
+   * solver clamps at full extension and the hand hangs a hand's width short
+   * of the gun — which is exactly what "not really holding it" looks like.
+   * Walking the anchor back toward the weapon's own origin puts the hand
+   * somewhere on the handguard it CAN reach, which is what a shooter does
+   * with a long rifle anyway.
+   *
+   * Closed form: the point where the segment from the anchor to the weapon
+   * origin crosses the sphere of the arm's reach.
+   */
+  reachable(target, arm, reach) {
+    const ax = target.x - arm.position.x;
+    const ay = target.y - arm.position.y;
+    const az = target.z - arm.position.z;
+    if (ax * ax + ay * ay + az * az <= reach * reach) return target;
+    const m = this.weaponMount.position;
+    const bx = m.x - target.x, by = m.y - target.y, bz = m.z - target.z;
+    const bb = bx * bx + by * by + bz * bz;
+    if (bb < 1e-9) return target;
+    const ab = ax * bx + ay * by + az * bz;
+    const c = ax * ax + ay * ay + az * az - reach * reach;
+    const disc = ab * ab - bb * c;
+    // No crossing means the weapon origin is out of reach too; go as far as
+    // the segment allows and let the solver clamp the rest.
+    const f = disc < 0 ? 1 : Math.min(1, Math.max(0, (-ab - Math.sqrt(disc)) / bb));
+    return target.set(target.x + bx * f, target.y + by * f, target.z + bz * f);
   }
 
   /** A point in weapon space, expressed in the torso space the arms live in. */
@@ -336,27 +405,47 @@ export class PlayerModel {
    * tilted back by the angle the law of cosines says the upper arm needs, and
    * the elbow takes the remainder. Reach is clamped just short of full
    * extension: at exactly L1+L2 the triangle degenerates and the elbow snaps.
+   *
+   * `roll` swings the elbow around the shoulder-to-hand line. Two bones and a
+   * target under-determine an arm — the elbow can sit anywhere on a circle —
+   * and the bare solve puts it wherever the maths lands, which was tight in
+   * against the ribs. Rolling about that exact line is the one move that
+   * cannot disturb the grip: the hand is ON the axis, so it stays put while
+   * the elbow swings out.
    */
-  solveArm(arm, target, L1, L2) {
+  solveArm(arm, target, L1, L2, roll = 0) {
     const dx = target.x - arm.position.x;
     const dy = target.y - arm.position.y;
     const dz = target.z - arm.position.z;
-    let d = Math.hypot(dx, dy, dz);
+    const d = Math.hypot(dx, dy, dz);
     if (d < 1e-4) return;
-    const maxReach = (L1 + L2) * 0.995;
-    const cl = Math.min(Math.max(d, 0.12), maxReach);
-    const inv = 1 / d;
-    const ux = dx * inv, uy = dy * inv, uz = dz * inv;
-    // Aim the rest axis (0,-1,0) along u, as Euler XYZ with no yaw:
-    //   Rx(b) * Rz(g) * (0,-1,0) = (sin g, -cos g cos b, -cos g sin b)
-    const g = Math.asin(Math.min(1, Math.max(-1, ux)));
-    const b = Math.atan2(-uz, -uy);
+    // Reach is clamped just short of full extension: at exactly L1+L2 the
+    // triangle degenerates and the elbow snaps.
+    const cl = Math.min(Math.max(d, 0.12), (L1 + L2) * 0.995);
+    const u = this._ikU.set(dx / d, dy / d, dz / d);
+
+    // Aim: the shortest rotation taking the arm's rest axis onto the line to
+    // the target. Doing this as a quaternion rather than as Euler angles is
+    // what makes the rest of the solve exact. The Euler version tilted the
+    // upper arm about the PARENT's x axis, which is only perpendicular to the
+    // aim when the target is straight ahead — every other time the hand
+    // landed a few centimetres off the grip, and the support hand, reaching
+    // furthest across the body, was off by ten.
+    const q = this._ikQ.setFromUnitVectors(REST_AXIS, u);
+    // Elbow roll about the aim line. It cannot move the hand: the hand is on
+    // that line, and every point of an axis is fixed by a rotation about it.
+    if (roll) q.premultiply(this._ikQ2.setFromAxisAngle(u, roll));
+    // The bend axis is the arm's own x after aiming, which the construction
+    // above guarantees is perpendicular to the aim.
+    const bend = this._ikB.set(1, 0, 0).applyQuaternion(q);
+
     // Law of cosines on the triangle shoulder-elbow-hand.
     const cosA = (L1 * L1 + cl * cl - L2 * L2) / (2 * L1 * cl);
     const cosT = (L1 * L1 + L2 * L2 - cl * cl) / (2 * L1 * L2);
     const a = Math.acos(Math.min(1, Math.max(-1, cosA)));
     const t = Math.acos(Math.min(1, Math.max(-1, cosT)));
-    arm.rotation.set(b - a, 0, g);
+
+    arm.quaternion.copy(q).premultiply(this._ikQ2.setFromAxisAngle(bend, -a));
     arm.userData.fore.rotation.x = Math.PI - t;
   }
 

@@ -96,6 +96,13 @@ export class LocalPlayer {
     if (!this.weapons.length) this.setLoadout(S.loadout);
     this.state = createMoveState(pos[0], pos[1], pos[2]);
     this.state.yaw = yaw;
+    // The footstep cadence is a distance the state accumulates against a mark
+    // this class keeps. A fresh state starts that distance back at zero, so
+    // leaving the mark where it was means the mark is now hundreds of metres
+    // ahead of the odometer — and no footstep plays until you have walked the
+    // whole match's distance a second time. That is the "footsteps sometimes
+    // make no sound" bug: they went quiet from your first respawn onward.
+    this.stepAccum = this.state.stepDistance;
     // Nothing to interpolate out of across a spawn — the previous tick was on
     // the other side of the map, and blending toward it would fly the camera
     // there over one frame.
@@ -405,6 +412,11 @@ export class LocalPlayer {
     }
     if (st.sliding) { this.stepAccum = st.stepDistance; return; }
     if (!st.grounded || st.speed < 0.4) return;
+    // Reconciliation rewinds stepDistance and replays from the server's
+    // position, which can land it slightly BEHIND the mark when the server
+    // says the path was shorter than predicted. Never let the mark lead the
+    // odometer: it can only ever cost silence.
+    if (this.stepAccum > st.stepDistance) this.stepAccum = st.stepDistance;
     const interval = stepInterval(st);
     if (st.stepDistance - this.stepAccum >= interval) {
       this.stepAccum = st.stepDistance;

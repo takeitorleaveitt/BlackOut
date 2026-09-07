@@ -21,10 +21,86 @@ import { getNavGrid } from './navgrid.js';
 import { EV, SF } from '../protocol.js';
 import {
   MAX_HEALTH, RESPAWN_DELAY_MS, HEAL_DELAY_MS, HEAL_RATE, TEAM, BTN,
-  LAG_COMP_MAX_MS, HISTORY_SECONDS, clamp, mulberry32, lerp
+  LAG_COMP_MAX_MS, clamp, mulberry32, lerp
 } from '../constants.js';
 
 const PHASE = { WARMUP: 'warmup', FREEZE: 'freeze', LIVE: 'live', ROUND_END: 'roundEnd', MATCH_END: 'matchEnd' };
+
+/**
+ * One player's recent positions, for rewinding hitboxes to where the shooter
+ * actually saw them.
+ *
+ * A ring of flat arrays rather than an array of records. The records version
+ * allocated one small object per player per tick — a full lobby is five
+ * hundred short-lived objects a second, straight through the nursery — and
+ * expired the old ones with shift(), which memmoves the entire window on
+ * every tick to drop one entry off the front. Neither cost buys anything: the
+ * window is a fixed size and always has been.
+ *
+ * LEN is in ticks, not seconds, so the only thing that matters is that it
+ * spans LAG_COMP_MAX_MS at whatever rate the sim is stepped. At the server's
+ * 30 Hz it holds three seconds; it would still hold 0.4 s at 240.
+ */
+const HISTORY_LEN = 96;
+
+class History {
+  constructor() {
+    this.t = new Float64Array(HISTORY_LEN);
+    this.x = new Float64Array(HISTORY_LEN);
+    this.y = new Float64Array(HISTORY_LEN);
+    this.z = new Float64Array(HISTORY_LEN);
+    this.yaw = new Float64Array(HISTORY_LEN);
+    this.crouchT = new Float64Array(HISTORY_LEN);
+    this.alive = new Uint8Array(HISTORY_LEN);
+    this.count = 0;      // total ever pushed; the ring holds the last LEN
+  }
+
+  push(t, st, alive) {
+    const i = this.count % HISTORY_LEN;
+    this.t[i] = t;
+    this.x[i] = st.x; this.y[i] = st.y; this.z[i] = st.z;
+    this.yaw[i] = st.yaw; this.crouchT[i] = st.crouchT;
+    this.alive[i] = alive ? 1 : 0;
+    this.count++;
+  }
+
+  /** Where this player was at time `t`, interpolated between two samples. */
+  sample(t) {
+    const n = this.count;
+    const oldest = Math.max(0, n - HISTORY_LEN);
+    for (let k = n - 1; k >= oldest; k--) {
+      const i = k % HISTORY_LEN;
+      if (this.t[i] > t) continue;
+      // `k + 1` is the sample after this one, when there is one; without it
+      // (t is newer than everything we hold) the sample itself is the answer.
+      if (k + 1 < n) {
+        const j = (k + 1) % HISTORY_LEN;
+        const span = this.t[j] - this.t[i];
+        if (span > 0) {
+          const f = clamp((t - this.t[i]) / span, 0, 1);
+          return {
+            x: lerp(this.x[i], this.x[j], f),
+            y: lerp(this.y[i], this.y[j], f),
+            z: lerp(this.z[i], this.z[j], f),
+            yaw: this.yaw[i],
+            crouchT: lerp(this.crouchT[i], this.crouchT[j], f),
+            alive: !!this.alive[i]
+          };
+        }
+      }
+      return this.at(i);
+    }
+    // `t` predates everything we hold: the oldest sample is the best we have.
+    return this.at(oldest % HISTORY_LEN);
+  }
+
+  at(i) {
+    return {
+      x: this.x[i], y: this.y[i], z: this.z[i],
+      yaw: this.yaw[i], crouchT: this.crouchT[i], alive: !!this.alive[i]
+    };
+  }
+}
 
 let nextEntityId = 1;
 
@@ -63,7 +139,6 @@ export class MatchSim {
     this.phase = PHASE.WARMUP;
     this.phaseEnd = 0;
     this.matchEndsAt = 0;
-    this.bomb = null;
     this.rng = mulberry32(opts.seed || (Date.now() & 0xffffffff));
     this.spawnCursor = { 1: 0, 2: 0, ffa: 0 };
     this.started = false;
@@ -109,7 +184,7 @@ export class MatchSim {
       lastDamage: -999,
       lastCmdSeq: 0,
       inputQueue: [],
-      history: [],
+      history: new History(),
       respawnAt: 0,
       kills: 0, deaths: 0, assists: 0, score: 0, streak: 0,
       damageDealt: 0, shotsFired: 0, hits: 0, headshots: 0,
@@ -126,7 +201,6 @@ export class MatchSim {
       nextLoadout: null,
       boughtThisRound: [],
       firing: false, reloading: false, reloadEnd: 0,
-      planting: false, plantProgress: 0,
       lastShotAt: 0,
       joinedAt: this.time
     };
@@ -310,7 +384,6 @@ export class MatchSim {
     p.alive = true;
     p.firing = false;
     p.reloading = false;
-    p.planting = false;
     p.lastDamage = -999;
     // Land on something you are actually holding: with no primary bought,
     // slot 0 is empty and you would spawn holding nothing at all.
@@ -554,14 +627,7 @@ export class MatchSim {
   // -------------------------------------------------------------------------
   recordHistory() {
     const t = this.now();
-    for (const p of this.players.values()) {
-      p.history.push({
-        t, x: p.state.x, y: p.state.y, z: p.state.z,
-        yaw: p.state.yaw, crouchT: p.state.crouchT, alive: p.alive
-      });
-      const cutoff = t - HISTORY_SECONDS * 1000;
-      while (p.history.length && p.history[0].t < cutoff) p.history.shift();
-    }
+    for (const p of this.players.values()) p.history.push(t, p.state, p.alive);
   }
 
   rewoundTargets(shooter, rewindMs) {
@@ -569,26 +635,10 @@ export class MatchSim {
     const out = [];
     for (const p of this.players.values()) {
       if (p.id === shooter.id) continue;
-      let s = null;
       const h = p.history;
-      if (!h.length || rewindMs <= 1) {
-        s = { x: p.state.x, y: p.state.y, z: p.state.z, yaw: p.state.yaw, crouchT: p.state.crouchT, alive: p.alive };
-      } else {
-        for (let i = h.length - 1; i >= 0; i--) {
-          if (h[i].t <= t) {
-            const a = h[i], b = h[i + 1];
-            if (b && b.t > a.t) {
-              const k = clamp((t - a.t) / (b.t - a.t), 0, 1);
-              s = {
-                x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), z: lerp(a.z, b.z, k),
-                yaw: a.yaw, crouchT: lerp(a.crouchT, b.crouchT, k), alive: a.alive
-              };
-            } else s = a;
-            break;
-          }
-        }
-        if (!s) s = h[0];
-      }
+      const s = h.count === 0 || rewindMs <= 1
+        ? { x: p.state.x, y: p.state.y, z: p.state.z, yaw: p.state.yaw, crouchT: p.state.crouchT, alive: p.alive }
+        : h.sample(t);
       out.push({
         id: p.id, x: s.x, y: s.y, z: s.z, yaw: s.yaw,
         height: lerp(1.80, 1.16, s.crouchT), team: p.team, alive: s.alive && p.alive,
@@ -659,7 +709,6 @@ export class MatchSim {
       if (p.state.y < -60) this.kill(p, p, 'torso');
     }
 
-    if (this.modeKey === 'snd') this.tickBomb(dt);
     this.recordHistory();
     return this.takeEvents();
   }
@@ -695,9 +744,8 @@ export class MatchSim {
     const w = p.weapons[p.slot];
     if (!w) return;
     const enemies = this.visibleEnemies(p);
-    const objective = this.bomb && this.bomb.planted ? this.bomb.pos : null;
     const out = p.brain.think(dt, p.state, this.world, enemies, this.map, {
-      ammo: w ? w.ammo : 0, magSize: w ? w.def.magSize : 0, objective, phase: this.phase,
+      ammo: w ? w.ammo : 0, magSize: w ? w.def.magSize : 0, objective: null, phase: this.phase,
       nav: this.nav,
       // Whether pulling the trigger this tick actually produces a round. The
       // brain counts its bursts in bullets, so it has to know.
@@ -790,11 +838,7 @@ export class MatchSim {
         if (p.nextLoadout) { this.setLoadout(p, p.nextLoadout, true); p.nextLoadout = null; }
       }
     }
-    this.bomb = this.modeKey === 'snd'
-      ? { planted: false, carrier: null, pos: null, site: null, timer: 0, defusing: null, defuseProgress: 0 }
-      : null;
     for (const p of this.players.values()) this.respawn(p);
-    // in S&D, alpha attacks
     this.emit(EV.ROUND_START, { round: this.round, freeze: this.options.freezeSec });
   }
 
@@ -818,9 +862,7 @@ export class MatchSim {
         break;
       case PHASE.LIVE:
         if (this.mode.rounds) {
-          if (this.time >= this.phaseEnd && !(this.bomb && this.bomb.planted)) {
-            this.endRound(this.modeKey === 'snd' ? TEAM.BRAVO : this.timeoutWinner(), 'time');
-          }
+          if (this.time >= this.phaseEnd) this.endRound(this.timeoutWinner(), 'time');
         } else if (this.time >= this.matchEndsAt) {
           this.endMatch('time');
         }
@@ -856,11 +898,7 @@ export class MatchSim {
     }
     if (a === 0 && b === 0) this.endRound(TEAM.NONE, 'wipe');
     else if (a === 0) this.endRound(TEAM.BRAVO, 'wipe');
-    else if (b === 0) {
-      // in S&D a planted charge still has to be defused
-      if (this.modeKey === 'snd' && this.bomb && this.bomb.planted) return;
-      this.endRound(TEAM.ALPHA, 'wipe');
-    }
+    else if (b === 0) this.endRound(TEAM.ALPHA, 'wipe');
   }
 
   endRound(winner, reason) {
@@ -913,35 +951,6 @@ export class MatchSim {
     this.emit(EV.MATCH_END, { reason, scores: { ...this.scores }, rounds: { ...this.roundWins }, board });
   }
 
-  // -------------------------------------------------------------------------
-  // Search & Destroy objective
-  // -------------------------------------------------------------------------
-  handlePlant(id, down) {
-    const p = this.players.get(id);
-    if (!p || !p.alive || this.modeKey !== 'snd' || !this.bomb || this.bomb.planted) return;
-    if (p.team !== TEAM.ALPHA) return;
-    const site = this.siteAt(p.state.x, p.state.y, p.state.z);
-    p.planting = !!down && !!site;
-    if (!p.planting) p.plantProgress = 0;
-    else if (p.plantProgress === 0) this.emit(EV.PLANT_START, { p: p.id, site: site.name });
-  }
-
-  handleDefuse(id, down) {
-    const p = this.players.get(id);
-    if (!p || !p.alive || !this.bomb || !this.bomb.planted) return;
-    if (p.team !== TEAM.BRAVO) return;
-    const d = Math.hypot(p.state.x - this.bomb.pos[0], p.state.z - this.bomb.pos[2]);
-    const ok = !!down && d < 2.0;
-    if (ok && this.bomb.defusing !== p.id) {
-      this.bomb.defusing = p.id;
-      this.bomb.defuseProgress = 0;
-      this.emit(EV.DEFUSE_START, { p: p.id });
-    } else if (!ok && this.bomb.defusing === p.id) {
-      this.bomb.defusing = null;
-      this.bomb.defuseProgress = 0;
-    }
-  }
-
   /**
    * Drop a map ping at a world point.
    *
@@ -966,62 +975,6 @@ export class MatchSim {
     this.emit(EV.PING, { p: p.id, t: p.team, x, y, z });
   }
 
-  siteAt(x, y, z) {
-    for (const s of this.map.sites) {
-      if (Math.hypot(x - s.p[0], z - s.p[2]) < s.radius && Math.abs(y - s.p[1]) < 3.5) return s;
-    }
-    return null;
-  }
-
-  tickBomb(dt) {
-    const b = this.bomb;
-    if (!b || this.phase !== PHASE.LIVE) return;
-    if (!b.planted) {
-      for (const p of this.players.values()) {
-        if (!p.alive || !p.planting) continue;
-        const site = this.siteAt(p.state.x, p.state.y, p.state.z);
-        if (!site) { p.planting = false; p.plantProgress = 0; continue; }
-        p.plantProgress += dt;
-        if (p.plantProgress >= this.mode.plantTimeSec) {
-          b.planted = true;
-          b.pos = [p.state.x, p.state.y, p.state.z];
-          b.site = site.name;
-          b.timer = this.mode.bombTimerSec;
-          p.planting = false;
-          p.score += 150;
-          this.phaseEnd = this.time + this.mode.bombTimerSec;
-          this.emit(EV.PLANTED, { p: p.id, site: site.name, pos: round3(b.pos) });
-          break;
-        }
-      }
-      return;
-    }
-    b.timer -= dt;
-    if (b.defusing !== null) {
-      const d = this.players.get(b.defusing);
-      if (!d || !d.alive) { b.defusing = null; b.defuseProgress = 0; }
-      else {
-        b.defuseProgress += dt;
-        if (b.defuseProgress >= this.mode.defuseTimeSec) {
-          d.score += 150;
-          this.emit(EV.DEFUSED, { p: d.id });
-          this.endRound(TEAM.BRAVO, 'defused');
-          return;
-        }
-      }
-    }
-    if (b.timer <= 0) {
-      this.emit(EV.BOMB_TICK, { detonated: 1, pos: round3(b.pos) });
-      // everyone near the charge dies
-      for (const p of this.players.values()) {
-        if (!p.alive) continue;
-        const d = Math.hypot(p.state.x - b.pos[0], p.state.z - b.pos[2]);
-        if (d < 9) { p.alive = false; p.health = 0; p.deaths++; }
-      }
-      this.endRound(TEAM.ALPHA, 'detonated');
-    }
-  }
-
   // -------------------------------------------------------------------------
   // views
   // -------------------------------------------------------------------------
@@ -1040,7 +993,6 @@ export class MatchSim {
     if (st.walking) f |= SF.WALK;
     if (st.speed > 0.4) f |= SF.MOVING;
     if (p.bot) f |= SF.BOT;
-    if (p.planting) f |= SF.PLANTING;
     return f;
   }
 
@@ -1120,11 +1072,6 @@ export class MatchSim {
       economy: this.economy || undefined,
       buyEndsAt: this.economy && this.phase === PHASE.FREEZE
         ? Math.max(0, Math.round(this.phaseEnd - this.time)) : undefined,
-      bomb: this.bomb ? {
-        planted: this.bomb.planted, site: this.bomb.site,
-        timer: Math.max(0, Math.round(this.bomb.timer)),
-        pos: this.bomb.pos, defusing: this.bomb.defusing !== null
-      } : null,
       board: this.scoreboard()
     };
   }

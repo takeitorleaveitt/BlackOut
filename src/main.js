@@ -138,7 +138,6 @@ class Game {
     bus.on('input:key', (code, down) => {
       if (!down) {
         if (code === S.binds.scoreboard) this.setScoreboard(false);
-        if (code === S.binds.use) this.net?.sendEvent(this.matchState?.mode === 'snd' ? 'plant' : 'plant', { down: false });
         return;
       }
       if (code === 'Escape') { this.onEscape(); return; }
@@ -149,11 +148,6 @@ class Game {
       }
       if (this.mode !== 'match' || this.paused) return;
       if (code === S.binds.scoreboard) { this.setScoreboard(true); return; }
-      if (code === S.binds.use) {
-        this.net?.sendEvent('plant', { down: true });
-        this.net?.sendEvent('defuse', { down: true });
-        return;
-      }
       if (code === S.binds.ping) { this.dropPing(); return; }
       this.player.handleKey(code, true, this.input);
     });
@@ -1293,27 +1287,11 @@ class Game {
           break;
         case EV.ROUND_START:
           bus.emit('hud:center', 'ROUND ' + ev.round, 'GET READY', 3);
-          this.hud.setObjective('');
           // Last round's callouts are not this round's. A mark stays put for
           // as long as it is useful, and it stops being useful here.
           this.pings.clear();
           break;
         case EV.ROUND_END: this.onRoundEnd(ev); break;
-        case EV.PLANTED:
-          bus.emit('hud:center', 'CHARGE PLANTED', 'SITE ' + ev.site, 3);
-          this.hud.setObjective('CHARGE ARMED — SITE ' + ev.site);
-          break;
-        case EV.DEFUSED:
-          bus.emit('hud:center', 'CHARGE DEFUSED', '', 3);
-          this.hud.setObjective('');
-          break;
-        case EV.BOMB_TICK:
-          if (ev.detonated) {
-            this.hud.flashScreen(0.9);
-            this.player.rig.addShake(3);
-            audio.impact('metal', ev.pos, 1.6);
-          }
-          break;
         case EV.PING: this.onPing(ev); break;
         case EV.MATCH_END: break;
         default: break;
@@ -1415,7 +1393,6 @@ class Game {
     bus.emit('hud:center',
       ev.winner === 0 ? 'ROUND DRAW' : won ? 'ROUND WON' : 'ROUND LOST',
       `${ev.a} — ${ev.b}`, 4.5);
-    this.hud.setObjective('');
   }
 
   // -------------------------------------------------------------------------
@@ -1475,9 +1452,26 @@ class Game {
     cam.updateProjectionMatrix();
   }
 
+  /**
+   * Tell the post chain whether its weapon pass has anything to draw.
+   *
+   * That pass is a second full RenderPass with clearDepth set, so it costs a
+   * render-target bind and a full-screen depth clear whether or not a weapon
+   * is in it — and it is empty a lot: every menu frame, every frame you spend
+   * dead on the free camera, and every frame with the gun stowed. The one
+   * thing that is NOT "am I in a match" is the loadout preview, which floats
+   * its weapon in this same scene.
+   */
+  updateViewmodelPass() {
+    this.viewmodel.scene.userData.drawing = this.mode !== 'match'
+      ? !!this.previewGroup
+      : !this.freeCam && this.viewmodel.visible && this.player.alive;
+  }
+
   // -------------------------------------------------------------------------
   update(dt, time) {
     this.updateCameraFov();
+    this.updateViewmodelPass();
     if (this.mode === 'menu') {
       if (this.menuCamActive !== false) this.updateMenuCamera(dt);
       this.worldRenderer.update(dt, time, this.engine.camera.position);
@@ -1561,9 +1555,6 @@ class Game {
         this.hud.scoreLine.children[2].textContent = String(s[2] ?? 0);
       }
       this.hud.modeLabel.textContent = `${this.matchState.modeName} · ${this.matchState.mapName}`;
-      if (this.matchState.bomb?.planted) {
-        this.hud.setObjective(`CHARGE ARMED · ${this.matchState.bomb.timer}s`);
-      }
     }
   }
 

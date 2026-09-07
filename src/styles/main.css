@@ -768,9 +768,6 @@ select:focus, input:focus { border-color: var(--line-hot); }
 .center-msg .big { font: 300 30px/1.2 var(--sans); letter-spacing: 0.3em; text-transform: uppercase; }
 .center-msg .small { font: 10px/1.8 var(--mono); letter-spacing: 0.24em; color: var(--ink-dim); margin-top: 10px; text-transform: uppercase; }
 
-.obj-banner { position: absolute; left: 50%; top: 100px; transform: translateX(-50%); text-align: center; font: 11px/1.6 var(--mono); letter-spacing: 0.24em; color: var(--warn); text-transform: uppercase; }
-.plant-bar { width: 220px; height: 3px; background: rgba(255,255,255,0.14); margin: 8px auto 0; }
-.plant-bar i { display: block; height: 100%; background: var(--warn); }
 
 #scoreboard {
   position: absolute; inset: 0; display: grid; place-items: center;
@@ -1004,10 +1001,10 @@ input[type=range]::-moz-range-thumb {
 
 /* ---------- bars ---------- */
 /* Thin, flat, unsegmented — a stat readout, not a power meter. */
-.bar, .end-xp .bar, .op-xp, .health-bar, .plant-bar, .boot-bar {
+.bar, .end-xp .bar, .op-xp, .health-bar, .boot-bar {
   border-radius: 0; background: var(--panel-3); box-shadow: none; overflow: hidden;
 }
-.bar i, .end-xp .bar i, .op-xp i, .health-bar i, .plant-bar i, .boot-bar i {
+.bar i, .end-xp .bar i, .op-xp i, .health-bar i, .boot-bar i {
   background: var(--accent); box-shadow: none;
   -webkit-mask: none; mask: none;
 }
@@ -1196,11 +1193,11 @@ h3.sec::before { top: 6px; bottom: 6px; height: auto; }
 
 /* ---------- bars ---------- */
 /* A fill lit from above, and a hairline sheen along its top edge. */
-.bar, .end-xp .bar, .op-xp, .health-bar, .plant-bar, .boot-bar {
+.bar, .end-xp .bar, .op-xp, .health-bar, .boot-bar {
   background: linear-gradient(180deg, #1c1c1c, #2c2c2c);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.55);
 }
-.bar i, .end-xp .bar i, .op-xp i, .plant-bar i, .boot-bar i {
+.bar i, .end-xp .bar i, .op-xp i, .boot-bar i {
   background: linear-gradient(180deg, #ff9455 0%, var(--accent) 55%, #cf5a1c 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }

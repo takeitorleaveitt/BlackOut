@@ -28,14 +28,6 @@ export const MODES = {
     roundsToWin: 7, roundTimeSec: 150, freezeSec: 6, maxPlayers: 10, minPlayers: 2,
     friendlyFireDefault: true
   },
-  snd: {
-    key: 'snd', name: 'Search & Destroy', short: 'S&D',
-    desc: 'Attackers carry the charge to A or B. Defenders hold, or cut the wires in time.',
-    teams: true, respawn: false, rounds: true, objective: true,
-    roundsToWin: 7, roundTimeSec: 165, freezeSec: 8, bombTimerSec: 45,
-    plantTimeSec: 4.0, defuseTimeSec: 7.0, maxPlayers: 10, minPlayers: 2,
-    friendlyFireDefault: true, switchSidesAt: 6
-  },
 };
 
 export const MODE_LIST = Object.values(MODES);
@@ -84,12 +76,12 @@ export function mapsForPlaylist(playlistKey, modeKey, allMaps) {
 export const PLAYLIST_LIST = Object.values(PLAYLISTS);
 
 /**
- * The modes a player can PICK. Free For All is not one of them any more — it
- * had no playlist behind it and every lobby it produced was bots — but the
- * mode itself stays implemented below, because Training and the offline
- * bootstrap still run on it.
+ * The modes you can pick in a private match or in training. This is every
+ * implemented mode — Free For All included: it has no matchmaking playlist
+ * behind it, because a public FFA lobby was always bots, but picking it for
+ * your own room or against the training bots is exactly what it is for.
  */
-export const PICKABLE_MODES = MODE_LIST.filter((m) => m.key !== 'ffa');
+export const PICKABLE_MODES = MODE_LIST;
 
 export const REGIONS = [
   { key: 'eu-west', name: 'EU West', city: 'Frankfurt' },

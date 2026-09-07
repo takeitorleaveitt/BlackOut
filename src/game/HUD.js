@@ -95,8 +95,6 @@ export class HUD {
     this.dmgWrap = el('div.dmg-dirs');
     this.center = el('div.center-msg', { style: { display: 'none' } },
       el('div.big', ''), el('div.small', ''));
-    this.objective = el('div.obj-banner', { style: { display: 'none' } });
-    this.plantBar = el('div.plant-bar', { style: { display: 'none' } }, el('i'));
     this.hurtVig = el('div.hurt-vig');
     this.flash = el('div.flash-overlay');
     this.leanInd = el('div.lean-ind', 'LEAN');
@@ -128,8 +126,6 @@ export class HUD {
     r.appendChild(this.tr);
     r.appendChild(this.killfeed);
     r.appendChild(this.dmgWrap);
-    r.appendChild(this.objective);
-    r.appendChild(this.plantBar);
     r.appendChild(this.center);
     r.appendChild(this.prompt);
     r.appendChild(this.hurtVig);
@@ -145,7 +141,6 @@ export class HUD {
     bus.on('hud:hit', (killed) => this.hitMarker(killed));
     bus.on('hud:kill', (feed) => this.addKillfeed(feed));
     bus.on('hud:center', (big, small, time) => this.centerMessage(big, small, time));
-    bus.on('hud:objective', (text) => this.setObjective(text));
   }
 
   /**
@@ -245,16 +240,6 @@ export class HUD {
     this.center.children[0].textContent = big || '';
     this.center.children[1].textContent = small || '';
     this.centerT = time;
-  }
-
-  setObjective(text) {
-    this.objective.style.display = text ? 'block' : 'none';
-    this.objective.textContent = text || '';
-  }
-
-  setPlantProgress(p) {
-    this.plantBar.style.display = p > 0 ? 'block' : 'none';
-    this.plantBar.firstChild.style.width = `${clamp(p, 0, 1) * 100}%`;
   }
 
   flashScreen(amount = 0.5) { this.flashT = amount; }

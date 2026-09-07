@@ -20,7 +20,6 @@ export const MAX_INPUTS_PER_PACKET = 12;
 // player's visible position.
 export const INTERP_DELAY_MS = 70;            // remote entity render delay
 export const LAG_COMP_MAX_MS = 260;           // how far back the server will rewind hitboxes
-export const HISTORY_SECONDS = 1.0;
 
 // --- player dimensions (metres) ---
 export const PLAYER_RADIUS = 0.34;

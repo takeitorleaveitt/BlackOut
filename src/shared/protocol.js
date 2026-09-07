@@ -33,8 +33,6 @@ export const MSG = {
   SHOT: 'shot',              // client -> server: a round left the muzzle
   RELOAD: 'reload',
   SWITCH: 'switch',
-  PLANT: 'plant',
-  DEFUSE: 'defuse',
   RESPAWN: 'respawn'
 };
 
@@ -52,15 +50,14 @@ export const EV = {
   LAND: 10,
   FOOTSTEP: 11,
   SPAWN: 12,
-  PLANT_START: 13,
-  PLANTED: 14,
-  DEFUSE_START: 15,
-  DEFUSED: 16,
+  // 13-16 and 20 were the Search & Destroy charge (plant start, planted,
+  // defuse start, defused, timer tick). The mode is gone; the ids stay retired
+  // rather than reused, so an old client that still knows them can only ever
+  // see events it will never be sent.
   ROUND_START: 17,
   ECONOMY: 30,
   ROUND_END: 18,
   MATCH_END: 19,
-  BOMB_TICK: 20,
   MELEE: 21,
   // A map ping. `t` is the pinging player's team, and the client only draws
   // pings from its own side — the whole point is that it is squad comms.
@@ -80,8 +77,7 @@ export const SF = {
   LEAN_R: 1 << 8,
   WALK: 1 << 9,
   MOVING: 1 << 10,
-  BOT: 1 << 11,
-  PLANTING: 1 << 12
+  BOT: 1 << 11
 };
 
 const PI = Math.PI;

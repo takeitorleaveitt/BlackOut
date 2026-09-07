@@ -101,14 +101,7 @@ export class World {
     out.length = 0;
     const ix0 = Math.floor(minX / CELL), ix1 = Math.floor(maxX / CELL);
     const iz0 = Math.floor(minZ / CELL), iz1 = Math.floor(maxZ / CELL);
-    let stamp = this._stamp;
-    if (!stamp || stamp.length < this.colliders.length) {
-      // Grow with headroom; brushes can be added after construction.
-      stamp = this._stamp = new Int32Array(Math.max(64, this.colliders.length * 2));
-      this._gen = 0;
-    }
-    // Int32Array wraps at 2^31; restart the stamps rather than alias them.
-    if (++this._gen >= 0x7fffffff) { stamp.fill(0); this._gen = 1; }
+    const stamp = this.newStamp();
     const gen = this._gen;
     for (let ix = ix0; ix <= ix1; ix++) {
       for (let iz = iz0; iz <= iz1; iz++) {
@@ -126,6 +119,75 @@ export class World {
     return out;
   }
 
+  /** A fresh de-dup generation. See query() for why it is stamps and not a Set. */
+  newStamp() {
+    let stamp = this._stamp;
+    if (!stamp || stamp.length < this.colliders.length) {
+      // Grow with headroom; brushes can be added after construction.
+      stamp = this._stamp = new Int32Array(Math.max(64, this.colliders.length * 2));
+      this._gen = 0;
+    }
+    // Int32Array wraps at 2^31; restart the stamps rather than alias them.
+    if (++this._gen >= 0x7fffffff) { stamp.fill(0); this._gen = 1; }
+    return stamp;
+  }
+
+  /**
+   * Colliders along a ray, walked cell by cell.
+   *
+   * The obvious thing — take the ray's bounding rectangle and hand it to
+   * query() — is what this used to do, and it is quadratic in the ray's
+   * length: a 100 m diagonal shot across District 9 covers a 17x17 block of
+   * six-metre cells, so 289 cell lookups and every collider in all of them,
+   * to test a line that actually passes through about 25 of those cells. Bot
+   * line-of-sight runs this for every bot against every enemy it can hear or
+   * see, several times a second, which is why the broadphase was the single
+   * most expensive thing in the simulation.
+   *
+   * A DDA walk (Amanatides & Woo, in XZ only) visits exactly the cells the
+   * line crosses. It cannot miss a hit: if the ray strikes a collider, the
+   * strike point lies inside that collider's XZ footprint AND on the line, so
+   * the cell containing it is both crossed by the walk and one of the cells
+   * the collider was registered into.
+   */
+  queryRay(ox, oz, dx, dz, maxDist, minX, minZ, maxX, maxZ, out = []) {
+    out.length = 0;
+    const stamp = this.newStamp();
+    const gen = this._gen;
+    let ix = Math.floor(ox / CELL), iz = Math.floor(oz / CELL);
+    const stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    const stepZ = dz > 0 ? 1 : dz < 0 ? -1 : 0;
+    const adx = Math.abs(dx), adz = Math.abs(dz);
+    // Distance along the ray to the first cell boundary on each axis, and the
+    // distance between boundaries after that. A ray with no horizontal
+    // component at all (straight up or down) never leaves its own cell, and
+    // Infinity is exactly the right answer for it.
+    const tDeltaX = stepX ? CELL / adx : Infinity;
+    const tDeltaZ = stepZ ? CELL / adz : Infinity;
+    let tMaxX = stepX ? (stepX > 0 ? (ix + 1) * CELL - ox : ox - ix * CELL) / adx : Infinity;
+    let tMaxZ = stepZ ? (stepZ > 0 ? (iz + 1) * CELL - oz : oz - iz * CELL) / adz : Infinity;
+    for (let guard = 0; guard < 4096; guard++) {
+      const arr = this.grid.get(key(ix, iz));
+      if (arr) {
+        for (let i = 0; i < arr.length; i++) {
+          const c = arr[i];
+          if (stamp[c.index] === gen) continue;
+          stamp[c.index] = gen;
+          if (c.maxX < minX || c.minX > maxX || c.maxZ < minZ || c.minZ > maxZ) continue;
+          out.push(c);
+        }
+      }
+      if (tMaxX < tMaxZ) {
+        if (tMaxX > maxDist) break;
+        ix += stepX; tMaxX += tDeltaX;
+      } else {
+        if (tMaxZ > maxDist) break;
+        iz += stepZ; tMaxZ += tDeltaZ;
+      }
+    }
+    return out;
+  }
+
   /**
    * Ray vs world. Returns the nearest hit, or null.
    * `filter` may reject colliders (used to skip glass we already broke, etc).
@@ -135,7 +197,8 @@ export class World {
     const maxX = Math.max(ox, ox + dx * maxDist) + 0.5;
     const minZ = Math.min(oz, oz + dz * maxDist) - 0.5;
     const maxZ = Math.max(oz, oz + dz * maxDist) + 0.5;
-    const cands = this.query(minX, minZ, maxX, maxZ, this._rcOut || (this._rcOut = []));
+    const cands = this.queryRay(ox, oz, dx, dz, maxDist, minX, minZ, maxX, maxZ,
+      this._rcOut || (this._rcOut = []));
     let best = null;
     const lo = [0, 0, 0], ld = [0, 0];
     for (let i = 0; i < cands.length; i++) {

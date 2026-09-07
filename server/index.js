@@ -92,7 +92,6 @@ function seedPublicRooms() {
     ['tdm', 'refinery', 'na-east', 8],
     ['ffa', 'killhouse', 'eu-north', 6],
     ['elimination', 'suburb', 'eu-west', 5],
-    ['snd', 'refinery', 'na-west', 6],
     ['tdm', 'suburb', 'ap-se', 6],
     ['ffa', 'warehouse', 'oce', 5]
   ];
@@ -415,12 +414,6 @@ function handle(client, msg) {
       break;
     case 'switch':
       client.room?.sim.handleSwitch(client.id, msg.slot | 0);
-      break;
-    case 'plant':
-      client.room?.sim.handlePlant(client.id, !!msg.down);
-      break;
-    case 'defuse':
-      client.room?.sim.handleDefuse(client.id, !!msg.down);
       break;
     // Map ping. Named 'mark' rather than 'ping' because 'ping' is already the
     // RTT probe on this socket.

@@ -72,6 +72,10 @@ export class Engine {
     this.running = false;
     this.time = 0;
     this.renderScale = S.renderScale;
+    // The frame-timing singleton, reachable from the engine so anything that
+    // wants to read it gets the object the render loop actually drives.
+    this.perf = perf;
+    this.applyFrameBudget();
     this.postCtx = {};
     this._accum = 0;
 
@@ -120,10 +124,25 @@ export class Engine {
       this.onResize();
       this.postfx.build();
     }
+    if (['fpsCap', 'preset', '*'].includes(key)) this.applyFrameBudget();
     if (['bodycam', 'filmGrain', 'chromatic', 'lensDistortion', 'compression', 'lensFlare',
       'vignette', 'exposure', 'brightness', 'preset'].includes(key) || key === '*') {
       this.postfx.applySettings();
     }
+  }
+
+  /**
+   * How long one frame is allowed to take, which is what the adaptive scaler
+   * measures itself against.
+   *
+   * The FPS limit is a ceiling the player asked for, not a target to chase
+   * with image quality: a 144 cap does not mean "go to 55% resolution trying
+   * for 144". So the target is the cap clamped into 30..90 — cap at 30 and
+   * the budget relaxes to 33 ms and the picture gets sharper; cap high, or
+   * not at all, and we defend 60-90 and stop there.
+   */
+  applyFrameBudget() {
+    perf.budgetMs = 1000 / clamp(S.fpsCap > 0 ? S.fpsCap : 60, 30, 90);
   }
 
   onResize() {
@@ -236,8 +255,14 @@ export class Engine {
     this.postfx.render();
     perf.drawCalls = this.renderer.info.render.calls;
     perf.triangles = this.renderer.info.render.triangles;
+    perf.endFrame();
 
-    const suggest = perf.suggestScale(this.renderScale, dt);
+    // The player's Render scale slider is the ceiling; the scaler may back off
+    // from it when the machine cannot hold the frame budget, and climbs back
+    // to it when it can. It used to be switched off entirely — nothing ever
+    // set adaptive.enabled — so a machine that could not hold 60 simply did
+    // not hold 60.
+    const suggest = perf.suggestScale(this.renderScale, dt, S.renderScale);
     if (suggest) {
       this.renderScale = suggest;
       this.onResize();

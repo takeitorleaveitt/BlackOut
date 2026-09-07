@@ -136,6 +136,12 @@ export class PostFX {
 
   /** Per-frame driving values from the camera rig and player state. */
   update(dt, ctx = {}) {
+    // Skip the weapon pass on frames with no weapon in it (see ViewModel).
+    // EffectComposer honours `enabled`, so a disabled pass costs nothing at
+    // all — not the render-target bind, not the depth clear.
+    if (this.viewmodelPass) {
+      this.viewmodelPass.enabled = this.viewmodelScene.userData.drawing !== false;
+    }
     const t = performance.now() / 1000;
     const u = this.bodycam.uniforms;
     u.uTime.value = t;
