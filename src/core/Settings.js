@@ -46,6 +46,7 @@ const DEFAULTS = {
   // profile
   name: '',
   nameChangedAt: 0,      // last accepted callsign change (one per day)
+  squadOpen: true,       // is the squad roster folded down under the op card
   // graphics — first-run default is the "low" preset (so a fresh install
   // never opens into a stutter on weak hardware) but with render scale
   // pushed to full resolution, since that's cheap on its own and the

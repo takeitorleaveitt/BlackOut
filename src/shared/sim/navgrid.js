@@ -55,6 +55,8 @@ const MAX_RISE = 0.95;
 // Refinery ran out of budget and came back as "unreachable" on a graph where
 // they plainly were not.
 const MAX_EXPANSIONS = 40000;
+// See heuristic(): >1 trades a slightly longer route for a much smaller search.
+const HEURISTIC_WEIGHT = 1.30;
 // How far off a requested height a node may be and still count as "the same
 // floor" when resolving a world point onto the grid.
 const SAME_FLOOR = 1.2;
@@ -125,6 +127,7 @@ export class NavGrid {
     // of a simulation tick once bots were pathing across a 17,000-node map.
     this.open = new Int32Array(this.nodes.length + 1);
     this.openN = 0;
+    this.buildComponents();
   }
 
   colIndex(ix, iz) { return iz * this.nx + ix; }
@@ -276,8 +279,53 @@ export class NavGrid {
     const dx = Math.abs(a.x - b.x), dz = Math.abs(a.z - b.z);
     // Octile: exact for 8-connected movement, so A* expands far fewer nodes
     // than it would on a straight Euclidean estimate.
+    //
+    // Then WEIGHTED by W. An admissible heuristic guarantees the shortest
+    // path and pays for it by expanding a large frontier in every direction;
+    // scaling it above 1 makes the search commit toward the goal much
+    // earlier, in exchange for a path that can be up to (W-1) longer than
+    // optimal. Nothing here needs an optimal route — these are bots walking
+    // to a point on a map — and a route a few per cent longer is invisible
+    // next to the cost of finding it. This is the single biggest lever on
+    // pathfinding time in the whole simulation.
     const lo = Math.min(dx, dz), hi = Math.max(dx, dz);
-    return hi + 0.4142 * lo + Math.abs(a.y - b.y) * 0.5;
+    return (hi + 0.4142 * lo + Math.abs(a.y - b.y) * 0.5) * HEURISTIC_WEIGHT;
+  }
+
+  /**
+   * Weakly-connected components, by union-find over every edge treated as
+   * undirected. Built once.
+   *
+   * This is a REJECTION test and only a rejection test. Edges here are
+   * directed — a drop you can fall down but not climb is one-way — so two
+   * nodes sharing a component does NOT mean a path runs between them, and
+   * findPath still has to do the work. But a directed path is also an
+   * undirected one, so nodes in DIFFERENT components provably have no path
+   * either way, and that is the case worth catching: a failed A* is the
+   * expensive one, expanding until it exhausts the component or hits the
+   * expansion cap. Bots ask for unreachable destinations routinely — a point
+   * picked at random lands on a roof or inside a sealed pocket — and each of
+   * those used to cost a full exhaustive search, three times over per
+   * retarget.
+   */
+  buildComponents() {
+    const n = this.nodes.length;
+    const parent = new Int32Array(n);
+    for (let i = 0; i < n; i++) parent[i] = i;
+    const find = (a) => {
+      let r = a;
+      while (parent[r] !== r) r = parent[r];
+      while (parent[a] !== r) { const nx = parent[a]; parent[a] = r; a = nx; }
+      return r;
+    };
+    for (let i = 0; i < n; i++) {
+      for (const e of this.nodes[i].edges) {
+        const ra = find(i), rb = find(e.id);
+        if (ra !== rb) parent[ra] = rb;
+      }
+    }
+    this.comp = new Int32Array(n);
+    for (let i = 0; i < n; i++) this.comp[i] = find(i);
   }
 
   /**
@@ -289,6 +337,8 @@ export class NavGrid {
     const goal = this.nodeAt(tx, ty, tz);
     if (start < 0 || goal < 0) return null;
     if (start === goal) return [{ x: tx, y: ty, z: tz }];
+    // Provably unreachable: skip the search entirely. See buildComponents.
+    if (this.comp[start] !== this.comp[goal]) return null;
 
     const id = ++this.searchId;
     const { g, f, from, stamp, closed, nodes } = this;

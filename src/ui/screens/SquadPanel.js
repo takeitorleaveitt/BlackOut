@@ -3,6 +3,7 @@
 // profile, and the squad is the thing you deploy with.
 
 import { el, clear, button } from '../UI.js';
+import { settings } from '../../core/Settings.js';
 import { audio } from '../../audio/AudioEngine.js';
 import { S } from '../../core/Settings.js';
 import { account } from '../../core/Account.js';
@@ -24,13 +25,25 @@ export function createSquadPanel(game, ui) {
   const lvlNode = el('div.op-level', el('span', 'LEVEL '), lvlNum);
   const xpBar = el('div.op-xp', xpFill);
 
+  // The chevron that folds the squad away. It lives INSIDE the operator card,
+  // which is itself a button into the profile, so its click has to stop
+  // propagating — otherwise collapsing the roster would also navigate you off
+  // the menu, which is the obvious way to get this wrong.
+  const caret = el('button.op-caret', {
+    type: 'button',
+    title: 'Show or hide your squad',
+    onclick: (e) => { e.stopPropagation(); toggleSquad(); },
+    onmouseenter: () => audio.ui('hover')
+  }, el('i'));
+
   const card = el('div.op-card', {
     onclick: () => { audio.ui('accept'); ui.show('profile'); },
     onmouseenter: () => audio.ui('hover'),
     title: 'View your profile and stats'
   },
     portrait,
-    el('div.op-meta', nameNode, lvlNode, xpBar, el('div.op-hint', 'VIEW STATS')));
+    el('div.op-meta', nameNode, lvlNode, xpBar, el('div.op-hint', 'VIEW STATS')),
+    caret);
 
   const slotRow = el('div.squad-slots');
   const countNode = el('span.squad-count', '1/4');
@@ -58,7 +71,34 @@ export function createSquadPanel(game, ui) {
         button('INVITE', doInvite, { cls: 'sm' }),
         leaveBtn)));
 
-  const node = el('div.op-block', card, panel);
+  // The panel is wrapped in a grid row that animates from 1fr to 0fr. That is
+  // the one way to transition to a element's NATURAL height in plain CSS —
+  // max-height has to guess a ceiling, and measuring scrollHeight in JS goes
+  // stale the moment the roster changes size.
+  const collapser = el('div.squad-collapse', el('div.squad-collapse-inner', panel));
+  const node = el('div.op-block', card, collapser);
+
+  function applySquadOpen(open, animate) {
+    node.classList.toggle('squad-closed', !open);
+    // Skip the transition when restoring the saved state on first paint:
+    // the panel should already be folded when the menu appears, not fold
+    // itself in front of you every time you open the game.
+    if (!animate) {
+      node.classList.add('no-anim');
+      // two frames, because one is not enough to guarantee the class landed
+      // before the transition property is restored
+      requestAnimationFrame(() => requestAnimationFrame(() => node.classList.remove('no-anim')));
+    }
+    caret.setAttribute('aria-expanded', String(open));
+    caret.title = open ? 'Hide your squad' : 'Show your squad';
+  }
+
+  function toggleSquad() {
+    const open = node.classList.contains('squad-closed');
+    audio.ui(open ? 'accept' : 'back');
+    settings.set('squadOpen', open);
+    applySquadOpen(open, true);
+  }
 
   function refresh() {
     nameNode.textContent = S.name;
@@ -132,6 +172,7 @@ export function createSquadPanel(game, ui) {
       unsubAccount = bus.on('account:changed', () => refresh());
       // Connect quietly so invites can reach us while sat in the menu.
       game.connectForSquad();
+      applySquadOpen(S.squadOpen !== false, false);
       refresh();
     },
     detach() { unsub?.(); unsub = null; unsubAccount?.(); unsubAccount = null; }

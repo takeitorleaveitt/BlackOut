@@ -4,41 +4,45 @@
    ========================================================================== */
 
 :root {
-  /* Holographic projection, not painted plate: everything is drawn in one
-     cyan on near-black, and depth comes from glow rather than from fill.
-     --accent-rgb exists so the dozens of translucent accent washes across
-     this file can all be written against the same colour. */
-  --accent-rgb: 56, 189, 248;
+  /* Flat, dense, neutral. Panels are opaque plates in a narrow band of
+     greys, separated by hairlines rather than by glow, and exactly one
+     colour in the whole interface is warm — the orange that marks the thing
+     you are about to do. --accent-rgb exists so every translucent accent
+     wash in this file resolves against the same colour. */
+  --accent-rgb: 239, 108, 42;
   --accent: rgb(var(--accent-rgb));
-  --accent-dim: #2f92c6;
-  --accent-hot: #9be3ff;
-  --bg: #01060d;
-  --bg-2: #04121c;
-  --panel: rgba(3, 16, 27, 0.80);
-  --panel-2: rgba(7, 27, 44, 0.90);
-  --line: rgba(var(--accent-rgb), 0.28);
-  --line-hot: rgba(var(--accent-rgb), 0.85);
-  --ink: #cfe8f7;
-  --ink-dim: #7ea6bd;
-  --ink-faint: #4a6d80;
-  --danger: #ff5a49;
-  --warn: #ffc257;
-  --alpha: #57b6ff;
-  --bravo: #ff8a4c;
+  --accent-dim: #b8501f;
+  --accent-hot: #ff8a4a;
+
+  --bg: #141414;
+  --bg-2: #1b1b1b;
+  --panel: #202020;          /* the plate everything sits on */
+  --panel-2: #2a2a2a;        /* raised: hover, open column, filled cell */
+  --panel-3: #333333;        /* selected */
+  --line: #383838;           /* the hairline between plates */
+  --line-hot: #5c5c5c;
+
+  --ink: #e4e4e4;
+  --ink-dim: #9a9a9a;
+  --ink-faint: #6a6a6a;
+
+  --danger: #e05a4a;
+  --warn: #e8c24a;
+  --good: #7ec96b;
+  --alpha: #5aa9e6;
+  --bravo: #e08a4c;
+
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   --sans: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  /* Rounded, because a hologram is drawn by a beam that cannot turn a sharp
-     corner. --cut is a radius now; the name is kept so every rule that
-     already refers to it comes along. */
-  --cut: 14px;
-  --cut-sm: 10px;
-  /* The three glows: an outline that bleeds outward, an inner haze that
-     suggests volume, and the text bloom. */
-  --glow: 0 0 10px rgba(var(--accent-rgb), 0.22), 0 0 26px rgba(var(--accent-rgb), 0.10);
-  --glow-hot: 0 0 12px rgba(var(--accent-rgb), 0.50), 0 0 34px rgba(var(--accent-rgb), 0.22);
-  --glow-in: inset 0 0 18px rgba(var(--accent-rgb), 0.06);
-  --text-glow: 0 0 8px rgba(var(--accent-rgb), 0.45);
+  /* Corners are square. A 2px softening is as far as this look goes; it is a
+     tool, not a hologram, and it is not a rounded card either. */
+  --cut: 2px;
+  --cut-sm: 2px;
+  --glow: none;
+  --glow-hot: none;
+  --glow-in: none;
+  --text-glow: none;
 }
 
 * { box-sizing: border-box; }
@@ -802,245 +806,548 @@ select:focus, input:focus { border-color: var(--line-hot); }
 .divider { height: 1px; background: var(--line); margin: 22px 0; }
 
 /* ==========================================================================
-   HOLOGRAPHIC SHELL
-   The interface is a projection: one cyan on near-black, every panel a
-   rounded outline that bleeds light outward, nothing filled with a solid
-   colour. Depth comes from three glows — an outer bloom on the border, a
-   faint inner haze that gives the panel volume, and a text glow — rather
-   than from opaque plates stacked on each other. These rules come last so
-   they override the plate-steel treatment above wherever the two disagree.
+   TACTICAL SHELL
+   Flat plates in a narrow band of greys, separated by hairlines. No glow,
+   no rounding, no gradients doing work that a border should do. Density is
+   the point: small type, tight padding, a lot on screen at once, and one
+   warm colour reserved for the thing you are about to do. These rules come
+   last so they win wherever the older treatment disagrees.
    ========================================================================== */
 
-html, body { background: #01060d; }
+html, body { background: var(--bg); }
+#ui-root::before { content: none; }
 
-/* A cold blue wash behind everything, so panels sit in light rather than on
-   flat black. */
-#ui-root::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background:
-    radial-gradient(ellipse 70% 55% at 50% 42%, rgba(var(--accent-rgb), 0.07), transparent 70%),
-    radial-gradient(ellipse at center, transparent 55%, rgba(0, 4, 10, 0.75) 100%);
+/* ---------- plates ---------- */
+.card, .buy-panel, .squad-panel, .op-card, .wpn-row, .att, .toast, .keybind,
+.buy-item, .sb-wrap, .roomcode, .pl-row, .buy-col, .menu-item {
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
 }
-
-/* ---------- panels ---------- */
-.card, .buy-panel, .squad-panel, .op-card, .wpn-row, .att, .toast,
-.keybind, .buy-item, .sb-wrap, .roomcode, .pl-row, .buy-col {
-  border-color: var(--line);
-  box-shadow: var(--glow), var(--glow-in);
-}
-.op-card, .wpn-row, .att, .toast, .pl-row, .keybind, .roomcode, .buy-item {
-  border-radius: var(--cut-sm);
-}
-.sb-wrap, .buy-col { border-radius: var(--cut); }
+.card::before, .buy-panel::before, .squad-panel::before, .sb-wrap::before { content: none; }
 .card:hover, .op-card:hover, .wpn-row:hover, .att:hover, .keybind:hover,
-.buy-item:hover, .squad-slot.empty:hover {
-  box-shadow: var(--glow-hot), var(--glow-in);
+.buy-item:hover, .menu-item:hover {
+  background: var(--panel-2);
+  border-color: var(--line-hot);
+  box-shadow: none;
+  transform: none;
 }
-.card.sel, .wpn-row.sel, .att.on {
-  box-shadow: var(--glow-hot), inset 0 0 22px rgba(var(--accent-rgb), 0.12);
-}
+.card::after, .buy-item::after { display: none; }
 
-/* Corner ticks. Four short marks pulled in from the corners of a panel read
-   as a projection registering itself on the surface — the single detail that
-   separates a holographic frame from a rounded div. */
-.card, .buy-panel, .squad-panel, .sb-wrap { position: relative; }
-.card::before, .buy-panel::before, .squad-panel::before, .sb-wrap::before {
-  content: ''; position: absolute; inset: 5px; pointer-events: none;
-  border: 1px solid rgba(var(--accent-rgb), 0.30);
-  border-radius: calc(var(--cut) - 4px);
-  -webkit-mask:
-    linear-gradient(#000 0 0) top left / 16px 16px no-repeat,
-    linear-gradient(#000 0 0) top right / 16px 16px no-repeat,
-    linear-gradient(#000 0 0) bottom left / 16px 16px no-repeat,
-    linear-gradient(#000 0 0) bottom right / 16px 16px no-repeat;
-          mask:
-    linear-gradient(#000 0 0) top left / 16px 16px no-repeat,
-    linear-gradient(#000 0 0) top right / 16px 16px no-repeat,
-    linear-gradient(#000 0 0) bottom left / 16px 16px no-repeat,
-    linear-gradient(#000 0 0) bottom right / 16px 16px no-repeat;
+/* Selection is a lighter plate with a warm edge on one side, not a fill.
+   The reference marks the live thing with a 2px bar and nothing else. */
+.card.sel, .wpn-row.sel, .att.on, .menu-item.sel, .buy-item.owned {
+  background: var(--panel-3);
+  border-color: var(--line-hot);
+  border-left: 2px solid var(--accent);
+  box-shadow: none;
+  color: var(--ink);
 }
+.att.on { color: var(--ink); }
 
 /* ---------- chrome ---------- */
 .hdr {
+  padding: 0 18px; min-height: 42px;
+  background: var(--bg-2);
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 6px 24px -12px rgba(var(--accent-rgb), 0.45);
+  box-shadow: none; backdrop-filter: none;
 }
-.hdr .brand b, .hdr .brand { text-shadow: var(--text-glow); }
-.ftr { border-top: 1px solid var(--line); box-shadow: 0 -6px 24px -12px rgba(var(--accent-rgb), 0.4); }
+.hdr::before { top: 0; bottom: 0; width: 2px; }
+.hdr::after { content: none; }
+.hdr .brand { font: 500 14px/1 var(--sans); letter-spacing: 0.22em; text-shadow: none; }
+.hdr .brand b { color: var(--accent); text-shadow: none; }
+.telemetry { gap: 16px; font-size: 10px; letter-spacing: 0.10em; }
 
-/* Titles carry the reference's rule-with-nodes underneath: a hairline the
-   width of the heading with a small diamond at each end. */
-h1.title {
-  position: relative; color: var(--accent); text-shadow: var(--text-glow);
-  padding-bottom: 16px; margin-bottom: 14px;
+.ftr {
+  padding: 0 18px; min-height: 46px;
+  background: var(--bg-2);
+  border-top: 1px solid var(--line);
+  box-shadow: none;
 }
-h1.title::after {
-  content: ''; position: absolute; left: 0; right: 0; bottom: 4px; height: 1px;
-  background:
-    linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.65) 12%,
-      rgba(var(--accent-rgb), 0.65) 88%, transparent),
-    none;
+
+.screen:not(#screen-main) .body {
+  background: var(--bg);
+  backdrop-filter: none;
+}
+#screen-loadout .body {
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 60%, rgba(20,20,20,0.72) 100%);
+  backdrop-filter: none;
+}
+.pane { padding: 18px 20px; }
+
+/* Headings are small and quiet, with a warm tick rather than a rule. */
+h1.title {
+  font: 600 20px/1 var(--sans); letter-spacing: 0.10em;
+  color: var(--ink); text-shadow: none;
+  padding: 0 0 10px; margin: 0 0 14px;
+  border-bottom: 1px solid var(--line);
 }
 h1.title::before {
-  content: ''; position: absolute; left: 0; bottom: 1px; width: 7px; height: 7px;
-  background: var(--accent); transform: rotate(45deg);
-  box-shadow: var(--glow-hot);
+  content: ''; position: absolute; left: 0; bottom: -1px; width: 42px; height: 2px;
+  background: var(--accent); transform: none; box-shadow: none;
 }
-h3.sec { color: var(--accent); text-shadow: var(--text-glow); }
+h1.title::after { content: none; }
+p.sub { font: 11px/1.6 var(--sans); letter-spacing: 0.04em; text-transform: none; margin-bottom: 18px; }
+h3.sec {
+  font: 600 10px/1 var(--sans); letter-spacing: 0.16em;
+  color: var(--ink-dim); text-shadow: none;
+  padding: 0 0 7px 0; margin: 20px 0 12px;
+}
+h3.sec::before { width: 3px; height: 11px; background: var(--accent); opacity: 1; }
+h3.sec { padding-left: 10px; }
 
 /* ---------- buttons ---------- */
-/* The reference's button is an outlined capsule with a bright label and no
-   fill at rest; pressing it lights the outline rather than painting it in. */
+/* A plain plate that lightens. The one orange button on a screen is the
+   thing that advances you — Enter, Confirm, Deploy — and nothing else. */
 .btn {
-  border: 1px solid rgba(var(--accent-rgb), 0.55);
-  border-radius: 10px;
-  background: rgba(var(--accent-rgb), 0.04);
-  color: var(--accent);
-  font-weight: 600;
-  text-shadow: var(--text-glow);
-  box-shadow: var(--glow), var(--glow-in);
+  border-radius: 0;
+  padding: 9px 20px; min-height: 34px;
+  font: 600 11px/1 var(--sans); letter-spacing: 0.14em;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-shadow: none; box-shadow: none;
 }
+.btn::before { content: none; }
 .btn:hover {
-  background: rgba(var(--accent-rgb), 0.13);
-  border-color: var(--accent);
-  color: var(--accent-hot);
-  box-shadow: var(--glow-hot), inset 0 0 20px rgba(var(--accent-rgb), 0.12);
+  background: #343434; border-color: var(--line-hot); color: #fff;
+  box-shadow: none;
 }
 .btn.primary {
-  background: rgba(var(--accent-rgb), 0.18);
-  border-color: var(--accent);
-  color: #eaf9ff;
-  box-shadow: var(--glow-hot), inset 0 0 22px rgba(var(--accent-rgb), 0.16);
+  background: var(--accent); border-color: var(--accent); color: #1a0d05;
+  box-shadow: none;
 }
-.btn.danger { border-color: rgba(255, 90, 73, 0.5); color: #ffb3aa; box-shadow: 0 0 10px rgba(255,90,73,0.18); }
-.btn.danger:hover { box-shadow: 0 0 14px rgba(255,90,73,0.45); color: #ffd7d3; }
+.btn.primary:hover { background: var(--accent-hot); border-color: var(--accent-hot); }
+.btn.danger { background: var(--panel-2); border-color: var(--line); color: var(--danger); box-shadow: none; }
+.btn.danger:hover { background: #3a2422; border-color: var(--danger); color: #ffd7d3; }
+.btn.sm { padding: 5px 12px; min-height: 26px; font-size: 10px; letter-spacing: 0.10em; }
 
 /* ---------- main menu ---------- */
-/* A stack of capsules, centred and bright, rather than a list with a rail. */
+/* A flat list against the scene, the live row lighter with a warm edge. */
+.menu-left { width: 320px; padding: 24px 0 24px 20px; gap: 1px; justify-content: flex-start; padding-top: 60px; }
 .menu-item {
-  justify-content: center; align-items: center; gap: 14px;
-  padding: 15px 20px; margin-bottom: 10px;
-  border: 1px solid rgba(var(--accent-rgb), 0.45); border-left-width: 1px;
-  border-radius: 12px;
-  background: rgba(var(--accent-rgb), 0.04);
-  box-shadow: var(--glow), var(--glow-in);
-  transition: border-color 0.2s var(--ease), background 0.2s var(--ease),
-              box-shadow 0.2s var(--ease), transform 0.16s var(--ease);
+  justify-content: flex-start; gap: 14px;
+  padding: 12px 16px; margin: 0;
+  border: 1px solid transparent; border-left: 2px solid transparent;
+  background: rgba(32, 32, 32, 0.86);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.menu-item .idx { position: absolute; left: 16px; color: rgba(var(--accent-rgb), 0.55); }
-.menu-item .lbl {
-  font: 600 21px/1 var(--sans); letter-spacing: 0.26em;
-  color: var(--accent); text-shadow: var(--text-glow);
-}
-.menu-item .desc { position: absolute; right: 18px; margin-left: 0; }
 .menu-item::after { display: none; }
-.menu-item:hover, .menu-item.sel {
-  padding-left: 20px; border-color: var(--accent);
-  background: rgba(var(--accent-rgb), 0.14);
-  box-shadow: var(--glow-hot), inset 0 0 22px rgba(var(--accent-rgb), 0.14);
-  transform: translateX(4px);
+.menu-item .idx { position: static; width: 18px; font-size: 9px; color: var(--ink-faint); }
+.menu-item .lbl {
+  font: 600 14px/1 var(--sans); letter-spacing: 0.14em;
+  color: var(--ink-dim); text-shadow: none;
 }
-.menu-item:hover .lbl, .menu-item.sel .lbl { color: #eaf9ff; letter-spacing: 0.30em; }
-.version-tag { color: rgba(var(--accent-rgb), 0.55); text-shadow: var(--text-glow); }
+.menu-item .desc { position: static; margin-left: auto; font-size: 9px; }
+.menu-item:hover, .menu-item.sel {
+  background: var(--panel-3); border-left-color: var(--accent);
+  padding-left: 16px; transform: none;
+}
+.menu-item:hover .lbl, .menu-item.sel .lbl { color: #fff; letter-spacing: 0.14em; }
+.version-tag { color: var(--ink-faint); text-shadow: none; }
 
 /* ---------- tabs ---------- */
-/* The reference's segmented control: the live tab is a solid block of cyan
-   with the label knocked out of it. */
-.tabs { gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 0; }
+/* Underline, not a filled block: the live tab is the same plate with a warm
+   bar under it and brighter text. */
+.tabs { gap: 0; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
 .tab {
-  border: 1px solid rgba(var(--accent-rgb), 0.35);
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  color: rgba(var(--accent-rgb), 0.75);
-  font-weight: 600;
-  background: rgba(var(--accent-rgb), 0.04);
+  padding: 9px 20px; border: none; border-bottom: 2px solid transparent;
+  border-radius: 0; background: transparent;
+  font: 600 11px/1 var(--sans); letter-spacing: 0.10em;
+  color: var(--ink-faint);
 }
-.tab:hover { color: var(--accent-hot); background: rgba(var(--accent-rgb), 0.10); }
+.tab:hover { color: var(--ink-dim); background: rgba(255,255,255,0.03); }
 .tab.active {
-  background: var(--accent); color: #02121d; border-color: var(--accent);
-  box-shadow: var(--glow-hot);
+  background: transparent; color: #fff;
+  border-bottom-color: var(--accent);
+  box-shadow: none;
 }
 
 /* ---------- controls ---------- */
-.toggle { border-radius: 999px; border-color: rgba(var(--accent-rgb), 0.45); box-shadow: var(--glow-in); }
-.toggle i { border-radius: 999px; background: rgba(var(--accent-rgb), 0.45); }
-.toggle.on { box-shadow: var(--glow), inset 0 0 12px rgba(var(--accent-rgb), 0.18); }
-.toggle.on i { background: var(--accent); box-shadow: var(--glow-hot); }
-.setting { border-bottom-color: rgba(var(--accent-rgb), 0.12); }
-.setting .val { text-shadow: var(--text-glow); }
-input[type=range] { accent-color: var(--accent); }
-
-/* ---------- bars ---------- */
-/* Segmented, like the meter in the reference: a run of lit cells rather than
-   a continuous fill. The mask is on the fill, so the segmentation reads even
-   as the bar drains. */
-.bar, .end-xp .bar, .op-xp, .health-bar, .plant-bar, .boot-bar {
-  border-radius: 3px;
-  background: rgba(var(--accent-rgb), 0.10);
-  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.22);
-  overflow: hidden;
-}
-.bar i, .end-xp .bar i, .op-xp i, .health-bar i, .plant-bar i, .boot-bar i {
-  background: var(--accent);
-  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.65);
-  -webkit-mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
-          mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
-}
-.health-bar { height: 6px; }
-.health-bar.hurt i { background: var(--warn); box-shadow: 0 0 8px rgba(255,194,87,0.6); }
-.health-bar.crit i { background: var(--danger); box-shadow: 0 0 8px rgba(255,90,73,0.6); }
-
-/* ---------- HUD ---------- */
-.ammo { color: var(--accent-hot); text-shadow: var(--text-glow), 0 2px 10px rgba(0,0,0,0.9); }
-.hp-num { color: var(--accent-hot); text-shadow: var(--text-glow); }
-.timer { color: var(--accent-hot); text-shadow: var(--text-glow); }
-.center-msg .big { color: var(--accent); text-shadow: var(--text-glow); }
-.kf { border-radius: var(--cut-sm); border: 1px solid rgba(var(--accent-rgb), 0.22); box-shadow: var(--glow-in); }
-.crosshair i { background: var(--accent-hot); box-shadow: 0 0 4px rgba(var(--accent-rgb), 0.9); }
-#scoreboard { background: rgba(1, 6, 13, 0.86); }
-
-/* ---------- boot ---------- */
-.boot-logo, .boot-logo span { color: var(--accent); text-shadow: var(--text-glow); }
-.boot-bar { border-radius: 3px; }
-
-/* Native form controls, brought onto the same projection. A default select
-   is an opaque grey plate and it was the one thing on the settings screen
-   that still looked like a web page. */
+.toggle { border-radius: 0; border-color: var(--line); background: var(--panel-2); box-shadow: none; }
+.toggle i { border-radius: 0; background: var(--ink-faint); box-shadow: none; }
+.toggle.on { background: rgba(var(--accent-rgb), 0.20); border-color: var(--accent-dim); box-shadow: none; }
+.toggle.on i { background: var(--accent); box-shadow: none; }
+.setting { border-bottom-color: var(--line); padding: 8px 0; }
+.setting label { font-size: 11px; letter-spacing: 0.04em; text-transform: none; color: var(--ink); }
+.setting .val { color: var(--ink-dim); text-shadow: none; }
 select, input[type=text], input[type=number] {
-  border: 1px solid rgba(var(--accent-rgb), 0.45);
-  border-radius: 8px;
-  background: rgba(var(--accent-rgb), 0.05);
-  color: var(--accent);
-  box-shadow: var(--glow-in);
-  -webkit-appearance: none; appearance: none;
-  padding-right: 30px;
+  border-radius: 0; border: 1px solid var(--line);
+  background: var(--panel-2); background-image: none; color: var(--ink);
+  box-shadow: none;
 }
+/* The arrow belongs to the select ALONE, and only with its size and position
+   restated. Two 50% gradients with no background-size fill the whole box —
+   which turned every text field into a light grey slab. */
 select {
   background-image:
-    linear-gradient(45deg, transparent 50%, rgba(var(--accent-rgb), 0.85) 50%),
-    linear-gradient(135deg, rgba(var(--accent-rgb), 0.85) 50%, transparent 50%);
-  background-position: right 14px top 55%, right 9px top 55%;
-  background-size: 5px 5px, 5px 5px;
+    linear-gradient(45deg, transparent 50%, var(--ink-dim) 50%),
+    linear-gradient(135deg, var(--ink-dim) 50%, transparent 50%);
+  background-position: right 13px top 55%, right 9px top 55%;
+  background-size: 4px 4px, 4px 4px;
   background-repeat: no-repeat;
 }
-select option { background: #02121d; color: var(--ink); }
-select:hover, input[type=text]:hover, input[type=number]:hover {
-  border-color: var(--accent); box-shadow: var(--glow), var(--glow-in);
-}
-select:focus, input:focus {
-  border-color: var(--accent); outline: none;
-  box-shadow: var(--glow-hot), var(--glow-in);
-}
+select option { background: #202020; color: var(--ink); }
+select:hover, input[type=text]:hover, input[type=number]:hover { border-color: var(--line-hot); box-shadow: none; }
+select:focus, input:focus { border-color: var(--accent); box-shadow: none; }
 input[type=range] {
-  height: 4px; border-radius: 999px;
-  background: rgba(var(--accent-rgb), 0.16);
-  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.28);
+  height: 3px; border-radius: 0;
+  background: var(--panel-3); box-shadow: none;
 }
 input[type=range]::-webkit-slider-thumb {
-  width: 14px; height: 14px; border-radius: 999px;
-  background: var(--accent); box-shadow: var(--glow-hot);
+  width: 10px; height: 16px; border-radius: 0; background: var(--accent); box-shadow: none;
 }
 input[type=range]::-moz-range-thumb {
-  width: 14px; height: 14px; border-radius: 999px;
-  background: var(--accent); box-shadow: var(--glow-hot);
+  width: 10px; height: 16px; border-radius: 0; background: var(--accent); box-shadow: none;
+}
+
+/* ---------- bars ---------- */
+/* Thin, flat, unsegmented — a stat readout, not a power meter. */
+.bar, .end-xp .bar, .op-xp, .health-bar, .plant-bar, .boot-bar {
+  border-radius: 0; background: var(--panel-3); box-shadow: none; overflow: hidden;
+}
+.bar i, .end-xp .bar i, .op-xp i, .health-bar i, .plant-bar i, .boot-bar i {
+  background: var(--accent); box-shadow: none;
+  -webkit-mask: none; mask: none;
+}
+.health-bar { height: 4px; }
+.health-bar i { background: var(--good); }
+.health-bar.hurt i { background: var(--warn); }
+.health-bar.crit i { background: var(--danger); }
+.op-xp i, .end-xp .bar i { background: var(--accent); }
+
+/* ---------- HUD ---------- */
+.ammo { color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.95); font-weight: 500; }
+.ammo small { color: var(--ink-faint); }
+.hp-num { color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.95); }
+.timer { color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.95); }
+.center-msg .big { color: var(--ink); text-shadow: 0 1px 6px rgba(0,0,0,0.95); }
+.crosshair i { background: rgba(255,255,255,0.9); box-shadow: 0 0 2px rgba(0,0,0,0.9); }
+.kf {
+  border-radius: 0; border: 1px solid var(--line);
+  border-right: 2px solid var(--accent);
+  background: rgba(20,20,20,0.82); box-shadow: none;
+}
+.kf .me { color: var(--accent); }
+#scoreboard { background: rgba(10,10,10,0.88); }
+.sb-team.a { color: var(--alpha); background: rgba(90,169,230,0.10); }
+.sb-team.b { color: var(--bravo); background: rgba(224,138,76,0.10); }
+
+/* ---------- buy menu ---------- */
+.buy-panel-head { background: var(--bg-2); }
+.buy-col.open { background: var(--panel-2); }
+.buy-col.open .buy-col-head { color: var(--accent); }
+.buy-item:hover .icon, .buy-item.owned .icon { background: var(--accent); }
+.buy-item:hover .pr { color: var(--accent); }
+.buy-money { color: var(--accent); }
+.buy-money.broke { color: var(--danger); }
+.kit-chip i { color: var(--ink-dim); }
+
+/* ---------- boot ---------- */
+.boot-logo, .boot-logo span { color: var(--ink); text-shadow: none; }
+.boot-logo span { color: var(--accent); }
+
+/* ==========================================================================
+   POLISH
+   Same flat tactical language, better made. Three things do nearly all of
+   the work on a dark interface:
+     1. a vertical gradient on every plate, so a panel is lit from above
+        instead of being one dead fill;
+     2. a 1px lighter line inset along the top edge, which is what reads as
+        a bevel catching light — it is the single strongest "this is a
+        crafted surface" cue and it costs nothing;
+     3. a bottom shadow that seats the plate on what is behind it.
+   None of it glows. Everything stays square.
+   ========================================================================== */
+
+/* The page itself is lit: a soft pool toward the top, falling to near-black
+   at the edges, so panels are not floating on a flat void. */
+#ui-root::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(255, 255, 255, 0.045), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 50% 100%, rgba(var(--accent-rgb), 0.035), transparent 72%),
+    linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+/* ---------- plates ---------- */
+.card, .buy-panel, .squad-panel, .op-card, .wpn-row, .att, .toast, .keybind,
+.buy-item, .sb-wrap, .roomcode, .pl-row {
+  background: linear-gradient(180deg, #262626 0%, #202020 46%, #1c1c1c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 1px 2px rgba(0, 0, 0, 0.45);
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease),
+              box-shadow 0.16s var(--ease), transform 0.16s var(--ease);
+}
+.card:hover, .op-card:hover, .wpn-row:hover, .att:hover, .keybind:hover,
+.buy-item:hover {
+  background: linear-gradient(180deg, #323232 0%, #2a2a2a 46%, #252525 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+/* Selection: the warm edge bleeds a little way across the plate rather than
+   stopping dead at the border. */
+.card.sel, .wpn-row.sel, .att.on, .buy-item.owned {
+  background:
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.14), rgba(var(--accent-rgb), 0) 38%),
+    linear-gradient(180deg, #343434 0%, #2b2b2b 46%, #262626 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.buy-col { background: linear-gradient(180deg, #232323, #1c1c1c); }
+.buy-col.open { background: linear-gradient(180deg, #2c2c2c, #232323); }
+
+/* ---------- chrome ---------- */
+.hdr {
+  background: linear-gradient(180deg, #262626 0%, #1c1c1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 1px 3px rgba(0,0,0,0.55);
+}
+/* The rail under the header fades out rather than ruling the full width. */
+.hdr::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, var(--accent) 0, rgba(var(--accent-rgb), 0.30) 16%, transparent 46%);
+}
+.ftr {
+  background: linear-gradient(0deg, #232323 0%, #1a1a1a 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 -1px 3px rgba(0,0,0,0.5);
+}
+.screen:not(#screen-main) .body {
+  background: linear-gradient(180deg, #171717 0%, #131313 60%, #101010 100%);
+}
+
+/* Section rules fade out to the right instead of running edge to edge. */
+h1.title { border-bottom: none; }
+h1.title::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: linear-gradient(90deg, var(--line) 0, var(--line) 55%, transparent 100%);
+}
+h3.sec {
+  border-bottom: none;
+  background: linear-gradient(90deg, rgba(255,255,255,0.035), transparent 55%);
+  padding: 7px 0 7px 10px;
+}
+h3.sec::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: linear-gradient(90deg, var(--line) 0, transparent 70%);
+}
+h3.sec::before { top: 6px; bottom: 6px; height: auto; }
+
+/* ---------- buttons ---------- */
+.btn {
+  background: linear-gradient(180deg, #333333 0%, #2a2a2a 52%, #242424 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.btn:hover {
+  background: linear-gradient(180deg, #3e3e3e 0%, #343434 52%, #2c2c2c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.55);
+}
+.btn:active {
+  transform: translateY(1px);
+  background: linear-gradient(180deg, #242424, #2c2c2c);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+.btn.primary {
+  background: linear-gradient(180deg, #f4813f 0%, #ec6a28 50%, #d55a1e 100%);
+  border-color: #f08a48;
+  color: #1c0e04;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    0 2px 8px rgba(var(--accent-rgb), 0.28);
+}
+.btn.primary:hover {
+  background: linear-gradient(180deg, #ff9455 0%, #f4783a 50%, #e06726 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 3px 12px rgba(var(--accent-rgb), 0.40);
+}
+.btn.primary:active { box-shadow: inset 0 2px 5px rgba(90, 30, 0, 0.45); }
+.btn.danger { background: linear-gradient(180deg, #303030, #262626); }
+.btn.danger:hover { background: linear-gradient(180deg, #4a2c28, #3a2320); }
+
+/* ---------- main menu ---------- */
+.menu-item {
+  background: linear-gradient(90deg, rgba(34,34,34,0.92), rgba(26,26,26,0.80));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease),
+              padding-left 0.18s var(--ease), box-shadow 0.16s var(--ease);
+}
+.menu-item:hover, .menu-item.sel {
+  background:
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0) 42%),
+    linear-gradient(90deg, rgba(56,56,56,0.96), rgba(34,34,34,0.86));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 1px 4px rgba(0,0,0,0.4);
+  padding-left: 20px;
+}
+
+/* ---------- tabs ---------- */
+.tab { transition: color 0.14s, background 0.14s, border-color 0.14s; }
+.tab:hover { background: linear-gradient(180deg, rgba(255,255,255,0.05), transparent); }
+.tab.active {
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.10), transparent 72%);
+}
+
+/* ---------- bars ---------- */
+/* A fill lit from above, and a hairline sheen along its top edge. */
+.bar, .end-xp .bar, .op-xp, .health-bar, .plant-bar, .boot-bar {
+  background: linear-gradient(180deg, #1c1c1c, #2c2c2c);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+.bar i, .end-xp .bar i, .op-xp i, .plant-bar i, .boot-bar i {
+  background: linear-gradient(180deg, #ff9455 0%, var(--accent) 55%, #cf5a1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.health-bar i { background: linear-gradient(180deg, #9ae08a 0%, var(--good) 55%, #5aa84c 100%); }
+.health-bar.hurt i { background: linear-gradient(180deg, #f5da75 0%, var(--warn) 55%, #c9a52e 100%); }
+.health-bar.crit i { background: linear-gradient(180deg, #f07a6c 0%, var(--danger) 55%, #b83e30 100%); }
+
+/* ---------- misc ---------- */
+.pane::-webkit-scrollbar { width: 10px; }
+.pane::-webkit-scrollbar-track { background: #161616; }
+.pane::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #3a3a3a, #2c2c2c);
+  border: 1px solid #262626;
+}
+.pane::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #4a4a4a, #383838); }
+.kf { background: linear-gradient(90deg, rgba(18,18,18,0.55), rgba(22,22,22,0.88)); }
+#scoreboard { background: linear-gradient(180deg, rgba(12,12,12,0.90), rgba(8,8,8,0.94)); }
+.sb-head { background: linear-gradient(180deg, #262626, #1e1e1e); }
+.buy-panel-head { background: linear-gradient(180deg, #2a2a2a, #202020); }
+.toggle { background: linear-gradient(180deg, #1e1e1e, #282828); box-shadow: inset 0 1px 2px rgba(0,0,0,0.5); }
+.toggle i { background: linear-gradient(180deg, #7a7a7a, #5e5e5e); }
+.toggle.on { background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.28), rgba(var(--accent-rgb), 0.14)); }
+.toggle.on i { background: linear-gradient(180deg, #ff9455, var(--accent)); }
+select, input[type=text], input[type=number] {
+  background-color: #262626;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+select:hover, input[type=text]:hover, input[type=number]:hover { background-color: #2e2e2e; }
+input[type=range] {
+  background: linear-gradient(180deg, #1a1a1a, #2a2a2a);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+}
+input[type=range]::-webkit-slider-thumb {
+  background: linear-gradient(180deg, #ff9455, #e06726);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 1px 3px rgba(0,0,0,0.5);
+}
+input[type=range]::-moz-range-thumb {
+  background: linear-gradient(180deg, #ff9455, #e06726);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 1px 3px rgba(0,0,0,0.5);
+}
+.spinner { border-top-color: var(--accent); }
+
+/* ==========================================================================
+   SQUAD FOLD
+   The operator card carries a chevron; it folds the roster away underneath.
+   ========================================================================== */
+
+.op-card { position: relative; }
+.op-caret {
+  position: absolute; right: 8px; bottom: 8px;
+  width: 26px; height: 20px; padding: 0;
+  display: grid; place-items: center;
+  background: linear-gradient(180deg, #2f2f2f, #242424);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07);
+  cursor: pointer;
+  transition: background 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+.op-caret:hover { background: linear-gradient(180deg, #3c3c3c, #2e2e2e); border-color: var(--line-hot); }
+/* The chevron is two borders on a rotated square — no glyph, so it cannot be
+   the wrong font, and it rotates cleanly about its own centre. */
+.op-caret i {
+  display: block; width: 7px; height: 7px;
+  border-right: 2px solid var(--ink-dim);
+  border-bottom: 2px solid var(--ink-dim);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.28s var(--ease), border-color 0.14s;
+}
+.op-caret:hover i { border-color: var(--accent); }
+/* Closed: the chevron points up, because pressing it opens the panel again. */
+.op-block.squad-closed .op-caret i { transform: translateY(1px) rotate(-135deg); }
+
+/* 1fr -> 0fr is the only way to transition to a natural height in CSS. The
+   inner element needs min-height 0 or the grid refuses to shrink below its
+   content, and overflow hidden or the roster spills out as it closes. */
+.squad-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.30s var(--ease), opacity 0.24s var(--ease),
+              margin-top 0.30s var(--ease);
+  opacity: 1;
+}
+.squad-collapse-inner { min-height: 0; overflow: hidden; }
+.op-block.squad-closed .squad-collapse {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin-top: -1px;
+}
+/* Restoring the saved state on first paint must not animate. */
+.op-block.no-anim .squad-collapse,
+.op-block.no-anim .op-caret i { transition: none; }
+
+/* ==========================================================================
+   POLISH II
+   Small things that separate a themed interface from a finished one:
+   keyboard focus you can actually see, motion on the elements that appear
+   and disappear, and a few places where the palette had not caught up.
+   ========================================================================== */
+
+/* Focus you can see, but only from the keyboard — :focus-visible keeps the
+   ring off mouse clicks, where it just looks like a stuck selection. */
+.btn:focus-visible, .tab:focus-visible, .card:focus-visible, .menu-item:focus-visible,
+.op-caret:focus-visible, .keybind:focus-visible, .att:focus-visible,
+select:focus-visible, input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Things that arrive should arrive from somewhere. */
+.toast { animation: toastIn 0.22s var(--ease); }
+@keyframes toastIn { from { opacity: 0; transform: translateX(16px); } }
+.squad-invite-banner { animation: bannerIn 0.24s var(--ease); }
+@keyframes bannerIn { from { opacity: 0; transform: translateY(-6px); } }
+
+/* Screen changes cross-fade with a hint of travel rather than cutting. */
+.screen { transition: opacity 0.20s var(--ease), transform 0.20s var(--ease); }
+.screen:not(.active) { transform: translateY(4px); }
+.screen.active { transform: none; }
+
+/* The empty squad slots read as placeholders, so their dashes should be
+   quieter than a real border and should warm up when you can act on them. */
+.squad-slot.empty { border-style: dashed; border-color: #333; background: rgba(255,255,255,0.012); }
+.squad-slot.empty:hover { border-color: var(--accent-dim); background: rgba(var(--accent-rgb), 0.06); }
+.squad-slot.you { border-left: 2px solid var(--accent); }
+.squad-slot.leader .role { color: var(--accent); }
+
+/* Disabled controls should look inert, not just faint. */
+.btn:disabled { opacity: 0.34; filter: saturate(0.3); box-shadow: none; }
+.btn:disabled:hover { background: linear-gradient(180deg, #333333, #242424); border-color: var(--line); }
+
+/* The operator card is a button into the profile; say so on hover. */
+.op-card { cursor: pointer; }
+.op-card:hover .op-name { color: #fff; }
+.op-hint { transition: opacity 0.16s, color 0.16s; }
+.op-card:hover .op-hint { color: var(--accent); }
+
+/* Weapon rows and buy items get a touch of travel on hover — enough to feel
+   live, not enough to reflow anything next to them. */
+.wpn-row, .buy-item, .att, .card { will-change: auto; }
+.wpn-row:hover, .buy-item:hover { transform: translateX(2px); }
+.card:hover { transform: translateY(-1px); }
+
+/* Selected weapon/tab text should be the brightest thing in its row. */
+.wpn-row.sel .nm, .card.sel .n { color: #fff; }
+.buy-col-head, .squad-head { letter-spacing: 0.16em; }
+
+/* Reduced motion: honour it. Everything above is decoration. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
 }
