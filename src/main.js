@@ -21,7 +21,7 @@ import { Pings } from './game/Pings.js';
 import { audio } from './audio/AudioEngine.js';
 import { NetClient } from './net/NetClient.js';
 import { LocalNet } from './net/LocalNet.js';
-import { UI, el } from './ui/UI.js';
+import { UI, el, button } from './ui/UI.js';
 import { createMainMenu } from './ui/screens/MainMenu.js';
 import { createPlayMenu, createPrivateMatch, createLobby, createTraining } from './ui/screens/Play.js';
 import { createLoadout } from './ui/screens/Loadout.js';
@@ -196,6 +196,36 @@ class Game {
       audio.applyVolumes();
       if (k === 'name' || k === '*') this.onNameChanged();
     });
+
+    // A lost graphics context turns the picture grey and stops every draw
+    // call. Say so, on top of everything, instead of leaving the player
+    // looking at a grey rectangle wondering whether the game crashed.
+    bus.on('engine:contextlost', () => this.showGpuNotice(true));
+    bus.on('engine:contextrestored', () => this.showGpuNotice(false));
+  }
+
+  /**
+   * The graphics-device panel. Browsers drop a WebGL context on a GPU process
+   * crash, a driver reset, waking from sleep, or when too many WebGL tabs are
+   * open — and they may or may not hand it back. Either way the player gets
+   * told which it was.
+   */
+  showGpuNotice(lost) {
+    if (!lost) {
+      this._gpuNotice?.remove();
+      this._gpuNotice = null;
+      return;
+    }
+    if (this._gpuNotice) return;
+    const panel = el('div.gpu-notice',
+      el('div.gpu-title', 'GRAPHICS DEVICE LOST'),
+      el('div.gpu-body',
+        'The browser took the graphics context away — usually a driver reset, '
+        + 'waking from sleep, or too many 3D tabs open at once. '
+        + 'The game is waiting for it back.'),
+      button('RELOAD', () => location.reload(), { cls: 'primary' }));
+    document.body.appendChild(panel);
+    this._gpuNotice = panel;
   }
 
   onEscape() {
@@ -260,26 +290,24 @@ class Game {
     });
     await step(92, 'COMPILING SHADERS…', () => {
       // The teammate chevron and callsign plate do not exist until somebody
-    // spawns, so they have to be put in front of the compiler by hand — with
-    // the same constructors the real ones use, or the cache keys differ and
-    // the compile is wasted.
-    const warm = new THREE.Group();
-    const chevron = new THREE.Mesh(makeMarkerGeometry(), makeMarkerMaterial());
-    const plate = new THREE.Sprite(makeLabelMaterial('WARMUP'));
-    warm.add(chevron, plate);
-    this.engine.scene.add(warm);
-    // Choose the map's active light set before compiling: the number of
-    // visible lights is part of a shader's identity, so compiling with them
-    // all still switched off compiles the wrong programs.
-    this.worldRenderer.update(0.5, 0, this.engine.camera.position);
-    // Tracers, casings, muzzle flashes, decals and both particle systems live
-    // in pools that are invisible until something uses them, and compile()
-    // only walks what is visible — so their programs were compiled on the
-    // first shot of the match.
-    this.effects.prewarm(this.engine.renderer, this.engine.camera);
-    this.engine.scene.remove(warm);
-    chevron.geometry.dispose(); chevron.material.dispose();
-    plate.material.map.dispose(); plate.material.dispose();
+      // spawns, so they have to be put in front of the compiler by hand —
+      // with the same constructors the real ones use, or the cache keys
+      // differ and the compile is wasted. Neither depends on the map, so
+      // compiling them once here covers every match.
+      const warm = new THREE.Group();
+      const chevron = new THREE.Mesh(makeMarkerGeometry(), makeMarkerMaterial());
+      const plate = new THREE.Sprite(makeLabelMaterial('WARMUP'));
+      warm.add(chevron, plate);
+      this.engine.scene.add(warm);
+      this.worldRenderer.update(0.5, 0, this.engine.camera.position);
+      // Tracers, casings, muzzle flashes, decals and both particle systems
+      // live in pools that are invisible until something uses them, and
+      // compile() only walks what is visible — so their programs used to be
+      // compiled on the first shot of the match.
+      this.effects.prewarm(this.engine.renderer, this.engine.camera);
+      this.engine.scene.remove(warm);
+      chevron.geometry.dispose(); chevron.material.dispose();
+      plate.material.map.dispose(); plate.material.dispose();
     });
     await step(97, 'READY');
 
@@ -1016,6 +1044,13 @@ class Game {
     // seconds of play. The loading screen cannot cover this on its own — it
     // compiles against the menu map, and a surface or a light count that only
     // exists on Refinery is not in that scene to be found.
+    //
+    // The light pass first, and not for the look of it: build() leaves every
+    // one of the new map's lights switched off, and the NUMBER of lit lights
+    // is part of a shader's identity. Compiling before choosing the active
+    // set compiles the no-lights permutation and throws it away on the first
+    // frame — which is the stall this call exists to prevent.
+    this.worldRenderer.update(0.5, 0, this.engine.camera.position);
     this.engine.renderer.compile(this.engine.scene, this.engine.camera);
     audio.setWorld(this.world);
     audio.stopMenuMusic();
@@ -1572,13 +1607,46 @@ function fmtClock(sec) {
 }
 
 // ---------------------------------------------------------------------------
-const game = new Game();
+/**
+ * Put a reason on the loading screen instead of leaving it to spin.
+ *
+ * Everything in here can fail on a machine that will not give the page a GPU,
+ * and until now the two failures looked completely different to the player
+ * and equally useless: a throw inside boot() wrote a message, while a throw
+ * from `new Game()` — which is where the renderer is built — happened before
+ * the catch below existed at all, so the bar simply sat at INITIALISING
+ * OPTICS forever with the reason hidden in a console nobody opens.
+ */
+function bootFailed(e) {
+  console.error(e);
+  const boot = document.getElementById('boot');
+  const status = boot?.querySelector('.boot-status');
+  const noGpu = /webgl|context/i.test(e?.message || '');
+  if (status) {
+    status.textContent = noGpu
+      ? 'NO GRAPHICS DEVICE — this browser could not open WebGL'
+      : 'FAILED TO START — ' + (e?.message || 'unknown error');
+    status.classList.add('boot-failed');
+  }
+  if (noGpu && boot) {
+    const hint = document.createElement('div');
+    hint.className = 'boot-hint';
+    hint.textContent = 'Turn on hardware acceleration in your browser settings, '
+      + 'or try another browser. Opening index.html straight from the folder '
+      + 'will not work either — the game has to be served.';
+    boot.querySelector('.boot-inner')?.appendChild(hint);
+  }
+}
+
+let game;
+try {
+  game = new Game();
+} catch (e) {
+  bootFailed(e);
+  throw e;
+}
 window.__game = game;
 window.__W = WEAPON_BY_KEY;   // exposed for automated screenshots
 window.__buildWeaponModel = buildWeaponModel;   // ditto: geometry measurements
 window.__settings = settings;                  // ditto: loadout assertions
-game.boot().catch((e) => {
-  console.error(e);
-  const status = document.querySelector('#boot .boot-status');
-  if (status) status.textContent = 'FAILED TO START — ' + e.message;
-});
+game.boot().catch(bootFailed);

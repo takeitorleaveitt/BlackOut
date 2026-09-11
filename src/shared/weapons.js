@@ -13,6 +13,11 @@ function pattern(str) {
   return str.trim().split(/\s+/).map((p) => p.split(',').map(Number));
 }
 
+// RECOIL, 1.51: every `vert` and `horiz` below is three times what it was,
+// the MP7 excepted — it had already been tripled a version earlier. These two
+// numbers are the per-shot aim climb, so they decide where your shots go; the
+// view model's own rocking is a separate pair of constants in ViewModel.js and
+// was NOT scaled with them.
 export const WEAPONS = [
   {
     id: 0,
@@ -32,7 +37,7 @@ export const WEAPONS = [
     spreadHip: 0.65, spreadAds: 0.19, spreadMove: 0.58, spreadJump: 1.16,
     spreadPerShot: 0.08, spreadMax: 1.45, spreadRecover: 5.4,
     recoil: {
-      vert: 0.0122, horiz: 0.0044, recovery: 7.6, viewKick: 1.0, camShake: 0.62,
+      vert: 0.0366, horiz: 0.0132, recovery: 7.6, viewKick: 1.0, camShake: 0.62,
       firstShotMult: 1.22, kickBack: 0.052,
       pattern: pattern('0,1 0.05,1 -0.05,1 0.12,0.95 -0.2,0.92 -0.35,0.86 -0.5,0.8 -0.55,0.74 -0.4,0.7 -0.15,0.68 0.2,0.66 0.5,0.65 0.65,0.63 0.55,0.62 0.3,0.6 -0.05,0.6 -0.4,0.58 -0.6,0.57 -0.55,0.56 -0.3,0.55')
     },
@@ -61,7 +66,7 @@ export const WEAPONS = [
     spreadHip: 0.75, spreadAds: 0.22, spreadMove: 0.60, spreadJump: 1.24,
     spreadPerShot: 0.10, spreadMax: 1.55, spreadRecover: 4.6,
     recoil: {
-      vert: 0.0168, horiz: 0.0092, recovery: 6.2, viewKick: 1.28, camShake: 0.92,
+      vert: 0.0504, horiz: 0.0276, recovery: 6.2, viewKick: 1.28, camShake: 0.92,
       firstShotMult: 1.15, kickBack: 0.075,
       pattern: pattern('0,1 0.15,1.02 0.3,1 0.5,0.96 0.72,0.92 0.9,0.88 1.0,0.84 0.95,0.8 0.8,0.76 0.55,0.74 0.2,0.72 -0.2,0.7 -0.55,0.68 -0.8,0.66 -0.95,0.65 -0.85,0.64 -0.6,0.63 -0.25,0.62 0.15,0.61 0.5,0.6')
     },
@@ -90,7 +95,7 @@ export const WEAPONS = [
     spreadHip: 0.55, spreadAds: 0.26, spreadMove: 0.42, spreadJump: 0.91,
     spreadPerShot: 0.06, spreadMax: 1.18, spreadRecover: 6.6,
     recoil: {
-      vert: 0.0078, horiz: 0.0038, recovery: 9.2, viewKick: 0.72, camShake: 0.42,
+      vert: 0.0234, horiz: 0.0114, recovery: 9.2, viewKick: 0.72, camShake: 0.42,
       firstShotMult: 1.05, kickBack: 0.034,
       pattern: pattern('0,1 -0.08,0.98 -0.18,0.94 -0.3,0.9 -0.35,0.86 -0.28,0.82 -0.1,0.8 0.15,0.78 0.35,0.76 0.45,0.74 0.4,0.72 0.25,0.7 0.0,0.68 -0.25,0.67 -0.4,0.66 -0.45,0.65 -0.3,0.64 -0.05,0.63 0.2,0.62 0.35,0.61')
     },
@@ -119,11 +124,8 @@ export const WEAPONS = [
     spreadHip: 0.58, spreadAds: 0.30, spreadMove: 0.36, spreadJump: 0.79,
     spreadPerShot: 0.07, spreadMax: 1.29, spreadRecover: 7.4,
     recoil: {
-      // Three times the aim climb it used to have (0.0070 / 0.0062). At 950 rpm
-      // that is the fastest-climbing gun in the game by a distance — which is
-      // the point: it was a near-pistol-mobility PDW that also held a dot on a
-      // chest across a room. The fast recovery below is what keeps it usable
-      // in bursts rather than only in taps.
+      // Tripled in 1.5, and left alone when the rest of the roster was tripled
+      // in 1.51 — doing it twice would be nine times the original.
       vert: 0.0210, horiz: 0.0186, recovery: 10.4, viewKick: 0.66, camShake: 0.38,
       firstShotMult: 1.0, kickBack: 0.028,
       pattern: pattern('0,1 0.2,0.96 -0.25,0.92 0.35,0.88 -0.4,0.85 0.5,0.82 -0.55,0.8 0.6,0.78 -0.5,0.76 0.45,0.74 -0.6,0.72 0.55,0.7 -0.35,0.69 0.4,0.68 -0.5,0.67 0.6,0.66 -0.45,0.65 0.3,0.64 -0.55,0.63 0.5,0.62')
@@ -154,7 +156,7 @@ export const WEAPONS = [
     spreadHip: 0.7, spreadAds: 0.5, spreadMove: 0.58, spreadJump: 1.17,
     spreadPerShot: 0.0, spreadMax: 0.93, spreadRecover: 3.0,
     recoil: {
-      vert: 0.0520, horiz: 0.0140, recovery: 4.2, viewKick: 2.6, camShake: 2.1,
+      vert: 0.156, horiz: 0.042, recovery: 4.2, viewKick: 2.6, camShake: 2.1,
       firstShotMult: 1.0, kickBack: 0.185,
       pattern: pattern('0,1 0.4,1 -0.4,1 0.3,1 -0.3,1 0.5,1 -0.5,1')
     },
@@ -183,7 +185,7 @@ export const WEAPONS = [
     spreadHip: 0.55, spreadAds: 0.30, spreadMove: 0.41, spreadJump: 0.93,
     spreadPerShot: 0.12, spreadMax: 1.22, spreadRecover: 8.0,
     recoil: {
-      vert: 0.0150, horiz: 0.0060, recovery: 11.0, viewKick: 1.05, camShake: 0.55,
+      vert: 0.045, horiz: 0.018, recovery: 11.0, viewKick: 1.05, camShake: 0.55,
       firstShotMult: 1.0, kickBack: 0.048,
       pattern: pattern('0,1 0.2,0.98 -0.2,0.96 0.25,0.94 -0.3,0.92 0.35,0.9 -0.25,0.9')
     },
@@ -212,7 +214,7 @@ export const WEAPONS = [
     spreadHip: 0.7, spreadAds: 0.34, spreadMove: 0.54, spreadJump: 1.08,
     spreadPerShot: 0.15, spreadMax: 1.24, spreadRecover: 6.4,
     recoil: {
-      vert: 0.0340, horiz: 0.0130, recovery: 6.4, viewKick: 1.9, camShake: 1.1,
+      vert: 0.102, horiz: 0.039, recovery: 6.4, viewKick: 1.9, camShake: 1.1,
       firstShotMult: 1.0, kickBack: 0.095,
       pattern: pattern('0,1 0.3,1 -0.35,1 0.4,1 -0.3,1 0.35,1 -0.25,1')
     },
@@ -241,7 +243,7 @@ export const WEAPONS = [
     spreadHip: 0.85, spreadAds: 0.16, spreadMove: 0.69, spreadJump: 1.43,
     spreadPerShot: 0.14, spreadMax: 1.75, spreadRecover: 4.0,
     recoil: {
-      vert: 0.0215, horiz: 0.0105, recovery: 5.4, viewKick: 1.62, camShake: 1.25,
+      vert: 0.0645, horiz: 0.0315, recovery: 5.4, viewKick: 1.62, camShake: 1.25,
       firstShotMult: 1.30, kickBack: 0.098,
       pattern: pattern('0,1 -0.2,1.05 0.25,1.0 -0.45,0.96 0.6,0.92 -0.7,0.88 0.85,0.86 -0.9,0.84 0.75,0.82 -0.6,0.8 0.4,0.78 -0.3,0.77 0.55,0.76 -0.75,0.75 0.9,0.74 -0.8,0.73 0.5,0.72 -0.35,0.71 0.6,0.70 -0.7,0.69')
     },
@@ -336,7 +338,7 @@ export const WEAPONS = [
     spreadHip: 3.60, spreadAds: 0.012, spreadMove: 2.20, spreadJump: 4.50,
     spreadPerShot: 0.9, spreadMax: 4.8, spreadRecover: 2.6,
     recoil: {
-      vert: 0.048, horiz: 0.011, recovery: 3.4, viewKick: 1.5, camShake: 1.35,
+      vert: 0.144, horiz: 0.033, recovery: 3.4, viewKick: 1.5, camShake: 1.35,
       firstShotMult: 1.0, kickBack: 0.055,
       pattern: pattern('0,0 0.1,0')
     },
@@ -385,7 +387,7 @@ export const WEAPONS = [
     spreadHip: 0.045, spreadAds: 0.026, spreadMove: 0.12, spreadJump: 0.40,
     spreadPerShot: 0.018, spreadMax: 0.40, spreadRecover: 9.0,
     recoil: {
-      vert: 0.0385, horiz: 0.0105, recovery: 5.4, viewKick: 2.1, camShake: 1.25,
+      vert: 0.1155, horiz: 0.0315, recovery: 5.4, viewKick: 2.1, camShake: 1.25,
       firstShotMult: 1.0, kickBack: 0.105,
       pattern: pattern('0,1 -0.3,1 0.35,1 -0.4,1 0.3,1 -0.25,1')
     },

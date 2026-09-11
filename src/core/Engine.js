@@ -84,12 +84,31 @@ export class Engine {
     this.onResize();
 
     bus.on('settings:changed', (k) => this.onSettingsChanged(k));
+    // A lost context used to emit an event that nothing in the codebase
+    // listened for. The browser takes the context away on a GPU process
+    // crash, a driver reset, waking from sleep, or when too many WebGL tabs
+    // are open and yours is the one it culls — and when it did, the canvas
+    // turned grey, every draw call stopped, and the game said nothing at all.
+    // That is the "sometimes it is just a grey screen".
+    //
+    // preventDefault() is what asks the browser to give it back. Until it
+    // does, stop drawing: rendering into a dead context throws warnings every
+    // frame and achieves nothing.
+    this.contextLost = false;
     this.canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
+      this.contextLost = true;
       bus.emit('engine:contextlost');
     });
     this.canvas.addEventListener('webglcontextrestored', () => {
+      this.contextLost = false;
+      // The post chain's render targets died with the old context, and the
+      // size we were drawing at is no longer recorded anywhere the new one
+      // can see, so both have to be rebuilt before the next frame.
+      this._sizedTo = null;
       this.postfx.build();
+      this.onResize();
+      this.renderer.shadowMap.needsUpdate = true;
       bus.emit('engine:contextrestored');
     });
   }
@@ -147,15 +166,48 @@ export class Engine {
     perf.budgetMs = 1000 / clamp(S.fpsCap > 0 ? S.fpsCap : 60, 30, 90);
   }
 
+  /**
+   * Size the renderer to the window.
+   *
+   * The floor of 1 is not defensive padding, it is the fix for a blank screen
+   * that never comes back. A browser can report an inner size of zero — a
+   * background tab, a window being restored, a container that has not laid
+   * out yet — and `0 / 0` is NaN. That NaN goes straight into the camera's
+   * projection matrix, every vertex it transforms lands nowhere, and the
+   * picture is gone for good, because nothing recomputes the aspect unless a
+   * resize event happens to fire afterwards. Clamping the divisor costs
+   * nothing and makes that unreachable; `sizeIsStale()` below then puts the
+   * real size back the moment the window admits to having one.
+   */
   onResize() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = Math.max(1, window.innerWidth || 0);
+    const h = Math.max(1, window.innerHeight || 0);
     const scale = clamp(this.renderScale || 1, 0.4, 1.0);
     const dpr = Math.min(window.devicePixelRatio || 1, 2) * scale;
+    this._sizedTo = { w, h, dpr };
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.postfx.setSize(w, h, dpr);
+  }
+
+  /**
+   * True when the window is a different size from the one we last drew at.
+   *
+   * A resize event is not guaranteed. A tab that was hidden while the page
+   * loaded, a window restored from minimised, an OS display change — any of
+   * these can leave the renderer sized to something the window no longer is,
+   * with no event to say so. Checking four numbers once a frame is cheaper
+   * than the bug.
+   */
+  sizeIsStale() {
+    const s = this._sizedTo;
+    if (!s) return true;
+    const w = Math.max(1, window.innerWidth || 0);
+    const h = Math.max(1, window.innerHeight || 0);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * clamp(this.renderScale || 1, 0.4, 1.0);
+    return w !== s.w || h !== s.h || Math.abs(dpr - s.dpr) > 1e-6;
   }
 
   applyEnvironment(env) {
@@ -227,6 +279,8 @@ export class Engine {
   }
 
   frame() {
+    if (this.contextLost) return;
+    if (this.sizeIsStale()) this.onResize();
     let dt = perf.begin();
     if (S.fpsCap > 0) {
       // Frame pacing under a limit.
