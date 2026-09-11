@@ -13,7 +13,7 @@ import { WorldRenderer } from './maps/WorldRenderer.js';
 import { Effects } from './render/Effects.js';
 import { ViewModel } from './weapons/ViewModel.js';
 import { LocalPlayer } from './player/LocalPlayer.js';
-import { RemotePlayer } from './player/RemotePlayer.js';
+import { RemotePlayer, makeMarkerGeometry, makeMarkerMaterial, makeLabelMaterial } from './player/RemotePlayer.js';
 import { PlayerModel } from './player/PlayerModel.js';
 import { HUD } from './game/HUD.js';
 import { FreeCam } from './game/FreeCam.js';
@@ -68,8 +68,6 @@ class Game {
     this.matchState = null;
     this.roomInfo = null;
     this.roomPlayerList = [];
-    this.serverList = [];
-    this.serverListeners = new Set();
     this.roomListeners = new Set();
     this.squadListeners = new Set();
     // Solo until the server says otherwise. The panel is drawn from this even
@@ -261,7 +259,27 @@ class Game {
       this.preloadScreens();
     });
     await step(92, 'COMPILING SHADERS…', () => {
-      this.engine.renderer.compile(this.engine.scene, this.engine.camera);
+      // The teammate chevron and callsign plate do not exist until somebody
+    // spawns, so they have to be put in front of the compiler by hand — with
+    // the same constructors the real ones use, or the cache keys differ and
+    // the compile is wasted.
+    const warm = new THREE.Group();
+    const chevron = new THREE.Mesh(makeMarkerGeometry(), makeMarkerMaterial());
+    const plate = new THREE.Sprite(makeLabelMaterial('WARMUP'));
+    warm.add(chevron, plate);
+    this.engine.scene.add(warm);
+    // Choose the map's active light set before compiling: the number of
+    // visible lights is part of a shader's identity, so compiling with them
+    // all still switched off compiles the wrong programs.
+    this.worldRenderer.update(0.5, 0, this.engine.camera.position);
+    // Tracers, casings, muzzle flashes, decals and both particle systems live
+    // in pools that are invisible until something uses them, and compile()
+    // only walks what is visible — so their programs were compiled on the
+    // first shot of the match.
+    this.effects.prewarm(this.engine.renderer, this.engine.camera);
+    this.engine.scene.remove(warm);
+    chevron.geometry.dispose(); chevron.material.dispose();
+    plate.material.map.dispose(); plate.material.dispose();
     });
     await step(97, 'READY');
 
@@ -397,9 +415,13 @@ class Game {
     const model = buildWeaponModel(def, def.attached || []);
     const holder = new THREE.Group();
     holder.add(model.root);
-    model.root.position.set(0.02, -0.30, -0.82);
-    model.root.rotation.set(0.10, -0.62, 0.05);
-    holder.scale.setScalar(1.35);
+    // Sized and placed to sit inside the stage column rather than running off
+    // the bottom of it: the preview is only visible now that the panel fades
+    // away behind it, and at the old scale the magazine and grip were under
+    // the footer bar.
+    model.root.position.set(0.02, -0.16, -1.02);
+    model.root.rotation.set(0.12, -0.62, 0.05);
+    holder.scale.setScalar(1.02);
     this.viewmodel.setAspect(this.engine.camera.aspect);
     this.viewmodel.scene.add(holder);
     this.previewGroup = holder;
@@ -587,26 +609,6 @@ class Game {
     this.onlineNet?.leave();
     this.roomInfo = null;
     this.ui.show('play', {}, { noStack: true });
-  }
-
-  async refreshServers() {
-    try {
-      const base = S.serverUrl
-        ? S.serverUrl.replace(/^ws/, 'http').replace(/\/ws$/, '')
-        : (location.port === '5173' ? `${location.protocol}//${location.hostname}:8787` : '');
-      const res = await fetch(base + '/api/servers', { cache: 'no-store' });
-      const data = await res.json();
-      this.serverList = data.rooms || [];
-      this.serverRegion = data.region;
-    } catch (e) {
-      this.serverList = [];
-    }
-    for (const fn of this.serverListeners) fn(this.serverList);
-  }
-
-  onServerList(fn) {
-    this.serverListeners.add(fn);
-    return () => this.serverListeners.delete(fn);
   }
 
   // -------------------------------------------------------------------------
@@ -912,10 +914,6 @@ class Game {
       this.onMatchState(msg.state);
     });
     net.on('roomInfo', (msg) => { this.roomInfo = msg; this.notifyRoom(); });
-    net.on('roomList', (msg) => {
-      this.serverList = msg.rooms || [];
-      for (const fn of this.serverListeners) fn(this.serverList);
-    });
     net.on('playerJoined', (msg) => {
       this.ui.toast(`${msg.name} joined`);
       this.roomPlayerList = this.roomPlayerList.filter((p) => p.id !== msg.id);
@@ -1011,6 +1009,14 @@ class Game {
     const map = getMap(mapKey);
     this.world = this.worldRenderer.build(map);
     this.viewmodel.setEnvironment(this.engine.scene.environment);
+    // Compile every shader this map needs NOW, while the map-change pause is
+    // still on screen. A program is compiled the first time something using it
+    // is drawn, and that compile is synchronous: entering a map used to bring
+    // two to nine new programs with it, landing one at a time over the first
+    // seconds of play. The loading screen cannot cover this on its own — it
+    // compiles against the menu map, and a surface or a light count that only
+    // exists on Refinery is not in that scene to be found.
+    this.engine.renderer.compile(this.engine.scene, this.engine.camera);
     audio.setWorld(this.world);
     audio.stopMenuMusic();
     audio.startAmbience(map.ambientSounds);
@@ -1508,7 +1514,7 @@ class Game {
         const surf = this.world?.supportY(pos[0], pos[1], pos[2], 0.34, 0.4).surface || 'concrete';
         audio.footstep(surf, pos, vol);
       });
-      r.updateMarker(this.player.team, dt);
+      r.updateMarker(this.player.team, dt, this.engine.camera);
     }
 
     this.worldRenderer.update(dt, time, this.engine.camera.position);

@@ -41,6 +41,14 @@ const settle = (x, freq = 2.6, damp = 5.5) =>
 // How far below the sight line the weapon sits when aimed. See the compose
 // step in update(): a gun whose own body eats the lower screen needs to come
 // down, or aiming it means seeing less than hip fire did.
+// How much of a weapon's recoil push-back the view model shows. The recoil
+// itself — where the shots land, how far the aim climbs — is untouched by
+// these; they only decide how much the gun visibly rocks while you hold the
+// trigger. Both were about a third higher, which on a fast gun turned the
+// screen into a see-saw and made it hard to read your own fire.
+const PUNCH_POS = 0.58;     // metres of push-back per unit of punch
+const PUNCH_ROT = 1.00;     // radians of muzzle rise per unit of punch
+
 const ADS_DROP = {
   revolver: 0.052,
   deagle: 0.014,
@@ -354,13 +362,13 @@ export class ViewModel {
     this.holder.position.set(
       sx + this.lag.x + this.bob.x + this.animOffset.x - this.wallT * 0.05,
       sy + this.lag.y + this.bob.y + this.animOffset.y - this.wallT * 0.10,
-      sz + this.bob.z + this.animOffset.z + punch * 0.85 + this.wallT * 0.14
+      sz + this.bob.z + this.animOffset.z + punch * PUNCH_POS + this.wallT * 0.14
     );
 
     const hipR = hip.r;
     this.holder.rotation.set(
       lerp(hipR[0], 0, ads) + this.rotLag.x * (1 - ads * 0.6) + this.animRot.x
-        + this.sprintT * 0.28 + punch * 1.5 - this.wallT * 0.15,
+        + this.sprintT * 0.28 + punch * PUNCH_ROT - this.wallT * 0.15,
       lerp(hipR[1], 0, ads) + this.rotLag.y * (1 - ads * 0.6) + this.animRot.y
         + this.sprintT * 0.42 + this.wallT * 0.5,
       lerp(hipR[2], 0, ads) + this.rotLag.z * (1 - ads * 0.5) + this.animRot.z

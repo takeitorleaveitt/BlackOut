@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { PostFX } from '../render/PostFX.js';
 import { Sky } from '../render/Sky.js';
-import { S, settings } from './Settings.js';
+import { S, settings, SHADOW_RES_MAX } from './Settings.js';
 import { perf } from './Perf.js';
 import { bus } from './EventBus.js';
 import { clamp } from '../shared/constants.js';
@@ -95,7 +95,9 @@ export class Engine {
   }
 
   configureShadow() {
-    const res = S.shadowRes || 2048;
+    // Clamped, not just defaulted: shadowRes is persisted, so a player who
+    // set 4096 before the ceiling came down still has it in local storage.
+    const res = clamp(S.shadowRes || SHADOW_RES_MAX, 256, SHADOW_RES_MAX);
     this.sun.shadow.mapSize.set(res, res);
     const d = S.shadows === 'low' ? 26 : S.shadows === 'medium' ? 38 : 52;
     const c = this.sun.shadow.camera;
@@ -227,11 +229,35 @@ export class Engine {
   frame() {
     let dt = perf.begin();
     if (S.fpsCap > 0) {
+      // Frame pacing under a limit.
+      //
+      // Setting an FPS limit used to COST you frames, badly, on any screen
+      // whose refresh is not a whole multiple of the cap. The rule was "add
+      // up the time, render when it passes one frame's worth, reset to zero",
+      // and the reset is the bug: on a 144 Hz display the callbacks land
+      // every 6.9 ms, so a 60 cap waited for the third one at 20.8 ms and
+      // then threw the surplus 4.2 ms away. Every frame. Measured over two
+      // thousand frames it delivered a rock-steady 48 fps — for a cap of 60.
+      // A 120 cap on the same screen gave 72. A 60 cap on 165 Hz gave 55.
+      //
+      // Two changes. Carry the overshoot rather than discarding it, so the
+      // average lands exactly on the cap; and accept a frame that is within
+      // half a callback of the ideal moment, which takes the NEAREST tick
+      // instead of the first one past the line. Same measurement afterwards:
+      // 60.0 and 120.0 fps. The cost is that the frame interval now varies
+      // by about +/-2 ms, because 60 evenly spaced frames simply do not exist
+      // on a 144 Hz screen — the cadence has to be two ticks, two ticks,
+      // three. Where the refresh IS a multiple (60 on 120, 30 on 60) nothing
+      // changes and the pacing stays exact.
       this._accum += dt;
       const step = 1 / S.fpsCap;
-      if (this._accum < step) return;
+      const tolerance = Math.min(dt, step) * 0.5;
+      if (this._accum < step - tolerance) return;
       dt = this._accum;
-      this._accum = 0;
+      this._accum -= step;
+      // A hitch (a backgrounded tab, a GC pause) can leave whole frames in
+      // there. Catching up on them is a fast-forward nobody asked for.
+      if (this._accum > step) this._accum = 0;
     }
     dt = Math.min(dt, 0.1);
     this.time += dt;

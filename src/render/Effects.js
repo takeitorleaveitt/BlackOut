@@ -79,6 +79,9 @@ class DecalSystem {
     this._s = new THREE.Vector3();
   }
 
+  /** Objects that must be visible for renderer.compile() to see this system. */
+  warmObjects() { return Object.values(this.groups).map((g) => g.mesh); }
+
   add(point, normal, surface, size = 0.12) {
     const kind = KIND_FOR[surface] || 'concrete';
     const g = this.groups[kind];
@@ -220,6 +223,8 @@ class ParticleSystem {
     this.sparks.renderOrder = 5;
     scene.add(this.sparks);
   }
+
+  warmObjects() { return [this.points, this.sparks]; }
 
   spawn(x, y, z, vx, vy, vz, color, size, life, gravity = 6, drag = 1.4) {
     // Once the pool is full, steal the slot nearest death instead of a random
@@ -367,6 +372,8 @@ class TracerSystem {
     this._m4 = new THREE.Matrix4();
   }
 
+  warmObjects() { return [this.group, ...this.group.children]; }
+
   fire(origin, dir, speed, distance, width = 0.016, color = 0xffd8a0) {
     const m = this.free.pop();
     if (!m) return;
@@ -440,6 +447,8 @@ class CasingSystem {
       this.free.push(m);
     }
   }
+
+  warmObjects() { return [this.group, ...this.group.children]; }
 
   eject(pos, dir, up, right, isShell, onLand) {
     const m = this.free.pop();
@@ -528,6 +537,10 @@ class FlashSystem {
     }
   }
 
+  warmObjects() {
+    return [...this.free, ...this.active].flatMap((f) => [f.g, f.core, f.star]);
+  }
+
   flash(pos, scale = 1, suppressed = false) {
     const f = this.free.pop();
     if (!f) return;
@@ -600,6 +613,26 @@ export class Effects {
     this.tracers = new TracerSystem(scene, 56);
     this.casings = new CasingSystem(scene, 44);
     this.flashes = new FlashSystem(scene, 10);
+  }
+
+  /**
+   * Put every effect in front of the shader compiler.
+   *
+   * The pools below are built up front, but their meshes sit invisible until
+   * something uses them, and `renderer.compile()` only walks what is visible.
+   * So the tracer, the casing, the muzzle flash and the two particle systems
+   * compiled their programs on the first shot of the match — a synchronous
+   * compile, in the frame you pulled the trigger. Showing them for the length
+   * of one compile call and hiding them again costs a few milliseconds during
+   * the map-change pause and nothing afterwards.
+   */
+  prewarm(renderer, camera) {
+    const objs = [this.decals, this.particles, this.tracers, this.casings, this.flashes]
+      .flatMap((sys) => sys.warmObjects());
+    const was = objs.map((o) => o.visible);
+    for (const o of objs) o.visible = true;
+    renderer.compile(this.scene, camera);
+    objs.forEach((o, i) => { o.visible = was[i]; });
   }
 
   /** Surface impact: decal plus material-appropriate debris. */

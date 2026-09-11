@@ -16,6 +16,53 @@ const BUFFER = 24;
 // against the map instead of blending into it.
 const MARKER_COLOR = { 1: 0x4aa8ff, 2: 0xe0b070 };
 
+// Callsign plate. The canvas is drawn at four times the size it is shown at so
+// the text stays crisp when a teammate is close; the sprite's world size is
+// LABEL_W x LABEL_H metres at the reference distance and scales from there.
+const LABEL_PX = 256, LABEL_PY = 64;
+const LABEL_W = 1.15, LABEL_H = LABEL_W * (LABEL_PY / LABEL_PX);
+
+/** The chevron's material. Exported so the shader warm-up builds the identical one. */
+export function makeMarkerMaterial() {
+  return new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, depthTest: false });
+}
+
+/** The callsign plate's material, ditto. */
+export function makeLabelMaterial(name) {
+  return new THREE.SpriteMaterial({
+    map: makeLabelTexture(name), transparent: true, depthTest: false, toneMapped: false
+  });
+}
+
+/** The chevron's geometry, ditto. */
+export function makeMarkerGeometry() {
+  return new THREE.ConeGeometry(0.085, 0.16, 4);
+}
+
+function makeLabelTexture(name) {
+  const c = document.createElement('canvas');
+  c.width = LABEL_PX; c.height = LABEL_PY;
+  const ctx = c.getContext('2d');
+  const text = String(name || 'OPERATOR').toUpperCase().slice(0, 17);
+  ctx.font = '600 30px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // A dark halo rather than a filled plate: a box behind every teammate's head
+  // is a lot of screen furniture, but bare white text vanishes against a pale
+  // wall. The stroke is what makes it readable on any background.
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.strokeText(text, LABEL_PX / 2, LABEL_PY / 2 + 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(text, LABEL_PX / 2, LABEL_PY / 2 + 1);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.minFilter = THREE.LinearFilter;
+  t.generateMipmaps = false;
+  return t;
+}
+
 export class RemotePlayer {
   constructor(id, scene, info = {}) {
     this.id = id;
@@ -42,9 +89,8 @@ export class RemotePlayer {
     // the head, team-coloured, shown only when this player is on the local
     // player's team. Kept as a scene child (not parented under model.root)
     // so a team swap that rebuilds the model doesn't take it with it.
-    const markerGeo = new THREE.ConeGeometry(0.085, 0.16, 4);
-    this.markerMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, depthTest: false });
-    this.marker = new THREE.Mesh(markerGeo, this.markerMat);
+    this.markerMat = makeMarkerMaterial();
+    this.marker = new THREE.Mesh(makeMarkerGeometry(), this.markerMat);
     this.marker.rotation.x = Math.PI;
     this.marker.rotation.y = Math.PI / 4;
     this.marker.renderOrder = 15;
@@ -52,21 +98,59 @@ export class RemotePlayer {
     this.marker.frustumCulled = false;
     scene.add(this.marker);
     this._markerBob = Math.random() * 10;
+
+    // The callsign, under the chevron, so a teammate is a name and not just a
+    // coloured arrow. Drawn into a canvas once and carried on a sprite: one
+    // small texture per player, rebuilt only when the name changes.
+    this.labelMat = makeLabelMaterial(this.name);
+    this.label = new THREE.Sprite(this.labelMat);
+    this.label.renderOrder = 16;
+    this.label.visible = false;
+    this.label.frustumCulled = false;
+    scene.add(this.label);
   }
 
-  /** Show/colour the teammate marker; called once a frame from the game with the local player's team. */
-  updateMarker(myTeam, dt) {
-    const friendly = myTeam && this.team === myTeam;
-    this.marker.visible = friendly && this.visible && !this.render.dead;
-    if (!this.marker.visible) return;
+  /**
+   * Show, colour and place the teammate chevron and its callsign. Called once
+   * a frame from the game with the local player's team and the world camera.
+   *
+   * The `!!` is not decoration. `myTeam` is 0 in Free For All, so the chain
+   * below evaluated to the NUMBER 0, and three.js skips an object only when
+   * `visible === false` — 0 is not false. Every marker in every FFA and
+   * training match was therefore drawn: never coloured and never positioned,
+   * because the early return below also treats 0 as hidden. The result was one
+   * white chevron sitting at the world origin, in the middle of the map, seen
+   * through walls because this material does not depth-test.
+   */
+  updateMarker(myTeam, dt, camera) {
+    const friendly = !!myTeam && this.team === myTeam;
+    const show = friendly && this.visible && !this.render.dead;
+    this.marker.visible = show;
+    this.label.visible = show;
+    if (!show) return;
     this.markerMat.color.setHex(MARKER_COLOR[this.team] || 0xffffff);
     this._markerBob += dt * 2.4;
     const bob = Math.sin(this._markerBob) * 0.03;
-    this.marker.position.set(this.render.x, this.render.y + this.height + 0.34 + bob, this.render.z);
+    const y = this.render.y + this.height + 0.34 + bob;
+    this.marker.position.set(this.render.x, y, this.render.z);
+    this.label.position.set(this.render.x, y + 0.30, this.render.z);
+    // A name tag has to stay readable across a map without becoming a
+    // billboard up close, so it grows with distance but only to a point.
+    const d = camera ? camera.position.distanceTo(this.label.position) : 12;
+    const k = clamp(d / 9, 0.75, 3.0);
+    this.label.scale.set(LABEL_W * k, LABEL_H * k, 1);
+    this.labelMat.opacity = clamp(1 - (d - 55) / 25, 0.18, 1);
+  }
+
+  /** Rebuild the callsign texture (the name arrives after construction). */
+  refreshLabel() {
+    this.labelMat.map?.dispose();
+    this.labelMat.map = makeLabelTexture(this.name);
+    this.labelMat.needsUpdate = true;
   }
 
   setInfo(info) {
-    if (info.name) this.name = info.name;
+    if (info.name && info.name !== this.name) { this.name = info.name; this.refreshLabel(); }
     if (info.team !== undefined && info.team !== this.team) {
       this.team = info.team;
       const old = this.model;
@@ -185,6 +269,9 @@ export class RemotePlayer {
     this.scene.remove(this.marker);
     this.marker.geometry.dispose();
     this.markerMat.dispose();
+    this.scene.remove(this.label);
+    this.labelMat.map?.dispose();
+    this.labelMat.dispose();
   }
 }
 

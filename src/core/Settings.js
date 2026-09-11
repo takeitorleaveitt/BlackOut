@@ -7,6 +7,17 @@ import { DEFAULT_ATTACHMENTS } from '../shared/attachments.js';
 
 const KEY = 'bp.settings.v1';
 
+// Nothing the renderer allocates goes above 1024 on a side. Surface textures
+// already stopped there (see textureSizeFor); the shadow map did not, and it
+// is the biggest single texture in the game — a 4096 depth map is 67 MB of
+// video memory and sixteen times the texels to fill against a 1024 one, for a
+// world whose shadows come off boxes. Ultra now differs from High in filter
+// quality and how far the shadow frustum reaches, not in how much memory it
+// eats. Old saved settings are clamped where the value is used, in
+// Engine.configureShadow, so a player who already had 4096 stored does not
+// keep it.
+export const SHADOW_RES_MAX = 1024;
+
 export const PRESETS = {
   low: {
     renderScale: 0.72, shadows: 'off', shadowRes: 512, textureQuality: 'low', aa: 'off',
@@ -21,13 +32,13 @@ export const PRESETS = {
     lights: 'medium', fog: true, anisotropy: 4, viewDistance: 0.85, compression: false, dustMotes: true
   },
   high: {
-    renderScale: 1.0, shadows: 'high', shadowRes: 2048, textureQuality: 'high', aa: 'fxaa',
+    renderScale: 1.0, shadows: 'high', shadowRes: 1024, textureQuality: 'high', aa: 'fxaa',
     bloom: true, lensDistortion: false,
     lensFlare: false, ssao: false, particles: 0.6, decals: 160, decalLife: 22,
     lights: 'high', fog: true, anisotropy: 8, viewDistance: 1.0, compression: false, dustMotes: true
   },
   ultra: {
-    renderScale: 1.0, shadows: 'ultra', shadowRes: 4096, textureQuality: 'high', aa: 'fxaa',
+    renderScale: 1.0, shadows: 'ultra', shadowRes: 1024, textureQuality: 'high', aa: 'fxaa',
     bloom: true, lensDistortion: false,
     lensFlare: false, ssao: true, particles: 0.8, decals: 260, decalLife: 30,
     lights: 'ultra', fog: true, anisotropy: 16, viewDistance: 1.25, compression: false, dustMotes: true

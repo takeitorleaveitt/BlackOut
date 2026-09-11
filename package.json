@@ -8,7 +8,8 @@
     "dev": "concurrently -k -n CLIENT,SERVER -c cyan,magenta \"vite\" \"node server/index.js\"",
     "dev:client": "vite",
     "dev:server": "node server/index.js",
-    "build": "vite build",
+    "build": "vite build && npm run check:privacy",
+    "check:privacy": "node scripts/check-privacy.mjs",
     "preview": "vite preview",
     "start": "npm run build && node server/index.js",
     "serve": "node server/index.js"

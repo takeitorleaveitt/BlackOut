@@ -2,7 +2,7 @@
 
 A browser-based tactical first-person shooter with a BODYCAM-style visual
 presentation, authoritative WebSocket multiplayer, seven fully modelled
-firearms, and six original maps. Built with Three.js (WebGL2) on the client
+firearms, and four original maps. Built with Three.js (WebGL2) on the client
 and a Node/`ws` authoritative server. No downloaded textures or audio —
 every material, weapon model, and sound effect is generated procedurally at
 runtime.
@@ -48,7 +48,7 @@ lobby, and match.
   arms/legs) against a lag-compensated hit history on the server
   (`src/shared/ballistics.js`, `src/shared/sim/MatchSim.js`).
 - **Four maps**: District 9 (warehouse), Willow Lane (suburb), Refinery,
-  and Killhouse (a compact shoothouse). All built from one small
+  and the Airsoft Range (a compact indoor site). All built from one small
   level-authoring DSL (`src/shared/maps/kit.js`) so the exact same
   brush/prop data drives both the renderer and the server's collision
   world — no separate art pass, no desync risk.
@@ -70,13 +70,38 @@ lobby, and match.
   deploys, and everyone else is pulled into the same room behind them.
   Abandoning a Standard match carries an escalating leave penalty.
 - **Authoritative multiplayer** over WebSocket (`server/`): server-side
-  movement simulation, lag-compensated shot validation, quick match, a live
-  server browser, and private rooms with shareable 6-character codes. Bots
-  fill empty seats and react to gunfire, damage, and line of sight.
+  movement simulation, lag-compensated shot validation, quick match, and
+  private rooms with shareable 6-character codes. Bots fill empty seats in
+  private matches and training, and react to gunfire, damage and line of sight.
 - **Procedural audio** (`src/audio/`) — every gunshot, footstep, impact,
   reload click and ambience bed is synthesized in WebAudio from the
   weapon/material's spectral profile, convolved through a reverb impulse
   that matches whatever space the listener is standing in.
+
+## Addresses and privacy
+
+Nothing that ships contains a network address, and `npm run build` refuses to
+finish if that stops being true.
+
+- **No address is written into the files.** The client works out where to
+  connect from the page it was served by (`location`), so a build is not tied
+  to any particular machine and carries no host in it. The one place an
+  address can be entered at all is the Server URL box in Settings, and what
+  you type there is saved in that browser's local storage — it never reaches
+  the project files and is never sent to another player.
+- **The server does not read a connecting player's address.** It used to keep
+  one on every connection and use it for nothing at all.
+- **No WebRTC.** Peer connections hand out a machine's local and public
+  addresses as a matter of course, which is how browser games leak them. All
+  traffic goes through the one WebSocket to the server.
+- **Nothing is published about who is playing.** `/api/servers` — which
+  answered any stranger with a live list of the rooms running on this machine,
+  their maps and their headcounts — is gone with the Servers tab that used it.
+  `/api/health` answers `{"ok":true}` and nothing else.
+
+`npm run check:privacy` scans every file git tracks (exactly what a release
+archive contains) plus `dist/`, and fails on an address literal, on WebRTC,
+or on anything reading a peer's address. It runs as part of `npm run build`.
 
 ## Project layout
 
@@ -94,7 +119,7 @@ src/
   net/           WebSocket client (+ an offline LocalNet with the same API
                  for Training mode)
   ui/            screen manager, main menu, operator card + squad panel,
-                 server browser, loadout, settings, lobby, matchmaking
+                 loadout, settings, lobby, matchmaking
   game/          HUD
 server/          authoritative Node server: rooms, matchmaking, WebSocket
                  protocol handling

@@ -65,7 +65,7 @@ export function createSettings(game) {
       sliderRow('Render scale', 'renderScale', 0.5, 1, 0.05, (v) => `${Math.round(v * 100)}%`,
         'Internal resolution. The single biggest performance lever.'),
       selectRow('Shadows', 'shadows', [['off', 'OFF'], ['low', 'LOW'], ['medium', 'MEDIUM'], ['high', 'HIGH'], ['ultra', 'ULTRA']]),
-      selectRow('Shadow resolution', 'shadowRes', [[512, '512'], [1024, '1024'], [2048, '2048'], [4096, '4096']]),
+      selectRow('Shadow resolution', 'shadowRes', [[256, '256'], [512, '512'], [768, '768'], [1024, '1024']]),
       selectRow('Texture quality', 'textureQuality',
         [['low', 'LOW (256)'], ['medium', 'MEDIUM (512)'], ['high', 'HIGH (1K)']],
         'Regenerates the procedural material set.'),
@@ -195,7 +195,8 @@ export function createSettings(game) {
       el('h3.sec', 'Profile'),
       settingRow('Callsign', nameInput, nameStatus),
       el('h3.sec', 'Network'),
-      settingRow('Server URL', urlInput, el('div.val'), 'Leave blank to use the server this page came from.'),
+      settingRow('Server URL', urlInput, el('div.val'),
+        'Leave blank to use the server this page came from. Anything you type here is saved in this browser only — it is never written into the game files and never sent to another player.'),
       selectRow('Preferred region', 'region', [['auto', 'AUTO'], ...['eu-west', 'eu-north', 'na-east', 'na-west', 'sa-east', 'ap-se', 'ap-ne', 'oce'].map((r) => [r, r.toUpperCase()])]),
       el('div.divider'),
       el('div.flex.gap8',
@@ -238,11 +239,15 @@ export function createSettings(game) {
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 
+// What each preset actually sets, in the terms a player picks between. These
+// used to describe an effect stack that has since changed: the shadow map is
+// capped at 1024 on every preset now, so Ultra differs from High in filter
+// quality and draw distance, not in how much memory it takes.
 function presetBlurb(p) {
   return {
-    low: 'Integrated graphics. No shadows or post.',
-    medium: 'Laptop dGPU. Core bodycam look on.',
-    high: 'Desktop GPU. Everything except SSAO.',
-    ultra: 'Full effect stack at native resolution.'
+    low: 'Integrated graphics. No shadows, no post, 72% resolution.',
+    medium: 'Laptop dGPU. Soft shadows and the core bodycam look.',
+    high: 'Desktop GPU. Full effects at native resolution.',
+    ultra: 'Desktop GPU. Softer shadows, longer draw distance, SSAO.'
   }[p] || '';
 }

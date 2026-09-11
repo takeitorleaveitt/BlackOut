@@ -162,6 +162,11 @@ export class WorldRenderer {
       }
     }
     this.budget = budget;
+    // Pick the active set straight away. The shader warm-up in enterMatch
+    // compiles against whatever is visible at that moment, and with every
+    // light still switched off it would compile the no-lights permutation and
+    // then throw it away on the first frame.
+    this._sortT = 0;
   }
 
   /** Dust motes / floating particulate — cheap, sells the air in a room. */
@@ -230,10 +235,24 @@ export class WorldRenderer {
       // light list four times a second, forever, on every map.
       if (!this._order || this._order.length !== lights.length) this._order = lights.slice();
       this._order.sort((a, b) => a.dist2 - b.dist2);
+      // Exactly the nearest `budget` lights, and no distance test on top.
+      //
+      // There used to be one — a light further away than its own reach was
+      // switched off even if it was inside the budget — and it made the
+      // NUMBER of visible lights change as you walked around. three.js keys a
+      // shader program on that number, so every time the count moved, every
+      // lit material in the scene recompiled. Synchronously. While you were
+      // walking through the map that caused it, which is why it showed up on
+      // Refinery and Willow Lane and never on the two smaller maps.
+      //
+      // A light outside its own range contributes nothing anyway: the falloff
+      // has already taken it to zero. Keeping it in the count costs one more
+      // iteration of a loop the shader was already running up to `budget`
+      // times, and buys a light count that never changes.
       const budget = this.budget;
       for (let i = 0; i < this._order.length; i++) {
         const e = this._order[i];
-        const want = i < budget && e.dist2 < (e.def.distance * 2.2) ** 2;
+        const want = i < budget;
         if (want !== e.active) {
           e.active = want;
           e.light.visible = want;

@@ -140,7 +140,10 @@ export function createLoadout(game) {
       node.appendChild(header('LOADOUT'));
       node.appendChild(el('div.body',
         el('div.pane', { style: { flex: '0.9' } }, tabs, listNode),
-        el('div.pane', { style: { flex: '1.1', borderLeft: '1px solid var(--line)' } },
+        // `stage` fades this column out below the stat block so the live 3D
+        // weapon renders into it. The preview has always been built, lit and
+        // animated — it was just behind an opaque panel.
+        el('div.pane.stage', { style: { flex: '1.1', borderLeft: '1px solid var(--line)' } },
           titleNode, descNode, el('div.divider'), statsNode),
         el('div.pane', { style: { flex: '0.9', borderLeft: '1px solid var(--line)' } }, attNode)));
       node.appendChild(footer(

@@ -195,8 +195,11 @@ export function buildSuburb() {
   b.prop('bush', -12, 0, 12, { solid: false });
   b.prop('bush', 12, 0, 11, { solid: false });
   b.prop('bush', -14, 0, -10, { solid: false });
-  b.prop('table', 3, 0, 14, { yaw: 0.2 });
-  b.prop('chair', 3, 0, 15.4, { yaw: 0.4 });
+  // The patio set sits on the west half of the decking. It used to be at x=3,
+  // which is the middle of the balcony steps (x 2.8..5.2): a garden table
+  // standing in a staircase.
+  b.prop('table', -4.2, 0, 14, { yaw: 0.2 });
+  b.prop('chair', -4.2, 0, 15.4, { yaw: 0.4 });
   b.prop('rock', -20, 0, 16, { yaw: 0.8 });
   b.prop('rock', 21, 0, 6, { yaw: 2.1 });
   b.prop('car', -2, 0, -14, { yaw: 0.02 });

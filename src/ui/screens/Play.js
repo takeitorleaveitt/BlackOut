@@ -2,7 +2,7 @@
 
 import { el, clear, button, header, footer, toggle, pingClass, fmtTime } from '../UI.js';
 import { audio } from '../../audio/AudioEngine.js';
-import { PICKABLE_MODES, MODES, REGIONS, PLAYLIST_LIST, PLAYLISTS } from '../../shared/modes.js';
+import { PICKABLE_MODES, MODES, PLAYLIST_LIST, PLAYLISTS } from '../../shared/modes.js';
 import { MAP_INFO, mapsForMode } from '../../shared/maps/index.js';
 import { S, settings } from '../../core/Settings.js';
 
@@ -14,27 +14,46 @@ export function createPlayMenu(game) {
   return {
     build(node, _ui) {
       ui = _ui;
+      // The eyebrow says what KIND of thing each card is. It used to read
+      // "DEPLOYMENT" on all four, directly under a heading that also said
+      // Deployment — four labels carrying no information at all.
+      //
+      // The facts line under each is derived from the playlist and mode data
+      // rather than written out, so it cannot drift away from what the game
+      // actually does when the rules change.
+      const facts = (pl) => [
+        pl.modes.map((m) => MODES[m].short).join(' / '),
+        `FIRST TO ${pl.roundsToWin}`,
+        `${pl.minPlayers} PLAYERS`,
+        `${(pl.maps || MAP_INFO.map((m) => m.key)).length} MAPS`
+      ];
       const cards = [
         ...PLAYLIST_LIST.map((pl) => ({
           k: pl.key === 'quickmatch' ? 'QM' : 'ST',
-          n: pl.name, d: pl.desc,
+          kind: 'MATCHMAKING', n: pl.name, d: pl.desc, f: facts(pl),
           go: () => game.playPlaylist(pl.key)
         })),
         {
-          k: 'PM', n: 'PRIVATE MATCH', d: 'Create a room, get a code, invite your friends.',
+          k: 'PM', kind: 'CUSTOM ROOM', n: 'PRIVATE MATCH',
+          d: 'Create a room, get a code, invite your friends.',
+          f: [`${PICKABLE_MODES.length} MODES`, `${MAP_INFO.length} MAPS`, 'BOTS OPTIONAL', 'YOUR RULES'],
           go: () => ui.show('private')
         },
         {
-          k: 'TR', n: 'TRAINING', d: 'Offline shoothouse against bots. No server required.',
+          k: 'TR', kind: 'OFFLINE', n: 'TRAINING',
+          d: 'Offline shoothouse against bots. No server required.',
+          f: [`${PICKABLE_MODES.length} MODES`, `${MAP_INFO.length} MAPS`, 'BOTS ONLY', 'NO SERVER'],
           go: () => ui.show('training')
         }
       ];
       const grid = el('div.grid.c2');
       for (const c of cards) {
-        grid.appendChild(el('div.card', {
+        grid.appendChild(el('div.card.card-tall', {
           onclick: () => { audio.ui('accept'); c.go(); },
           onmouseenter: () => audio.ui('hover')
-        }, el('div.tag', c.k), el('div.k', 'DEPLOYMENT'), el('div.n', c.n), el('div.d', c.d)));
+        },
+        el('div.tag', c.k), el('div.k', c.kind), el('div.n', c.n), el('div.d', c.d),
+        el('div.card-facts', ...c.f.map((t) => el('span', t)))));
       }
 
       node.appendChild(header('PLAY'));

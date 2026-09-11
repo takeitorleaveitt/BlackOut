@@ -149,7 +149,10 @@ body.fx-off #fx-overlay { display: none; }
   background: linear-gradient(180deg, rgba(5,7,9,0.94) 0%, rgba(5,7,9,0.92) 52%, rgba(5,7,9,0.42) 100%);
   backdrop-filter: blur(2px);
 }
-.pane { position: relative; padding: 30px 34px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+/* The bottom padding is deliberately deep: a scrolling pane that ends flush
+   with the footer leaves its last row half-hidden behind the bar, which reads
+   as a clipped layout rather than as "there is more below". */
+.pane { position: relative; padding: 30px 34px 44px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .pane::-webkit-scrollbar { width: 8px; }
 .pane::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
 
@@ -518,16 +521,35 @@ h3.sec:first-child { margin-top: 0; }
 .op-card:hover { border-color: var(--line-hot); border-left-color: var(--accent); transform: translateX(-3px); }
 .op-portrait { flex: 0 0 auto; line-height: 0; border: 1px solid var(--line); background: #05070a; }
 .op-card:hover .op-portrait { border-color: var(--line-hot); }
-.op-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+/* The caret is absolutely positioned in the card's bottom-right corner, so
+   the meta column has to reserve that corner or its widest child — the XP bar
+   — runs underneath the button and looks like it has been cut in half. That
+   is exactly what it was doing. */
+.op-meta {
+  flex: 1; min-width: 0; padding-right: 34px;
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+}
 .op-name {
   font: 400 13px/1 var(--sans); letter-spacing: 0.18em; text-transform: uppercase; color: #fff;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .op-level { font: 10px/1 var(--mono); letter-spacing: 0.24em; color: var(--ink-faint); }
 .op-level b { color: var(--accent); font-weight: 500; font-size: 12px; }
-.op-xp { height: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
-.op-xp i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.4s var(--ease); }
-.op-hint { font: 9px/1 var(--mono); letter-spacing: 0.22em; color: var(--ink-faint); opacity: 0; transition: opacity 0.18s; }
+/* Tall enough to read as a bar rather than a hairline, with a track that is
+   visible when it is nearly empty — at level 1 the fill is a few pixels, and
+   on a 3px hairline that looked like a rendering fault rather than progress. */
+.op-xp { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.10); overflow: hidden; }
+.op-xp i {
+  display: block; height: 100%; width: 0%; min-width: 5px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transition: width 0.4s var(--ease);
+}
+/* The hint reserves its line whether or not it is showing, so the card does
+   not change height on hover. */
+.op-hint {
+  font: 9px/1 var(--mono); letter-spacing: 0.22em; color: var(--ink-faint);
+  opacity: 0; transition: opacity 0.18s;
+}
 .op-card:hover .op-hint { opacity: 1; color: var(--accent-dim); }
 
 .squad-panel {
@@ -619,6 +641,23 @@ h3.sec:first-child { margin-top: 0; }
 .card .n { font: 400 16px/1.2 var(--sans); letter-spacing: 0.16em; margin: 8px 0 6px; text-transform: uppercase; }
 .card .d { font: 11px/1.6 var(--sans); color: var(--ink-dim); }
 .card .tag { position: absolute; top: 12px; right: 12px; font: 9px/1 var(--mono); letter-spacing: 0.18em; color: var(--accent-dim); }
+/* A card that has room to say what it actually is. The four deployment cards
+   sat in the top quarter of the screen with three lines each and a very large
+   nothing underneath them. */
+.card-tall { display: flex; flex-direction: column; min-height: 148px; }
+.card-tall .d { flex: 1; }
+.card-facts {
+  display: flex; flex-wrap: wrap; gap: 6px 10px;
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
+  font: 9px/1 var(--mono); letter-spacing: 0.16em; color: var(--ink-faint);
+}
+.card-facts span { display: inline-flex; align-items: center; }
+.card-facts span + span::before {
+  content: ''; width: 3px; height: 3px; margin-right: 10px;
+  background: var(--line-hot); transform: rotate(45deg);
+}
+.card:hover .card-facts { color: var(--ink-dim); }
+.card:hover .card-facts span + span::before { background: var(--accent-dim); }
 
 table.list { width: 100%; border-collapse: collapse; font-size: 12px; }
 table.list th {
@@ -632,8 +671,12 @@ table.list tr.row:hover td { background: rgba(var(--accent-rgb), 0.06); color: v
 table.list tr.row.sel td { background: rgba(var(--accent-rgb), 0.1); color: #fff; }
 .ping { font-family: var(--mono); }
 .ping.good { color: #7fe08a; } .ping.ok { color: var(--warn); } .ping.bad { color: var(--danger); }
-.bar { height: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--accent-dim); }
+/* 3px read as a drawn line rather than as a measurement, and a value near
+   zero (the sniper's magazine, a pistol's range) disappeared entirely. Same
+   treatment as the profile card's XP bar: a visible track, a rounded fill,
+   and a floor so a small value is still a mark on the scale. */
+.bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.10); overflow: hidden; }
+.bar i { display: block; height: 100%; min-width: 5px; border-radius: 3px; background: var(--accent-dim); }
 
 /* ---------- settings ---------- */
 .setting { display: grid; grid-template-columns: 1fr 240px 62px; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
@@ -867,11 +910,11 @@ html, body { background: var(--bg); }
   background: var(--bg);
   backdrop-filter: none;
 }
-#screen-loadout .body {
-  background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 60%, rgba(20,20,20,0.72) 100%);
-  backdrop-filter: none;
-}
-.pane { padding: 18px 20px; }
+/* Loadout panel backgrounds live at the end of this file — see there. */
+/* Tighter margins than the base rule, but the deep bottom padding stays: it
+   is what keeps the last row of a scrolling list from sitting half-hidden
+   behind the footer bar. */
+.pane { padding: 18px 20px 44px; }
 
 /* Headings are small and quiet, with a warm tick rather than a rule. */
 h1.title {
@@ -1120,16 +1163,20 @@ input[type=range]::-moz-range-thumb {
 h1.title { border-bottom: none; }
 h1.title::after {
   content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
-  background: linear-gradient(90deg, var(--line) 0, var(--line) 55%, transparent 100%);
+  background: linear-gradient(90deg, var(--line) 0, var(--line) 88%, transparent 100%);
 }
 h3.sec {
   border-bottom: none;
   background: linear-gradient(90deg, rgba(255,255,255,0.035), transparent 55%);
   padding: 7px 0 7px 10px;
 }
+/* The rule under a section head runs the whole width of the column and fades
+   only in the last tenth of it. Stopping at 70% read as a half-drawn border
+   rather than as a deliberate fade — and the QUALITY PRESET head, whose
+   content is a four-card grid, appeared to have no rule at all. */
 h3.sec::after {
   content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
-  background: linear-gradient(90deg, var(--line) 0, transparent 70%);
+  background: linear-gradient(90deg, var(--line) 0, var(--line) 88%, transparent 100%);
 }
 h3.sec::before { top: 6px; bottom: 6px; height: auto; }
 
@@ -1365,3 +1412,26 @@ select:focus-visible, input:focus-visible {
 .menu-item:hover .lbl, .menu-item.sel .lbl { letter-spacing: 0.22em; }
 .menu-item .idx { font-size: 10px; width: 22px; }
 .menu-item .desc { font-size: 9px; letter-spacing: 0.16em; }
+
+/* ---------- loadout stage ----------
+   The loadout is the one screen with something worth seeing behind it. Rather
+   than fading the whole width — which would leave the weapon list and the
+   attachment column sitting on a half-transparent ground — the panels carry
+   their own backgrounds and only the centre column, the one the 3D preview
+   renders into, fades away below the stat block.
+
+   Before this the preview was built, lit, animated and completely invisible:
+   the theme pass set the panel to 72% opacity over a dark scene. The first
+   attempt at fixing it did nothing either, and the reason is worth writing
+   down — `.screen:not(#screen-main) .body` carries an ID in its specificity,
+   because :not() takes the specificity of its argument. It outranks a plain
+   `#screen-loadout .body` no matter which comes later in the file. Hence the
+   redundant-looking `.screen` here, and hence the position: last. */
+.screen#screen-loadout .body { background: none; backdrop-filter: none; }
+.screen#screen-loadout .pane {
+  background: linear-gradient(180deg, rgba(5,7,9,0.97), rgba(5,7,9,0.99));
+}
+.screen#screen-loadout .pane.stage {
+  background: linear-gradient(180deg,
+    rgba(5,7,9,0.97) 0%, rgba(5,7,9,0.95) 36%, rgba(5,7,9,0.16) 66%, rgba(5,7,9,0) 100%);
+}

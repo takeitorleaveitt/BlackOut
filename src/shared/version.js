@@ -11,7 +11,7 @@
 // 1.4700000000000002 in binary floating point, and the menu would print that
 // verbatim. Dividing an integer by 100 always renders as the short decimal
 // you expect — 1.46, 1.5, 1.7 — with no trailing zero to trim.
-const VERSION_HUNDREDTHS = 148;
+const VERSION_HUNDREDTHS = 150;
 
 const N = VERSION_HUNDREDTHS / 100;
 

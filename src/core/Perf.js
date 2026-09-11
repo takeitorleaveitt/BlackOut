@@ -102,27 +102,51 @@ export class Perf {
     this.adaptive.cooldown -= dt;
     if (this.adaptive.cooldown > 0) return 0;
     const budget = this.budgetMs;
-    const cap = Math.min(1, ceiling);
-    if (current > cap) { this.adaptive.cooldown = 0.5; return cap; }
+    const cap = clampScale(Math.min(1, ceiling));
+    if (current > cap + 1e-6) { this.adaptive.cooldown = 0.5; return cap; }
+    const i = nearestStep(current);
     // Missing the target frame rate, or about to: on the CPU alone we are
     // already inside 8% of the whole budget, so the GPU half cannot fit.
     const struggling = this.avgMs > budget * 1.22 || this.avgWorkMs > budget * 0.92;
-    if (struggling && current > MIN_SCALE) {
-      this.adaptive.cooldown = 1.2;
-      return Math.max(MIN_SCALE, current - 0.07);
+    if (struggling && i > 0) {
+      this.adaptive.cooldown = 1.4;
+      return STEPS[i - 1];
     }
     // Hitting the target with the CPU side costing under half of it. Two
     // separate conditions: the second is what stops us climbing back up on a
     // machine that is only keeping pace because we scaled down.
-    if (!struggling && this.avgMs < budget * 1.06 && this.avgWorkMs < budget * 0.5 && current < cap) {
-      this.adaptive.cooldown = 3.0;
-      return Math.min(cap, current + 0.05);
+    if (!struggling && this.avgMs < budget * 1.06 && this.avgWorkMs < budget * 0.5 &&
+        i < STEPS.length - 1 && STEPS[i + 1] <= cap) {
+      this.adaptive.cooldown = 4.0;
+      return STEPS[i + 1];
     }
     return 0;
   }
 }
 
-// Below this the image is mush and the player would rather have the stutter.
-const MIN_SCALE = 0.55;
+/**
+ * The rungs the adaptive scaler is allowed to stand on.
+ *
+ * It used to move in free 0.05 and 0.07 increments, which meant a machine
+ * hovering near the budget could visit a dozen different resolutions in a
+ * minute. Every one of those costs a reallocation of the whole post chain's
+ * render targets — a real hitch, in the middle of exactly the firefight that
+ * triggered the drop. Five rungs, and a machine settles onto one and stays
+ * there. The bottom rung is where the image turns to mush and a player would
+ * rather have the stutter.
+ */
+const STEPS = [0.55, 0.65, 0.75, 0.85, 1.0];
+
+const clampScale = (v) => STEPS.reduce((best, s) => (s <= v + 1e-6 && s > best ? s : best), STEPS[0]);
+
+/** Index of the rung nearest `v`, so a hand-set scale still steps sensibly. */
+function nearestStep(v) {
+  let bi = 0, bd = Infinity;
+  for (let i = 0; i < STEPS.length; i++) {
+    const d = Math.abs(STEPS[i] - v);
+    if (d < bd) { bd = d; bi = i; }
+  }
+  return bi;
+}
 
 export const perf = new Perf();

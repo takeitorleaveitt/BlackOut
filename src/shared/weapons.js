@@ -119,7 +119,12 @@ export const WEAPONS = [
     spreadHip: 0.58, spreadAds: 0.30, spreadMove: 0.36, spreadJump: 0.79,
     spreadPerShot: 0.07, spreadMax: 1.29, spreadRecover: 7.4,
     recoil: {
-      vert: 0.0070, horiz: 0.0062, recovery: 10.4, viewKick: 0.66, camShake: 0.38,
+      // Three times the aim climb it used to have (0.0070 / 0.0062). At 950 rpm
+      // that is the fastest-climbing gun in the game by a distance — which is
+      // the point: it was a near-pistol-mobility PDW that also held a dot on a
+      // chest across a room. The fast recovery below is what keeps it usable
+      // in bursts rather than only in taps.
+      vert: 0.0210, horiz: 0.0186, recovery: 10.4, viewKick: 0.66, camShake: 0.38,
       firstShotMult: 1.0, kickBack: 0.028,
       pattern: pattern('0,1 0.2,0.96 -0.25,0.92 0.35,0.88 -0.4,0.85 0.5,0.82 -0.55,0.8 0.6,0.78 -0.5,0.76 0.45,0.74 -0.6,0.72 0.55,0.7 -0.35,0.69 0.4,0.68 -0.5,0.67 0.6,0.66 -0.45,0.65 0.3,0.64 -0.55,0.63 0.5,0.62')
     },

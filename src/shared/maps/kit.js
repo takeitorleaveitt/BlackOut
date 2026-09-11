@@ -6,6 +6,10 @@
 import { SURFACE } from '../constants.js';
 
 /** Prop catalogue: size + collision boxes, shared by renderer and server. */
+// `mounted` marks a prop that is SUPPOSED to be off the ground — bolted to a
+// wall, hung from a ceiling, or carried on a rack. Without it a floating-prop
+// audit reports every television and overhead pipe in the game and is quietly
+// ignored, which is how the props that really were floating stayed floating.
 export const PROPS = {
   crate_wood:   { size: [0.9, 0.9, 0.9], mat: SURFACE.WOOD, col: [[0, 0.45, 0, 0.9, 0.9, 0.9]] },
   crate_large:  { size: [1.4, 1.4, 1.4], mat: SURFACE.WOOD, col: [[0, 0.7, 0, 1.4, 1.4, 1.4]] },
@@ -26,11 +30,11 @@ export const PROPS = {
   locker:       { size: [0.9, 1.9, 0.5], mat: SURFACE.METAL, col: [[0, 0.95, 0, 0.9, 1.9, 0.5]] },
   cabinet:      { size: [1.0, 1.35, 0.48], mat: SURFACE.METAL, col: [[0, 0.68, 0, 1.0, 1.35, 0.48]] },
   bookshelf:    { size: [1.1, 1.8, 0.35], mat: SURFACE.WOOD, col: [[0, 0.9, 0, 1.1, 1.8, 0.35]] },
-  tv:           { size: [1.1, 0.65, 0.08], mat: SURFACE.GLASS, col: [] },
-  monitor:      { size: [0.55, 0.42, 0.18], mat: SURFACE.GLASS, col: [] },
+  tv:           { size: [1.1, 0.65, 0.08], mat: SURFACE.GLASS, mounted: true, col: [] },
+  monitor:      { size: [0.55, 0.42, 0.18], mat: SURFACE.GLASS, mounted: true, col: [] },
   computer:     { size: [0.22, 0.45, 0.48], mat: SURFACE.METAL, col: [] },
   printer:      { size: [0.6, 0.4, 0.5], mat: SURFACE.PLASTER, col: [] },
-  whiteboard:   { size: [1.8, 1.1, 0.06], mat: SURFACE.PLASTER, col: [] },
+  whiteboard:   { size: [1.8, 1.1, 0.06], mat: SURFACE.PLASTER, mounted: true, col: [] },
   dumpster:     { size: [2.0, 1.25, 1.1], mat: SURFACE.METAL, col: [[0, 0.63, 0, 2.0, 1.25, 1.1]] },
   car:          { size: [1.85, 1.45, 4.4], mat: SURFACE.METAL, col: [[0, 0.5, 0, 1.85, 1.0, 4.4], [0, 1.15, -0.2, 1.6, 0.6, 2.2]] },
   van:          { size: [2.1, 2.3, 5.2], mat: SURFACE.METAL, col: [[0, 1.15, 0, 2.1, 2.3, 5.2]] },
@@ -41,8 +45,8 @@ export const PROPS = {
   cone:         { size: [0.35, 0.6, 0.35], mat: SURFACE.PLASTER, col: [] },
   generator:    { size: [1.6, 1.2, 0.9], mat: SURFACE.METAL, col: [[0, 0.6, 0, 1.6, 1.2, 0.9]] },
   ac_unit:      { size: [1.1, 0.85, 1.1], mat: SURFACE.METAL, col: [[0, 0.43, 0, 1.1, 0.85, 1.1]] },
-  pipe_run:     { size: [0.3, 0.3, 6.0], mat: SURFACE.METAL, col: [[0, 0, 0, 0.3, 0.3, 6.0]] },
-  girder:       { size: [0.35, 0.35, 8.0], mat: SURFACE.METAL, col: [[0, 0, 0, 0.35, 0.35, 8.0]] },
+  pipe_run:     { size: [0.3, 0.3, 6.0], mat: SURFACE.METAL, mounted: true, col: [[0, 0, 0, 0.3, 0.3, 6.0]] },
+  girder:       { size: [0.35, 0.35, 8.0], mat: SURFACE.METAL, mounted: true, col: [[0, 0, 0, 0.35, 0.35, 8.0]] },
   rubble:       { size: [1.6, 0.6, 1.6], mat: SURFACE.CONCRETE, col: [[0, 0.28, 0, 1.6, 0.55, 1.6]] },
   debris_pile:  { size: [2.2, 0.9, 2.2], mat: SURFACE.CONCRETE, col: [[0, 0.4, 0, 2.0, 0.8, 2.0]] },
   tree:         { size: [3.0, 7.0, 3.0], mat: SURFACE.WOOD, col: [[0, 3.5, 0, 0.5, 7.0, 0.5]] },

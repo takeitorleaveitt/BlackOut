@@ -59,7 +59,8 @@ export function buildRefinery() {
   //   control room      x  -8..6      z -20..-8       floor at 5.4
   //   pipe maze         x -37..2      z  10..30
   //   pump house        x  -8..3      z  28..37
-  //   process hall      x  12..40     z -26..26       catwalk at 5.2
+  //   process hall      x  12..40     z  -26..26      catwalk at 5.2
+  //   north lamp row    x -40..40     z   38.5        clear of the pump house
   const Z_TANKS = -21, Z_YARD = 0, Z_PIPES = 20;
   const CW = 5.2, CR = 5.4, DECK_Y = 6.5;
 
@@ -198,7 +199,9 @@ export function buildRefinery() {
   const GAP_X = (TANKS[0] + TANKS[1]) / 2;          // -26, the lane between them
   b.box(-26, DECK_Y, Z_TANKS, 24, 0.3, 5.0, { mat: M });          // deck over both
   b.stairs(GAP_X, 0.03, Z_TANKS - 11.5, 2.4, 'z', 20, DECK_Y + 0.12, 9.0, M);
-  b.prop('pipe_run', -26, 3.2, Z_TANKS - 6, { yaw: Math.PI / 2 });
+  // Under the deck, not through the flight. At Z_TANKS - 6 this ran straight
+  // across the staircase up to the deck, at the height its treads had reached.
+  b.prop('pipe_run', -26, 3.2, Z_TANKS + 1, { yaw: Math.PI / 2 });
   b.prop('barrel', -14.6, 0, Z_TANKS - 1.2, {});
   b.prop('barrel', -13.8, 0, Z_TANKS - 0.4, {});
   b.prop('fuel_drum', -38, 0, Z_TANKS + 2.0, {});
@@ -266,9 +269,12 @@ export function buildRefinery() {
   spawnYard(-1);
   spawnYard(1);
 
-  b.propLine('streetlight', -40, 36, 40, 36, 5, 0, {});
+  // Along the north wall, clear of the pump house (which reaches z 37). At
+  // z=36 the middle lamp of this row stood inside the pump house and came out
+  // through its roof.
+  b.propLine('streetlight', -40, 38.5, 40, 38.5, 5, 0, {});
   for (let i = 0; i < 5; i++) {
-    b.light('point', -40 + i * 20, 6.2, 36, { color: 0xfff0c8, intensity: 6, distance: 22, fixture: 'street' });
+    b.light('point', -40 + i * 20, 6.2, 38.5, { color: 0xfff0c8, intensity: 6, distance: 22, fixture: 'street' });
   }
 
   // --- spawns / sites ------------------------------------------------------

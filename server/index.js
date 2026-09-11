@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Room, makeRoomCode } from './Room.js';
 import { readInput, MSG } from '../src/shared/protocol.js';
-import { MODES, REGIONS, PLAYLISTS, mapsForPlaylist } from '../src/shared/modes.js';
-import { ROTATION, MAP_INFO, mapsForMode } from '../src/shared/maps/index.js';
+import { MODES, PLAYLISTS, mapsForPlaylist } from '../src/shared/modes.js';
+import { ROTATION, mapsForMode } from '../src/shared/maps/index.js';
 import { INTERP_DELAY_MS, LAG_COMP_MAX_MS, TICK_RATE, SNAPSHOT_RATE, clamp } from '../src/shared/constants.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -157,17 +157,17 @@ function findQuickMatch(modeKey, opts = {}) {
 // ---------------------------------------------------------------------------
 const server = http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
-  if (url === '/api/servers') {
-    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ region: REGION, rooms: listRooms(), regions: REGIONS, maps: MAP_INFO }));
-    return;
-  }
+  // /api/servers is gone with the Servers tab that used it. It answered any
+  // stranger who asked with the full list of rooms running on this machine —
+  // maps, modes, how many people were on it, minute by minute. The room list
+  // a player legitimately needs still exists, over their own authenticated
+  // socket (the 'roomList' message), where it is answered to someone who has
+  // actually joined rather than to the open internet.
   if (url === '/api/health') {
+    // A liveness probe and nothing more. It used to report uptime and a live
+    // headcount, which is a public activity feed for whoever is running this.
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({
-      ok: true, uptime: process.uptime(), rooms: rooms.size,
-      players: [...rooms.values()].reduce((a, r) => a + r.humanCount, 0)
-    }));
+    res.end('{"ok":true}');
     return;
   }
   serveStatic(req, res);
@@ -178,7 +178,7 @@ const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: false 
 let clientSeq = 1;
 const clients = new Set();
 
-wss.on('connection', (ws, req) => {
+wss.on('connection', (ws) => {
   const client = {
     id: clientSeq++,
     ws,
@@ -191,9 +191,13 @@ wss.on('connection', (ws, req) => {
     ping: 60,
     lastPing: Date.now(),
     alive: true,
-    squad: null,
-    ip: req.socket.remoteAddress
+    squad: null
   };
+  // A connecting player's network address is deliberately never read off the
+  // socket. It used to be recorded here on every connection and then used by
+  // nothing at all. An address you never hold is one you cannot log, leak in
+  // a crash dump, or serialise into a message by accident — and
+  // scripts/check-privacy.mjs fails the build if anything starts holding one.
   clients.add(client);
   createSquad(client);
 

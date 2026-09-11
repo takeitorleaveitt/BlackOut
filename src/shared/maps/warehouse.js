@@ -118,18 +118,26 @@ export function buildWarehouse() {
   // Two long runs down the hall, each cut into three segments so the gaps line
   // up with the cross-corridors. The upper decks are shootable-through gaps at
   // head height, which is what makes the aisles readable from beside them.
-  const rackRun = (z) => {
-    for (const [x0, x1] of [[-26, -10], [-4, 4], [10, 26]]) {
+  // `collapsed` drops one segment: where a run has come down, the racking is
+  // gone and the debris below IS the cover. It used to be built anyway, so the
+  // rubble pile sat buried inside a rack that was still standing — the pile
+  // read as junk dropped on the floor rather than as a collapse.
+  const rackRun = (z, collapsed = -1) => {
+    const segs = [[-26, -10], [-4, 4], [10, 26]];
+    segs.forEach(([x0, x1], i) => {
+      if (i === collapsed) return;
       const cx = (x0 + x1) / 2, len = x1 - x0;
       for (let x = x0 + 1.3; x < x1; x += 2.7) b.prop('shelf_rack', x, 0.05, z, {});
       b.box(cx, 2.42, z, len, 0.12, 2.6, { mat: SURFACE.METAL });
-    }
+    });
   };
-  rackRun((Z_DOCK + Z_MAIN) / 2 + 0.5);    // between the dock lane and the main aisle
-  rackRun((Z_MAIN + Z_RACK) / 2 + 0.5);    // between the main aisle and the rack aisle
+  rackRun((Z_DOCK + Z_MAIN) / 2 + 0.5, 1);  // dock lane to main aisle; middle segment down
+  rackRun((Z_MAIN + Z_RACK) / 2 + 0.5);     // main aisle to rack aisle
 
-  // A collapsed run at the middle: the mid cross-corridor is the most exposed
-  // place on the map, and it needs something to break the line.
+  // The collapse itself, filling the gap the segment above leaves. The mid
+  // cross-corridor is the most exposed place on the map and needs something to
+  // break the line; the fallen upright does at head height what the rack's top
+  // deck used to.
   b.prop('debris_pile', -1.2, 0.05, Z_MAIN - 4.6, { yaw: 0.9 });
   b.prop('rubble', 1.6, 0.05, Z_MAIN - 5.4, { yaw: 2.1 });
   b.box(0.4, 1.1, Z_MAIN - 5.0, 5.2, 0.2, 0.9, { mat: SURFACE.METAL, yaw: 0.4 });

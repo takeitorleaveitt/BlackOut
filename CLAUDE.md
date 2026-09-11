@@ -17,6 +17,17 @@ cannot fall out of step. It is an integer of hundredths rather than a float
 because repeatedly adding a hundredth to a float drifts (1.45 + 0.01 + 0.01 is
 1.4700000000000002 in binary floating point, and the menu would print that).
 
+### No network address ever ships
+
+Nothing in this repository may contain an IP address, and nothing may read a
+peer's. `npm run build` runs `scripts/check-privacy.mjs`, which scans every
+git-tracked file plus `dist/` and fails on an address literal, on WebRTC, or
+on anything touching a socket's remote address. Do not add an exception to the
+scanner to get a build through — if it fires, the address is the thing to
+remove. The client derives its server from `location`; the only place an
+address can be entered is the Server URL box in Settings, which stays in that
+browser's local storage.
+
 ## Layout
 
 - `src/shared/` — the simulation both sides run: movement, ballistics, weapons,
