@@ -1,0 +1,66 @@
+name: Build Desktop Executables
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-executables-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund --fetch-timeout=60000
+        timeout-minutes: 5
+
+      # Builds the browser client into dist/ (server/index.js serves this),
+      # then bundles the server to a single CommonJS file — pkg can only
+      # package CommonJS entries, not this project's native ES modules — and
+      # packages that bundle plus the embedded dist/ assets into standalone
+      # Windows and Linux executables. See package:desktop in package.json,
+      # which runs the same three steps for a local build.
+      - run: npm run build
+      - run: npm run bundle:server
+      - name: Package standalone server (Windows + Linux)
+        run: >
+          npx --yes @yao-pkg/pkg@5 -c pkg.config.json pkg-build/server.cjs
+          --targets node20-win-x64,node20-linux-x64
+          --out-path pkg-dist
+
+      - name: Read game version
+        id: version
+        run: |
+          VERSION=$(node --input-type=module -e "import('./src/shared/version.js').then(m => console.log(m.GAME_VERSION))")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Rename outputs with version
+        run: |
+          mv pkg-dist/server-win.exe "pkg-dist/blackout-protocol-v${{ steps.version.outputs.version }}-win.exe"
+          mv pkg-dist/server-linux "pkg-dist/blackout-protocol-v${{ steps.version.outputs.version }}-linux"
+          chmod +x "pkg-dist/blackout-protocol-v${{ steps.version.outputs.version }}-linux"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blackout-protocol-v${{ steps.version.outputs.version }}-win
+          path: pkg-dist/blackout-protocol-v${{ steps.version.outputs.version }}-win.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blackout-protocol-v${{ steps.version.outputs.version }}-linux
+          path: pkg-dist/blackout-protocol-v${{ steps.version.outputs.version }}-linux
+          if-no-files-found: error
