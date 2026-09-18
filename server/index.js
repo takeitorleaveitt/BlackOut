@@ -15,8 +15,16 @@ import { MODES, PLAYLISTS, mapsForPlaylist } from '../src/shared/modes.js';
 import { ROTATION, mapsForMode } from '../src/shared/maps/index.js';
 import { INTERP_DELAY_MS, LAG_COMP_MAX_MS, TICK_RATE, SNAPSHOT_RATE, clamp } from '../src/shared/constants.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..');
+// Node's module wrapper supplies a real __dirname to every CJS module (read
+// here under a different name so this declaration can't shadow it) but
+// never to an ES module, so plain `node server/index.js` always takes the
+// import.meta.url branch below. This only matters once this file has been
+// bundled to CommonJS for packaging (see npm run package:desktop) — esbuild
+// resolves import.meta.url to nothing at bundle time, which is fine because
+// that dead branch never runs once bundled.
+const cjsDirname = typeof __dirname !== 'undefined' ? __dirname : undefined;
+const scriptDir = cjsDirname ?? path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(scriptDir, '..');
 const DIST = path.join(ROOT, 'dist');
 const PORT = process.env.PORT ? +process.env.PORT : 8787;
 const REGION = process.env.REGION || 'eu-west';

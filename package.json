@@ -12,7 +12,9 @@
     "check:privacy": "node scripts/check-privacy.mjs",
     "preview": "vite preview",
     "start": "npm run build && node server/index.js",
-    "serve": "node server/index.js"
+    "serve": "node server/index.js",
+    "bundle:server": "npx --yes esbuild@0.24 server/index.js --bundle --platform=node --format=cjs --outfile=pkg-build/server.cjs --log-level=warning",
+    "package:desktop": "npm run build && npm run bundle:server && npx --yes @yao-pkg/pkg@5 -c pkg.config.json pkg-build/server.cjs --targets node20-win-x64,node20-linux-x64 --out-path pkg-dist"
   },
   "dependencies": {
     "three": "^0.185.1",
